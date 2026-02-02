@@ -9,6 +9,7 @@ __pycache__/
 # ===== Virtualenv =====
 venv/
 .env/
+.env
 .env.*
 
 # ===== Flask / runtime =====

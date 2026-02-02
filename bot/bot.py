@@ -1,7 +1,7 @@
 import asyncio
 import os
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
@@ -13,13 +13,15 @@ def build_keyboard():
     )
 
 
-def register_handlers(dp: Dispatcher):
-    @dp.message(CommandStart())
-    async def start(message):
-        await message.answer(
-            "Добро пожаловать! Откройте mini app для управления сервисом.",
-            reply_markup=build_keyboard(),
-        )
+async def handle_start(message: types.Message) -> None:
+    await message.answer(
+        "Добро пожаловать! Откройте mini app для управления сервисом.",
+        reply_markup=build_keyboard(),
+    )
+
+
+def register_handlers(dp: Dispatcher) -> None:
+    dp.message(CommandStart())(handle_start)
 
 
 async def start_bot():

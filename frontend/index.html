@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Lumica Mini App</title>
+    <style>
+        :root {
+            font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+            background-color: #030712;
+            color: #f4f5f7;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0b1b45, #111b36 60%);
+        }
+
+        main {
+            width: min(680px, 92vw);
+            padding: 2.5rem;
+            border-radius: 24px;
+            background: rgba(10, 20, 40, 0.88);
+            box-shadow: 0 20px 60px rgba(5, 9, 20, 0.6);
+        }
+
+        .status-card,
+        .app-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .status-card {
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(1.75rem, 3vw, 2.25rem);
+            line-height: 1.2;
+        }
+
+        p {
+            margin: 0;
+            line-height: 1.5;
+            color: rgba(244, 245, 247, 0.85);
+        }
+
+        .app-content.hidden {
+            display: none;
+        }
+
+        .status-card.hidden {
+            display: none;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.35rem 0.9rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: #0a0f1a;
+            background: linear-gradient(135deg, #facc15, #f97316);
+            align-self: flex-start;
+        }
+
+        .cta {
+            margin-top: 1.25rem;
+            padding: 0.85rem 1.2rem;
+            border-radius: 12px;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #38bdf8, #6366f1);
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .cta:disabled {
+            opacity: 0.5;
+            cursor: wait;
+        }
+
+        .cta:not(:disabled):hover {
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section id="status-card" class="status-card">
+            <span class="pill">Проверка</span>
+            <h1 id="status-title">Выполняем проверку Telegram</h1>
+            <p id="status-text">Позвольте системе удостовериться, что вы пришли через Telegram: мы проверим initData и только потом откроем интерфейс.</p>
+        </section>
+
+        <section id="app-content" class="app-content hidden">
+            <span class="pill">Добро пожаловать</span>
+            <h1 id="welcome-title">Привет</h1>
+            <p>Вы успешно прошли проверку, доступ открыт. Здесь можно разместить ваш основной контент.</p>
+            <button id="cta-open" class="cta">Открыть мини-приложение</button>
+        </section>
+    </main>
+
+    <script>
+        const statusCard = document.getElementById("status-card");
+        const statusTitle = document.getElementById("status-title");
+        const statusText = document.getElementById("status-text");
+        const appContent = document.getElementById("app-content");
+        const welcomeTitle = document.getElementById("welcome-title");
+        const ctaButton = document.getElementById("cta-open");
+
+        function showApp(userName) {
+            statusCard.classList.add("hidden");
+            welcomeTitle.textContent = userName || "пользователь Telegram";
+            appContent.classList.remove("hidden");
+        }
+
+        function showError(message) {
+            statusTitle.textContent = "Доступ закрыт";
+            statusText.textContent = message || "Валидация Telegram initData не прошла, повторите запуск мини-приложения.";
+            appContent.classList.add("hidden");
+            statusCard.classList.remove("hidden");
+        }
+
+        async function validateUser() {
+            const initData = window.Telegram?.WebApp?.initData;
+            if (!initData) {
+                throw new Error("Не обнаружены данные Telegram Web App. Запустите мини-приложение через Telegram.");
+            }
+
+            const response = await fetch("/api/tg/auth", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ initData }),
+            });
+
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+                throw new Error(payload.error || "Телеграм не подтвердил данные пользователя.");
+            }
+
+            return payload;
+        }
+
+        async function init() {
+            try {
+                const { user } = await validateUser();
+                showApp(user?.name || user?.username);
+            } catch (err) {
+                console.error(err);
+                showError(err.message);
+            }
+        }
+
+        ctaButton.addEventListener("click", () => {
+            alert("Вы можете расширить этот экран любым интерактивным контентом.");
+        });
+
+        window.addEventListener("DOMContentLoaded", init);
+    </script>
+</body>
+</html>
