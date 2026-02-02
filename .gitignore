@@ -1,0 +1,46 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+*.sqlite3
+
+# ===== Virtualenv =====
+venv/
+.env/
+.env.*
+
+# ===== Flask / runtime =====
+instance/
+*.pid
+
+# ===== Node / frontend  =====
+dist/
+build/
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Local tools =====
+dev_tools/
+start_tunnel.bat
+
+# ===== DATABASE =====
+database/
+*.db
+
+# ===== DOCS  =====
+docs/
+
+# ===== Temporary / misc =====
+tmp/
+temp/
+.cache/
