@@ -4,32 +4,66 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Lumica Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
             font-family: "Inter", "Segoe UI", system-ui, sans-serif;
             background-color: #030712;
             color: #f4f5f7;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --system-top-reserve: 0px;
+            --system-nav-reserve: 0px;
+            --app-top-offset: calc(var(--safe-top) + var(--system-top-reserve));
+            --app-bottom-offset: calc(var(--safe-bottom) + var(--system-nav-reserve));
         }
 
         * {
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        button,
+        [role="button"],
+        a {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        button:focus:not(:focus-visible),
+        [role="button"]:focus:not(:focus-visible),
+        a:focus:not(:focus-visible) {
+            outline: none;
+        }
+
+        html, body {
+            height: 100%;
         }
 
         body {
             margin: 0;
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #0b1b45, #111b36 60%);
+            background: radial-gradient(circle at 50% -10%, rgba(99, 140, 255, 0.18), rgba(5, 10, 25, 0.85) 42%), linear-gradient(145deg, #0b1224, #090f1f 55%);
+            color: #f4f5f7;
         }
 
         main {
-            width: min(680px, 92vw);
-            padding: 2.5rem;
-            border-radius: 24px;
-            background: rgba(10, 20, 40, 0.88);
-            box-shadow: 0 20px 60px rgba(5, 9, 20, 0.6);
+            width: 100%;
+            min-height: 100vh;
+            padding: calc(1.2rem + var(--app-top-offset)) 1rem 1rem;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.45s ease, transform 0.45s ease;
+        }
+
+        main.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .content {
+            max-width: 540px;
+            margin: 0 auto;
+            padding-bottom: calc(110px + var(--app-bottom-offset));
         }
 
         .status-card,
@@ -40,9 +74,783 @@
         }
 
         .status-card {
-            padding: 2rem;
+            padding: 1.75rem;
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 18px;
+            align-items: flex-start;
+            background: rgba(7, 12, 24, 0.75);
+        }
+
+        .app-shell {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.2rem 0.4rem;
+            color: #e9ecf5;
+            letter-spacing: 0.03em;
+            font-weight: 700;
+            font-size: 1.05rem;
+            text-transform: uppercase;
+        }
+
+        .topbar .icon {
+            display: none;
+        }
+
+        .hero-card {
+            position: relative;
+            border-radius: 24px;
+            overflow: hidden;
+            padding: 1.4rem 1.2rem 1.1rem;
+            background: radial-gradient(circle at 50% 10%, rgba(92, 174, 255, 0.15), rgba(33, 16, 54, 0.05) 35%, rgba(7, 11, 26, 0.72) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+        }
+
+        .hero-card .orb-hero {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            margin: 0 auto 0.8rem;
+            filter: drop-shadow(0 12px 30px rgba(0,0,0,0.45));
+        }
+
+        .hero-icon {
+            width: 180px;
+            height: 180px;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .hero-caption {
+            text-align: center;
+            color: #cfe8ff;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-shadow: 0 4px 18px rgba(0,0,0,0.4);
+        }
+
+        .hero-sub {
+            text-align: center;
+            color: rgba(207, 232, 255, 0.8);
+            margin-top: 0.15rem;
+            font-size: 0.85rem;
+        }
+
+        .cards {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .card {
+            position: relative;
+            padding: 1rem 1rem;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(28, 46, 74, 0.65), rgba(18, 25, 44, 0.92));
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 14px 40px rgba(0,0,0,0.28);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+
+        .card .left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .badge {
+            min-width: 32px;
+            min-height: 32px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 30% 30%, #6cf6ff, #1d9bff);
+            box-shadow: 0 0 16px rgba(33, 190, 255, 0.45);
+            color: #03223b;
+            font-weight: 700;
+        }
+
+        .card-title {
+            color: #eef4ff;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
+        .card-sub {
+            color: rgba(230, 240, 255, 0.7);
+            font-size: 0.92rem;
+        }
+
+        .chevron {
+            color: rgba(230, 240, 255, 0.7);
+        }
+        .connection-protocol-btn {
+            width: 100%;
+            text-align: left;
+            font: inherit;
+            color: inherit;
+            cursor: pointer;
+        }
+        .connection-protocol-btn:active {
+            transform: translateY(1px);
+        }
+        .connection-pages {
+            display: grid;
+            gap: 0.8rem;
+        }
+        .connections-detail-list {
+            display: grid;
+            gap: 0.55rem;
+        }
+        .connections-detail-info {
+            border: 1px solid rgba(133, 188, 255, 0.34);
+            border-radius: 12px;
+            background: rgba(23, 38, 66, 0.62);
+            color: #e5f1ff;
+            padding: 0.62rem 0.72rem;
+            font-size: 0.82rem;
+            line-height: 1.35;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+        .connection-item {
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            background: rgba(11, 18, 34, 0.82);
+            padding: 0.64rem 0.72rem;
+        }
+        .connection-item-title {
+            color: #edf6ff;
+            font-weight: 700;
+            font-size: 0.84rem;
+            line-height: 1.25;
+        }
+        .connection-item-meta {
+            margin-top: 0.2rem;
+            display: grid;
+            gap: 0.1rem;
+            color: rgba(219, 234, 255, 0.74);
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+        .connection-copy-row {
+            margin-top: 0.45rem;
+            display: flex;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+        .connection-copy-btn {
+            border: 1px solid rgba(120, 171, 255, 0.42);
+            background: rgba(28, 44, 80, 0.9);
+            color: #edf6ff;
+            border-radius: 8px;
+            padding: 0.3rem 0.52rem;
+            font-size: 0.76rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .connection-copy-btn:active {
+            transform: translateY(1px);
+        }
+
+        .section-title {
+            margin: 0.2rem 0 0.3rem;
+            color: #e6ecf7;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .pill-soft {
+            padding: 0.4rem 0.75rem;
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(79, 123, 255, 0.28), rgba(95, 237, 255, 0.22));
+            color: #dce9ff;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .support-card {
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            left: 50%;
+            bottom: calc(16px + var(--app-bottom-offset));
+            transform: translateX(-50%);
+            width: min(520px, 92vw);
+            padding: 0.35rem;
+            border-radius: 16px;
+            background: rgba(12, 18, 33, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.25rem;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(12px);
+        }
+        .bottom-nav.with-work {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .nav-btn {
+            border: none;
+            background: transparent;
+            color: rgba(220, 232, 255, 0.8);
+            padding: 0.65rem 0.4rem;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            align-items: center;
+            font-size: 0.92rem;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.15s;
+        }
+
+        .nav-btn .icon {
+            font-size: 1.05rem;
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(135deg, rgba(64, 224, 255, 0.2), rgba(122, 89, 255, 0.2));
+            color: #f5fbff;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 6px 16px rgba(0,0,0,0.25);
+            transform: translateY(-1px);
+        }
+
+        .screen {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            width: 100%;
+            min-width: 0;
+        }
+        #screen-work {
+            width: 100vw;
+            margin-left: calc(50% - 50vw);
+            margin-right: calc(50% - 50vw);
+            padding-inline: 1rem;
+            box-sizing: border-box;
+            align-items: stretch;
+        }
+        #screen-connections {
+            width: 100vw;
+            margin-left: calc(50% - 50vw);
+            margin-right: calc(50% - 50vw);
+            padding-inline: 1rem;
+            box-sizing: border-box;
+            align-items: stretch;
+        }
+        .work-page {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 0.9rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(13, 18, 31, 0.78);
+        }
+        #work-menu-page {
+            width: 100%;
+            padding: 0;
+            border: none;
+            background: transparent;
+        }
+        #screen-work .section-title {
+            width: 100%;
+        }
+        .work-page-title {
+            color: #eaf2ff;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+        .work-page-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+        .work-back-btn {
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(18, 26, 44, 0.92);
+            color: #dbe9ff;
+            border-radius: 10px;
+            padding: 0.45rem 0.65rem;
+            cursor: pointer;
+            font-weight: 700;
+        }
+        .work-profile-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.8rem;
+            width: 100%;
+            padding: 0.9rem;
+            border-radius: 16px;
+            background: rgba(14, 20, 34, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .work-profile-main {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 0;
+        }
+        .work-profile-avatar {
+            width: 54px;
+            height: 54px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 164, 117, 0.28), rgba(35, 42, 60, 0.9));
+            flex: 0 0 54px;
+        }
+        .work-profile-name {
+            color: #f3f8ff;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .work-profile-role {
+            margin-top: 0.18rem;
+            color: rgba(224, 236, 255, 0.72);
+            font-size: 0.84rem;
+        }
+        .work-menu-groups {
+            display: grid;
+            width: 100%;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+        .work-menu-group {
+            width: 100%;
+            padding: 0.85rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            background: rgba(15, 20, 34, 0.86);
+        }
+        .work-menu-group-title {
+            color: #f4f8ff;
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.65rem;
+        }
+        .work-menu-buttons {
+            display: grid;
+            gap: 0.6rem;
+        }
+        .work-menu-btn {
+            width: 100%;
+            border: 1px solid rgba(120, 171, 255, 0.42);
+            background: linear-gradient(135deg, rgba(34, 50, 88, 0.92), rgba(18, 29, 56, 0.96));
+            color: #f2f8ff;
+            border-radius: 12px;
+            padding: 0.8rem 0.75rem;
+            text-align: center;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 18px rgba(7, 16, 35, 0.34);
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .work-menu-btn:active {
+            transform: translateY(1px);
+            border-color: rgba(132, 227, 255, 0.72);
+            box-shadow: inset 0 0 0 1px rgba(186, 236, 255, 0.1), 0 6px 14px rgba(8, 17, 38, 0.32);
+        }
+        .work-menu-btn:focus-visible {
+            outline: none;
+            border-color: rgba(132, 227, 255, 0.78);
+            box-shadow: 0 0 0 2px rgba(86, 184, 255, 0.22), inset 0 0 0 1px rgba(186, 236, 255, 0.12);
+        }
+        .work-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.6rem;
+        }
+        .work-action-link {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.7rem;
+            border: 1px solid rgba(142, 198, 255, 0.52);
+            background: linear-gradient(135deg, rgba(38, 61, 106, 0.94), rgba(18, 33, 66, 0.98));
+            border-radius: 12px;
+            padding: 0.78rem 0.82rem;
+            cursor: pointer;
+            color: #f2f8ff;
+            font-weight: 700;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 22px rgba(7, 15, 35, 0.35);
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .work-action-link:active {
+            transform: translateY(1px);
+            border-color: rgba(132, 227, 255, 0.76);
+            box-shadow: inset 0 0 0 1px rgba(186, 236, 255, 0.12), 0 7px 16px rgba(8, 17, 38, 0.3);
+        }
+        .work-action-link:focus-visible {
+            outline: none;
+            border-color: rgba(132, 227, 255, 0.82);
+            box-shadow: 0 0 0 2px rgba(86, 184, 255, 0.24), inset 0 0 0 1px rgba(186, 236, 255, 0.14);
+        }
+        .work-action-link-label {
+            color: #f4f9ff;
+            font-size: 0.94rem;
+            line-height: 1.2;
+        }
+        .work-action-link-chevron {
+            color: rgba(204, 230, 255, 0.9);
+            font-size: 1.08rem;
+            line-height: 1;
+            font-weight: 800;
+            flex: 0 0 auto;
+        }
+        .work-btn {
+            border: 1px solid rgba(120, 171, 255, 0.36);
+            background: linear-gradient(135deg, rgba(30, 47, 84, 0.9), rgba(16, 27, 52, 0.95));
+            color: #f4f8ff;
+            border-radius: 12px;
+            padding: 0.75rem 0.7rem;
+            cursor: pointer;
+            font-weight: 700;
+            text-align: left;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035), 0 8px 16px rgba(7, 15, 34, 0.3);
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .work-btn:active {
+            transform: translateY(1px);
+            border-color: rgba(132, 227, 255, 0.68);
+            box-shadow: inset 0 0 0 1px rgba(186, 236, 255, 0.1), 0 6px 12px rgba(8, 17, 38, 0.28);
+        }
+        .work-btn:focus-visible {
+            outline: none;
+            border-color: rgba(132, 227, 255, 0.76);
+            box-shadow: 0 0 0 2px rgba(86, 184, 255, 0.2), inset 0 0 0 1px rgba(186, 236, 255, 0.12);
+        }
+        .work-note {
+            font-size: 0.82rem;
+            color: rgba(221, 235, 255, 0.72);
+            line-height: 1.35;
+        }
+        .work-client-summary-card {
+            padding: 0.85rem 0.95rem;
+        }
+        .work-client-summary {
+            display: grid;
+            gap: 0.62rem;
+        }
+        .work-client-summary-row {
+            display: grid;
+            gap: 0.14rem;
+        }
+        .work-client-summary-label {
+            color: rgba(192, 215, 255, 0.76);
+            font-size: 0.79rem;
+        }
+        .work-client-summary-value {
+            color: #edf6ff;
+            font-weight: 700;
+            font-size: 0.88rem;
+        }
+        .work-bind input {
+            width: 100%;
+            background: rgba(12, 20, 38, 0.9);
+            color: #e9f2ff;
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            padding: 0.55rem 0.6rem;
+        }
+        .work-sub-extend-wrap {
+            width: 100%;
+            display: grid;
+            gap: 0.42rem;
+        }
+        .work-sub-extend-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.6rem;
+        }
+        .work-sub-extend-label {
+            color: rgba(207, 226, 255, 0.8);
+            font-size: 0.82rem;
+        }
+        .work-sub-extend-value {
+            color: #eef7ff;
+            font-size: 0.86rem;
+            font-weight: 700;
+        }
+        .work-sub-extend-range {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 1.5rem;
+            margin: 0;
+            padding: 0;
+            border: none;
+            background: transparent;
+            touch-action: pan-y;
+            --work-sub-progress: 0%;
+        }
+        .work-sub-extend-range:focus {
+            outline: none;
+        }
+        .work-sub-extend-range::-webkit-slider-runnable-track {
+            height: 0.38rem;
+            border-radius: 999px;
+            background: linear-gradient(
+                90deg,
+                #56b8ff 0%,
+                #56b8ff var(--work-sub-progress),
+                rgba(192, 216, 255, 0.28) var(--work-sub-progress),
+                rgba(192, 216, 255, 0.28) 100%
+            );
+        }
+        .work-sub-extend-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 1.02rem;
+            height: 1.02rem;
+            margin-top: -0.32rem;
+            border-radius: 50%;
+            border: 2px solid #56b8ff;
+            background: #f3f9ff;
+            box-shadow: 0 2px 8px rgba(7, 17, 34, 0.45);
+            cursor: pointer;
+        }
+        .work-sub-extend-range::-moz-range-track {
+            height: 0.38rem;
+            border: none;
+            border-radius: 999px;
+            background: rgba(192, 216, 255, 0.28);
+        }
+        .work-sub-extend-range::-moz-range-progress {
+            height: 0.38rem;
+            border: none;
+            border-radius: 999px;
+            background: #56b8ff;
+        }
+        .work-sub-extend-range::-moz-range-thumb {
+            width: 1.02rem;
+            height: 1.02rem;
+            border-radius: 50%;
+            border: 2px solid #56b8ff;
+            background: #f3f9ff;
+            box-shadow: 0 2px 8px rgba(7, 17, 34, 0.45);
+            cursor: pointer;
+        }
+        .work-sub-create-wrap {
+            width: 100%;
+            display: grid;
+            gap: 0.42rem;
+        }
+        .work-sub-create-label {
+            color: rgba(207, 226, 255, 0.8);
+            font-size: 0.82rem;
+        }
+        .work-sub-create-input {
+            color-scheme: dark;
+        }
+        .work-bind {
+            display: grid;
+            gap: 0.6rem;
+            margin-top: 0.35rem;
+        }
+        .work-bind select {
+            width: 100%;
+            background: rgba(12, 20, 38, 0.9);
+            color: #e9f2ff;
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            padding: 0.55rem 0.6rem;
+        }
+        .work-bind-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.55rem;
+        }
+        @media (max-width: 420px) {
+            .work-bind-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+        .work-client-cards,
+        .work-links-list {
+            display: grid;
+            gap: 0.6rem;
+        }
+        .work-client-card {
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(135deg, rgba(23, 35, 62, 0.88), rgba(14, 20, 38, 0.95));
+            color: #eef5ff;
+            border-radius: 12px;
+            padding: 0.8rem;
+            cursor: pointer;
+            text-align: left;
+        }
+        .work-client-card-title {
+            font-weight: 700;
+            color: #f3f7ff;
+        }
+        .work-client-card-sub {
+            margin-top: 0.2rem;
+            color: rgba(221, 235, 255, 0.72);
+            font-size: 0.84rem;
+        }
+        .work-link-item {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 0.7rem;
+            background: rgba(12, 19, 36, 0.86);
+        }
+        .work-link-item-title {
+            color: #eff5ff;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+        .work-link-item-value {
+            margin-top: 0.24rem;
+            color: #f5f9ff;
+            font-size: 0.85rem;
+            line-height: 1.35;
+        }
+        .work-link-item-sub {
+            margin-top: 0.2rem;
+            color: rgba(219, 234, 255, 0.72);
+            font-size: 0.82rem;
+            line-height: 1.35;
+        }
+        .work-link-clients {
+            margin-top: 0.45rem;
+            display: grid;
+            gap: 0.35rem;
+        }
+        .work-link-client {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 0.48rem 0.55rem;
+            background: rgba(16, 25, 46, 0.84);
+        }
+        .work-link-client-name {
+            color: #eef6ff;
+            font-size: 0.83rem;
+            line-height: 1.3;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .work-link-client-remove {
+            border: 1px solid rgba(255, 107, 107, 0.5);
+            background: rgba(120, 25, 37, 0.42);
+            color: #ffd7dc;
+            border-radius: 8px;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            flex: 0 0 auto;
+        }
+        .work-link-client-remove:active {
+            transform: translateY(1px);
+        }
+        .work-inbounds-list {
+            display: grid;
+            gap: 0.55rem;
+        }
+        .work-inbound-card {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            background: rgba(12, 19, 36, 0.86);
+            padding: 0.75rem;
+            display: grid;
+            gap: 0.45rem;
+        }
+        .work-inbound-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+        .work-inbound-title {
+            color: #eff6ff;
+            font-weight: 700;
+            font-size: 0.9rem;
+            line-height: 1.25;
+        }
+        .work-inbound-meta {
+            color: rgba(219, 234, 255, 0.74);
+            font-size: 0.82rem;
+            line-height: 1.3;
+        }
+        .work-inbound-badges {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+        .work-inbound-pill {
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 999px;
+            padding: 0.16rem 0.48rem;
+            font-size: 0.75rem;
+            color: #e7f1ff;
+            background: rgba(28, 41, 68, 0.86);
+        }
+        .work-inbound-pill.off {
+            border-color: rgba(255, 126, 126, 0.35);
+            background: rgba(86, 20, 20, 0.36);
+            color: #ffd3d3;
+        }
+        .work-inbound-toggle-btn {
+            border: 1px solid rgba(126, 189, 255, 0.42);
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(34, 50, 88, 0.92), rgba(18, 29, 56, 0.96));
+            color: #f2f8ff;
+            padding: 0.48rem 0.6rem;
+            font-size: 0.81rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-align: center;
+        }
+        .work-inbound-toggle-btn:active {
+            transform: translateY(1px);
+        }
+        .work-empty {
+            border: 1px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 0.75rem;
+            color: rgba(219, 234, 255, 0.72);
+            font-size: 0.86rem;
+        }
+        .work-stub {
+            min-height: 140px;
+            display: flex;
+            align-items: center;
         }
 
         h1 {
@@ -63,6 +871,10 @@
 
         .status-card.hidden {
             display: none;
+        }
+
+        .hidden {
+            display: none !important;
         }
 
         .pill {
@@ -100,21 +912,502 @@
         .cta:not(:disabled):hover {
             transform: translateY(-1px);
         }
+
+        /* === Breathing orb scene === */
+        .pulse-scene {
+            --glow-color: rgba(55, 224, 255, 0.55);
+            --cycle: 4.8s; /* удлинили для тестов (было 2.4s) */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.1rem;
+            width: 100%;
+        }
+
+        .orb-wrapper {
+            position: relative;
+            width: min(190px, 46vw);
+            aspect-ratio: 1;
+            transform-origin: 50% 50%;
+        }
+
+        .orb {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background:
+                /* soft cyan base */
+                radial-gradient(120% 120% at 22% 30%, rgba(80, 248, 255, 0.92), rgba(30, 38, 78, 0.0) 55%),
+                /* deeper blue body */
+                radial-gradient(110% 110% at 40% 55%, rgba(52, 129, 255, 0.85), rgba(12, 19, 40, 0.0) 70%),
+                /* violet limb */
+                radial-gradient(100% 100% at 78% 58%, rgba(158, 83, 255, 0.9), rgba(17, 16, 39, 0.0) 58%),
+                /* subtle base tint */
+                linear-gradient(135deg, #37e0ff 0%, #4f7bff 48%, #a855f7 100%);
+            background-size: 150% 150%;
+            animation:
+                breathe var(--cycle) ease-in-out infinite,
+                gradientShift 8s ease-in-out infinite alternate;
+            box-shadow:
+                0 0 28px 8px rgba(55, 224, 255, 0.18),
+                0 0 64px 18px var(--glow-color),
+                0 0 22px 6px rgba(148, 68, 255, 0.25);
+            filter: drop-shadow(0 12px 28px rgba(0,0,0,0.35));
+        }
+
+        /* Crescent overlay for the 'slice' like in the icon */
+        .orb::before {
+            content: "";
+            position: absolute;
+            inset: -6%;
+            border-radius: 50%;
+            background: radial-gradient(85% 85% at 78% 42%, rgba(12, 17, 34, 0.78), rgba(12,17,34,0) 50%);
+            mix-blend-mode: multiply;
+            animation: breathe var(--cycle) ease-in-out infinite;
+        }
+
+        .orb::after {
+            content: "";
+            position: absolute;
+            inset: -18%;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--glow-color) 0%, rgba(59, 123, 255, 0) 65%);
+            filter: blur(18px);
+            opacity: 0.7;
+            animation: glowBreath var(--cycle) ease-in-out infinite;
+        }
+
+        .orb-highlight {
+            position: absolute;
+            inset: 14%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 28% 28%, rgba(255,255,255,0.18), rgba(255,255,255,0));
+            mix-blend-mode: screen;
+            opacity: 0.12;
+            animation: highlightBreath var(--cycle) ease-in-out infinite;
+        }
+
+        .status-label {
+            font-size: 1.05rem;
+            letter-spacing: 0.01em;
+            color: rgba(244, 245, 247, 0.9);
+            transition: opacity 150ms ease;
+        }
+
+        .status-label.fade-out {
+            opacity: 0;
+        }
+
+        @keyframes breathe {
+            0%   { transform: scale(1.00); }
+            25%  { transform: scale(1.03); }
+            50%  { transform: scale(1.06); }
+            75%  { transform: scale(1.03); }
+            100% { transform: scale(1.00); }
+        }
+
+        @keyframes glowBreath {
+            0%   { opacity: 0.45; filter: blur(16px); }
+            25%  { opacity: 0.58; filter: blur(18px); }
+            50%  { opacity: 0.75; filter: blur(22px); }
+            75%  { opacity: 0.62; filter: blur(18px); }
+            100% { opacity: 0.45; filter: blur(16px); }
+        }
+
+        @keyframes highlightBreath {
+            0%   { transform: scale(1.00); opacity: 0.10; }
+            50%  { transform: scale(1.02); opacity: 0.15; }
+            100% { transform: scale(1.00); opacity: 0.10; }
+        }
+
+        @keyframes gradientShift {
+            0%   { background-position: 40% 40%; }
+            100% { background-position: 60% 60%; }
+        }
+
+        /* Fullscreen loading stage */
+        #loading {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0b1b45, #111b36 60%);
+            z-index: 5;
+        }
+
+        /* Exit transition */
+        #loading.exiting {
+            animation: fadeOutBg 0.7s ease forwards;
+        }
+
+        .orb-wrapper.expand {
+            animation: orbExpand 0.7s ease forwards;
+        }
+
+        @keyframes orbExpand {
+            0% { transform: scale(1); opacity: 1; }
+            70% { transform: scale(12); opacity: 0.35; }
+            100% { transform: scale(18); opacity: 0; }
+        }
+
+        @keyframes fadeOutBg {
+            to { opacity: 0; }
+        }
     </style>
 </head>
 <body>
-    <main>
-        <section id="status-card" class="status-card">
-            <span class="pill">Проверка</span>
-            <h1 id="status-title">Выполняем проверку Telegram</h1>
-            <p id="status-text">Позвольте системе удостовериться, что вы пришли через Telegram: мы проверим initData и только потом откроем интерфейс.</p>
+    <div id="loading">
+        <div class="pulse-scene" id="pulse-scene">
+            <div class="orb-wrapper">
+                <div class="orb"></div>
+                <div class="orb-highlight"></div>
+            </div>
+            <div class="status-label" id="status-label">Проверяем сервер…</div>
+        </div>
+    </div>
+
+    <main class="hidden">
+        <section id="status-card" class="status-card hidden">
+            <h1 id="status-title">Доступ закрыт</h1>
+            <p id="status-text">Попробуйте снова запустить мини‑приложение.</p>
         </section>
 
         <section id="app-content" class="app-content hidden">
-            <span class="pill">Добро пожаловать</span>
-            <h1 id="welcome-title">Привет</h1>
-            <p>Вы успешно прошли проверку, доступ открыт. Здесь можно разместить ваш основной контент.</p>
-            <button id="cta-open" class="cta">Открыть мини-приложение</button>
+            <div class="content">
+            <div class="app-shell">
+                <div class="topbar" id="topbar">
+                    <div class="brand">Lumica Service</div>
+                </div>
+
+                <div class="hero-card" id="hero-card">
+                    <div class="orb-hero">
+                        <img class="hero-icon" alt="Lumica orb" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><defs><radialGradient id='g1' cx='30%' cy='30%' r='80%'><stop offset='0%' stop-color='%234ef0ff'/><stop offset='65%' stop-color='%232b5be0'/><stop offset='100%' stop-color='%231a1f3f' stop-opacity='0.05'/></radialGradient><radialGradient id='g2' cx='75%' cy='60%' r='55%'><stop offset='0%' stop-color='%23a060ff' stop-opacity='0.95'/><stop offset='100%' stop-color='%23101020' stop-opacity='0'/></radialGradient></defs><circle cx='100' cy='100' r='95' fill='url(%23g1)'/><circle cx='100' cy='100' r='95' fill='url(%23g2)'/><circle cx='120' cy='70' r='78' fill='rgba(10,15,40,0.45)'/></svg>" />
+                    </div>
+                    <div class="hero-caption" id="welcome-title">Lumica Service</div>
+                    <div class="hero-sub" id="hero-sub">Сервер активен • Онлайн</div>
+                </div>
+
+                    <div id="screen-home" class="screen">
+                        <div class="cards">
+                            <div class="card">
+                                <div class="left">
+                                    <div class="badge">✓</div>
+                                    <div>
+                                        <div class="card-title">Сервер активен</div>
+                                        <div class="card-sub" id="home-server-sub">Проверка...</div>
+                                    </div>
+                                </div>
+                                <span class="chevron"></span>
+                            </div>
+                            <div class="card">
+                                <div class="left">
+                                    <div class="badge">◎</div>
+                                    <div>
+                                        <div class="card-title" id="home-sub-title">Подписка</div>
+                                        <div class="card-sub" id="home-sub-sub">Проверка...</div>
+                                    </div>
+                                </div>
+                                <span class="card-sub" id="home-sub-right">...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="screen-connections" class="screen hidden">
+                        <div class="connection-pages">
+                            <section id="connections-menu-page">
+                                <div class="cards">
+                                    <button type="button" class="card connection-protocol-btn" id="vless-card" data-connection-protocol="vless">
+                                        <div class="left">
+                                            <div class="badge">V</div>
+                                            <div>
+                                                <div class="card-title">VLESS</div>
+                                                <div class="card-sub" id="vless-status">Проверка...</div>
+                                            </div>
+                                        </div>
+                                        <span class="chevron" id="vless-detail">›</span>
+                                    </button>
+                                    <button type="button" class="card connection-protocol-btn" id="http-card" data-connection-protocol="http">
+                                        <div class="left">
+                                            <div class="badge">H</div>
+                                            <div>
+                                                <div class="card-title">HTTP Proxy</div>
+                                                <div class="card-sub" id="http-status">Проверка...</div>
+                                            </div>
+                                        </div>
+                                        <span class="chevron" id="http-detail">›</span>
+                                    </button>
+                                    <button type="button" class="card connection-protocol-btn" id="mixed-card" data-connection-protocol="mixed">
+                                        <div class="left">
+                                            <div class="badge">M</div>
+                                            <div>
+                                                <div class="card-title">Mixed (SOCKS5)</div>
+                                                <div class="card-sub" id="mixed-status">Проверка...</div>
+                                            </div>
+                                        </div>
+                                        <span class="chevron" id="mixed-detail">›</span>
+                                    </button>
+                                    <div id="connections-hidden-note" class="work-empty hidden">Нет доступных подключений для показа в приложении.</div>
+                                </div>
+                            </section>
+
+                            <section id="connections-detail-page" class="hidden">
+                                <div class="work-page-head">
+                                    <button type="button" class="work-back-btn" id="connections-back-btn">← Назад</button>
+                                    <div class="work-page-title" id="connections-detail-title">Подключения</div>
+                                </div>
+                                <div class="connections-detail-info" id="connections-detail-subtitle">Информация о подключениях</div>
+                                <div id="connections-detail-list" class="connections-detail-list">
+                                    <div class="work-empty">Подключения не найдены.</div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <div id="screen-work" class="screen hidden">
+                        <div class="section-title" id="work-section-title">Работа</div>
+
+                        <section id="work-menu-page" class="work-page">
+                            <div class="work-profile-card" id="work-header-card">
+                                <div class="work-profile-main">
+                                    <div class="work-profile-avatar">👤</div>
+                                    <div>
+                                        <div class="work-profile-name" id="work-owner-name">Панель управления</div>
+                                        <div class="work-profile-role" id="work-owner-role">user</div>
+                                    </div>
+                                </div>
+                                <span class="pill-soft hidden" id="work-role-pill" aria-hidden="true"></span>
+                            </div>
+
+                            <div class="work-menu-groups">
+                                <section class="work-menu-group">
+                                    <div class="work-menu-group-title">Работа с людьми</div>
+                                    <div class="work-menu-buttons">
+                                        <button type="button" class="work-menu-btn" data-work-nav="work-staff-page">Персонал</button>
+                                        <button type="button" class="work-menu-btn" data-work-nav="work-clients-page">Клиенты</button>
+                                    </div>
+                                </section>
+                                <section class="work-menu-group">
+                                    <div class="work-menu-group-title">Работа с подключениями</div>
+                                    <div class="work-menu-buttons">
+                                        <button type="button" class="work-menu-btn" data-work-nav="work-inbounds-page">Подключения</button>
+                                    </div>
+                                </section>
+                            </div>
+                        </section>
+
+                        <section id="work-staff-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
+                                <div class="work-page-title">Персонал</div>
+                            </div>
+                            <div class="work-empty work-stub">Экран персонала. Здесь можно разместить список сотрудников и роли.</div>
+                        </section>
+
+                        <section id="work-clients-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
+                                <div class="work-page-title">Клиенты</div>
+                                <button id="work-refresh-users-btn" class="work-back-btn">Обновить</button>
+                            </div>
+                            <div id="work-client-cards" class="work-client-cards">
+                                <div class="work-empty">Загрузка списка клиентов...</div>
+                            </div>
+                            <div class="work-actions">
+                                <button type="button" class="work-action-link" data-work-nav="work-pending-page">
+                                    <span class="work-action-link-label">Pending до входа</span>
+                                    <span class="work-action-link-chevron" aria-hidden="true">›</span>
+                                </button>
+                            </div>
+                        </section>
+
+                        <section id="work-pending-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-clients-page">← Назад</button>
+                                <div class="work-page-title">Pending до первого входа</div>
+                            </div>
+                            <div class="work-bind">
+                                <input id="work-pending-telegram-id" type="text" inputmode="numeric" placeholder="Telegram ID">
+                                <select id="work-pending-inbound-select">
+                                    <option value="">Выбери inbound</option>
+                                </select>
+                                <select id="work-pending-client-select">
+                                    <option value="">Выбери клиента из inbound</option>
+                                </select>
+                                <button id="work-pending-add-btn" class="work-btn">Добавить pending-привязку</button>
+                                <div class="work-note">Этот inbound будет выдан автоматически при первом входе пользователя в приложение.</div>
+                            </div>
+                            <div id="work-pending-list" class="work-links-list">
+                                <div class="work-empty">Pending-привязки пока нет.</div>
+                            </div>
+                        </section>
+
+                        <section id="work-inbounds-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
+                                <div class="work-page-title">Подключения</div>
+                                <button id="work-sync-inbounds-btn" class="work-back-btn">Синхр.</button>
+                            </div>
+                            <div class="work-note">Управляй, какие inbound показывать пользователям во вкладке подключений.</div>
+                            <div id="work-inbounds-list" class="work-inbounds-list">
+                                <div class="work-empty">Загрузка подключений...</div>
+                            </div>
+                        </section>
+
+                        <section id="work-client-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-clients-page">← Назад</button>
+                                <div class="work-page-title" id="work-client-page-title">Клиент</div>
+                            </div>
+                            <div class="card">
+                                <div class="left">
+                                    <div class="badge">👤</div>
+                                    <div>
+                                        <div class="card-title" id="work-client-name">—</div>
+                                        <div class="card-sub" id="work-client-meta">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card work-client-summary-card">
+                                <div class="work-client-summary" id="work-client-summary">
+                                    <div class="work-client-summary-row">
+                                        <div class="work-client-summary-label">Подписка</div>
+                                        <div class="work-client-summary-value" id="work-client-sub-status">—</div>
+                                    </div>
+                                    <div class="work-client-summary-row">
+                                        <div class="work-client-summary-label">До</div>
+                                        <div class="work-client-summary-value" id="work-client-sub-until">—</div>
+                                    </div>
+                                    <div class="work-client-summary-row">
+                                        <div class="work-client-summary-label">Платит</div>
+                                        <div class="work-client-summary-value" id="work-client-sub-price">—</div>
+                                    </div>
+                                    <div class="work-client-summary-row">
+                                        <div class="work-client-summary-label">Лимит подключений</div>
+                                        <div class="work-client-summary-value" id="work-client-connections-available">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="work-actions">
+                                <button type="button" class="work-action-link" data-work-nav="work-client-connections-page">
+                                    <span class="work-action-link-label">Подключения</span>
+                                    <span class="work-action-link-chevron" aria-hidden="true">›</span>
+                                </button>
+                                <button type="button" class="work-action-link" data-work-nav="work-client-subscription-page">
+                                    <span class="work-action-link-label">Подписка</span>
+                                    <span class="work-action-link-chevron" aria-hidden="true">›</span>
+                                </button>
+                            </div>
+                        </section>
+
+                        <section id="work-client-connections-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-client-page">← Назад</button>
+                                <div class="work-page-title">Подключения</div>
+                            </div>
+                            <div class="work-bind">
+                                <select id="work-inbound-select">
+                                    <option value="">Выбери inbound</option>
+                                </select>
+                                <select id="work-client-select">
+                                    <option value="">Выбери клиента из inbound</option>
+                                </select>
+                                <div class="work-bind-actions">
+                                    <button id="work-bind-btn" class="work-btn">Привязать inbound</button>
+                                    <button id="work-refresh-inbound-clients-btn" type="button" class="work-btn">Обновить</button>
+                                </div>
+                                <div class="work-note">Порядок: пользователь → inbound → клиент → привязка.</div>
+                            </div>
+                            <div class="work-page-title">Существующие связи</div>
+                            <div id="work-existing-links" class="work-links-list">
+                                <div class="work-empty">Связи еще не загружены.</div>
+                            </div>
+                        </section>
+
+                        <section id="work-client-subscription-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-client-page">← Назад</button>
+                                <div class="work-page-title">Подписка</div>
+                            </div>
+                            <div class="work-bind">
+                                <select id="work-sub-status-select">
+                                    <option value="active">active</option>
+                                    <option value="lifetime">lifetime</option>
+                                    <option value="paused">paused</option>
+                                    <option value="expired">expired</option>
+                                    <option value="canceled">canceled</option>
+                                    <option value="inactive">inactive</option>
+                                </select>
+                                <input id="work-sub-price-input" type="number" min="0" step="0.01" placeholder="Цена (₽)">
+                                <input id="work-sub-limit-input" type="number" min="0" step="1" placeholder="Лимит подключений">
+                                <button id="work-sub-save-btn" class="work-btn">Сохранить параметры</button>
+                            </div>
+                            <div class="work-bind">
+                                <div id="work-sub-extend-wrap" class="work-sub-extend-wrap">
+                                    <div class="work-sub-extend-head">
+                                        <span class="work-sub-extend-label">Срок продления</span>
+                                        <span class="work-sub-extend-value" id="work-sub-extend-value">1 месяц</span>
+                                    </div>
+                                    <input id="work-sub-extend-range" class="work-sub-extend-range" type="range" min="1" max="12" step="1" value="1">
+                                </div>
+                                <div id="work-sub-create-wrap" class="work-sub-create-wrap hidden">
+                                    <label class="work-sub-create-label" for="work-sub-create-date">Дата окончания (если подписки нет)</label>
+                                    <input id="work-sub-create-date" class="work-sub-create-input" type="date">
+                                </div>
+                                <button id="work-sub-extend-btn" class="work-btn">Продлить подписку</button>
+                            </div>
+                        </section>
+                    </div>
+                    <div id="screen-profile" class="screen hidden">
+                        <div class="section-title">Главная</div>
+                        <div class="card">
+                            <div class="left">
+                                <div class="badge">ID</div>
+                                <div>
+                                    <div class="card-title">Ваш ID</div>
+                                    <div class="card-sub" id="profile-telegram-id">••••</div>
+                                </div>
+                            </div>
+                            <div class="pill-soft" id="profile-id-toggle">Скрыт</div>
+                        </div>
+
+                        <div class="card">
+                            <div class="left">
+                                <div class="badge">✓</div>
+                                <div>
+                                    <div class="card-title" id="profile-sub-title">Подписка</div>
+                                    <div class="card-sub" id="profile-sub-sub">Проверка...</div>
+                                </div>
+                            </div>
+                            <div class="pill-soft" id="profile-role">user</div>
+                        </div>
+
+                        <div class="card support-card">
+                            <div class="card-title">Поддержка</div>
+                            <div class="card-sub">Задайте вопрос в чате</div>
+                        </div>
+                    </div>
+
+                <nav class="bottom-nav">
+                    <button class="nav-btn active" data-screen="screen-home">
+                        <span class="icon">🏠</span>
+                        <span>Главная</span>
+                    </button>
+                    <button class="nav-btn" data-screen="screen-connections">
+                        <span class="icon">&#x2B07;&#xFE0F;</span>
+                        <span>Подключения</span>
+                    </button>
+                    <button class="nav-btn hidden" id="nav-work-btn" data-screen="screen-work">
+                        <span class="icon">🛠</span>
+                        <span>Работа</span>
+                    </button>
+                    <button class="nav-btn" data-screen="screen-profile">
+                        <span class="icon">👤</span>
+                        <span>Профиль</span>
+                    </button>
+                </nav>
+            </div>
+            </div>
         </section>
     </main>
 
@@ -124,35 +1417,1576 @@
         const statusText = document.getElementById("status-text");
         const appContent = document.getElementById("app-content");
         const welcomeTitle = document.getElementById("welcome-title");
-        const ctaButton = document.getElementById("cta-open");
+        const statusLabel = document.getElementById("status-label");
+        const pulseScene = document.getElementById("pulse-scene");
+        const loading = document.getElementById("loading");
+        const mainEl = document.querySelector("main");
+        const orbWrapper = document.querySelector(".orb-wrapper");
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const navButtons = document.querySelectorAll("[data-screen]");
+        const screens = document.querySelectorAll(".screen");
+        const heroCardEl = document.getElementById("hero-card");
+        const topbarEl = document.getElementById("topbar");
+        const workSectionTitleEl = document.getElementById("work-section-title");
+        const bottomNavEl = document.querySelector(".bottom-nav");
+        const navWorkBtn = document.getElementById("nav-work-btn");
+        const workPages = document.querySelectorAll(".work-page");
+        const workNavButtons = document.querySelectorAll("[data-work-nav]");
+        const workBackButtons = document.querySelectorAll("[data-work-back]");
+        const authUrl = `${window.location.origin}/api/tg/auth`;
+        const meUrl = `${window.location.origin}/api/me`;
+        const statusUrl = `${window.location.origin}/api/status`;
+        const vpnConfigUrl = `${window.location.origin}/api/vpn/config`;
+        const vpnHttpUrl = `${window.location.origin}/api/vpn/http`;
+        const vpnMixedUrl = `${window.location.origin}/api/vpn/mixed`;
+        const adminUsersUrl = `${window.location.origin}/api/admin/users`;
+        const adminInboundsUrl = `${window.location.origin}/api/admin/inbounds`;
+        const adminSyncInboundsUrl = `${window.location.origin}/api/admin/sync-inbounds`;
+        const adminBindClientUrl = `${window.location.origin}/api/admin/bind-client`;
+        const adminUnbindClientUrl = `${window.location.origin}/api/admin/unbind-client`;
+        const adminPendingBindingsUrl = `${window.location.origin}/api/admin/pending-bindings`;
+        const adminCancelPendingBindingUrl = (pendingId) =>
+            `${window.location.origin}/api/admin/pending-bindings/${pendingId}/cancel`;
+        const adminInboundVisibilityUrl = (panelInboundId) => `${window.location.origin}/api/admin/inbounds/${panelInboundId}/visibility`;
+        const adminUserBindingsUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/bindings`;
+        const adminUserOverviewUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/overview`;
+        const adminUserSubscriptionUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/subscription`;
+        const homeServerSub = document.getElementById("home-server-sub");
+        const homeSubTitle = document.getElementById("home-sub-title");
+        const homeSubSub = document.getElementById("home-sub-sub");
+        const homeSubRight = document.getElementById("home-sub-right");
+        const connectionsMenuPageEl = document.getElementById("connections-menu-page");
+        const connectionsDetailPageEl = document.getElementById("connections-detail-page");
+        const connectionsBackBtnEl = document.getElementById("connections-back-btn");
+        const connectionsDetailTitleEl = document.getElementById("connections-detail-title");
+        const connectionsDetailSubtitleEl = document.getElementById("connections-detail-subtitle");
+        const connectionsDetailListEl = document.getElementById("connections-detail-list");
+        const connectionProtocolButtons = document.querySelectorAll("[data-connection-protocol]");
+        const vlessCardEl = document.getElementById("vless-card");
+        const httpCardEl = document.getElementById("http-card");
+        const mixedCardEl = document.getElementById("mixed-card");
+        const connectionsHiddenNoteEl = document.getElementById("connections-hidden-note");
+        const vlessStatusEl = document.getElementById("vless-status");
+        const vlessDetailEl = document.getElementById("vless-detail");
+        const httpStatusEl = document.getElementById("http-status");
+        const httpDetailEl = document.getElementById("http-detail");
+        const mixedStatusEl = document.getElementById("mixed-status");
+        const mixedDetailEl = document.getElementById("mixed-detail");
+        const profileTelegramIdEl = document.getElementById("profile-telegram-id");
+        const profileIdToggleEl = document.getElementById("profile-id-toggle");
+        const profileSubTitleEl = document.getElementById("profile-sub-title");
+        const profileSubSubEl = document.getElementById("profile-sub-sub");
+        const profileRoleEl = document.getElementById("profile-role");
+        const workOwnerNameEl = document.getElementById("work-owner-name");
+        const workOwnerRoleEl = document.getElementById("work-owner-role");
+        const workRolePillEl = document.getElementById("work-role-pill");
+        const workRefreshUsersBtnEl = document.getElementById("work-refresh-users-btn");
+        const workSyncInboundsBtnEl = document.getElementById("work-sync-inbounds-btn");
+        const workInboundsListEl = document.getElementById("work-inbounds-list");
+        const workClientCardsEl = document.getElementById("work-client-cards");
+        const workClientPageTitleEl = document.getElementById("work-client-page-title");
+        const workClientNameEl = document.getElementById("work-client-name");
+        const workClientMetaEl = document.getElementById("work-client-meta");
+        const workClientSubStatusEl = document.getElementById("work-client-sub-status");
+        const workClientSubUntilEl = document.getElementById("work-client-sub-until");
+        const workClientSubPriceEl = document.getElementById("work-client-sub-price");
+        const workClientConnectionsAvailableEl = document.getElementById("work-client-connections-available");
+        const workExistingLinksEl = document.getElementById("work-existing-links");
+        const workInboundSelectEl = document.getElementById("work-inbound-select");
+        const workClientSelectEl = document.getElementById("work-client-select");
+        const workBindBtnEl = document.getElementById("work-bind-btn");
+        const workRefreshInboundClientsBtnEl = document.getElementById("work-refresh-inbound-clients-btn");
+        const workPendingTelegramIdEl = document.getElementById("work-pending-telegram-id");
+        const workPendingInboundSelectEl = document.getElementById("work-pending-inbound-select");
+        const workPendingClientSelectEl = document.getElementById("work-pending-client-select");
+        const workPendingAddBtnEl = document.getElementById("work-pending-add-btn");
+        const workPendingListEl = document.getElementById("work-pending-list");
+        const workSubStatusSelectEl = document.getElementById("work-sub-status-select");
+        const workSubPriceInputEl = document.getElementById("work-sub-price-input");
+        const workSubLimitInputEl = document.getElementById("work-sub-limit-input");
+        const workSubSaveBtnEl = document.getElementById("work-sub-save-btn");
+        const workSubExtendWrapEl = document.getElementById("work-sub-extend-wrap");
+        const workSubCreateWrapEl = document.getElementById("work-sub-create-wrap");
+        const workSubCreateDateEl = document.getElementById("work-sub-create-date");
+        const workSubExtendRangeEl = document.getElementById("work-sub-extend-range");
+        const workSubExtendValueEl = document.getElementById("work-sub-extend-value");
+        const workSubExtendBtnEl = document.getElementById("work-sub-extend-btn");
+        const workState = {
+            users: [],
+            inbounds: [],
+            clients: [],
+            bindings: [],
+            pendingClients: [],
+            pendingBindings: [],
+            selectedUserId: null,
+            overview: null,
+        };
+        const FORCE_HIDE_TOPBAR = true;
+        const FULLSCREEN_TOP_RESERVE_PX = 28;
+        const FULLSCREEN_BOTTOM_RESERVE_PX = 2;
+        const connectionsState = {
+            activeProtocol: null,
+            entries: {
+                vless: [],
+                http: [],
+                mixed: [],
+            },
+            visibility: {
+                vless: false,
+                http: false,
+                mixed: false,
+            },
+        };
+        let lastUserPayload = null;
+        let showFullTelegramId = false;
+        let viewportListenerBound = false;
+        let tgBackButtonBound = false;
+        const workBackTargetByPage = new Map();
+        workBackButtons.forEach((btn) => {
+            const pageId = btn.closest(".work-page")?.id;
+            if (!pageId) return;
+            workBackTargetByPage.set(pageId, btn.dataset.workBack || "work-menu-page");
+        });
 
-        function showApp(userName) {
+        function isMobileTelegramPlatform(tg) {
+            const platform = String(tg?.platform || "").toLowerCase();
+            return platform === "android" || platform === "ios";
+        }
+
+        function updateSafeAreaVars(tg) {
+            const safeArea = tg?.safeAreaInset || tg?.contentSafeAreaInset;
+            const top = Number(safeArea?.top) || 0;
+            const bottom = Number(safeArea?.bottom) || 0;
+            document.documentElement.style.setProperty("--safe-top", `${top}px`);
+            document.documentElement.style.setProperty("--safe-bottom", `${bottom}px`);
+        }
+
+        function applyTopReserve(enabled) {
+            const reserve = enabled ? FULLSCREEN_TOP_RESERVE_PX : 0;
+            document.documentElement.style.setProperty("--system-top-reserve", `${reserve}px`);
+        }
+
+        function applyBottomReserve(enabled) {
+            const reserve = enabled ? FULLSCREEN_BOTTOM_RESERVE_PX : 0;
+            document.documentElement.style.setProperty("--system-nav-reserve", `${reserve}px`);
+        }
+
+        function ensureSafeViewportMode() {
+            const tg = window.Telegram?.WebApp;
+            if (!tg) {
+                applyTopReserve(false);
+                applyBottomReserve(false);
+                return;
+            }
+            try {
+                const isMobile = isMobileTelegramPlatform(tg);
+                const canFullscreen = isMobile && typeof tg.requestFullscreen === "function" && tg.isVersionAtLeast?.("8.0");
+                updateSafeAreaVars(tg);
+                tg.expand?.();
+                if (canFullscreen) {
+                    try {
+                        tg.requestFullscreen();
+                    } catch (fullscreenErr) {
+                        console.warn("requestFullscreen failed:", fullscreenErr);
+                    }
+                }
+                applyTopReserve(Boolean(tg.isFullscreen) || canFullscreen);
+                applyBottomReserve(Boolean(tg.isFullscreen) || canFullscreen);
+
+                if (!viewportListenerBound && typeof tg.onEvent === "function") {
+                    tg.onEvent("viewportChanged", () => {
+                        updateSafeAreaVars(tg);
+                        applyTopReserve(Boolean(tg.isFullscreen) || canFullscreen);
+                        applyBottomReserve(Boolean(tg.isFullscreen) || canFullscreen);
+                    });
+                    viewportListenerBound = true;
+                }
+            } catch (err) {
+                console.error("viewport mode setup error:", err);
+            }
+        }
+
+        function setTopbarVisibility(shouldHide = false) {
+            if (!topbarEl) return;
+            if (FORCE_HIDE_TOPBAR || shouldHide) {
+                topbarEl.classList.add("hidden");
+            } else {
+                topbarEl.classList.remove("hidden");
+            }
+        }
+
+        function getActiveScreenId() {
+            const active = Array.from(screens).find((screen) => !screen.classList.contains("hidden"));
+            return active?.id || "";
+        }
+
+        function getActiveWorkPageId() {
+            const active = Array.from(workPages).find((page) => !page.classList.contains("hidden"));
+            return active?.id || "";
+        }
+
+        function hasTelegramBackButton() {
+            const backButton = window.Telegram?.WebApp?.BackButton;
+            return Boolean(backButton && typeof backButton.show === "function" && typeof backButton.hide === "function");
+        }
+
+        function setCustomBackButtonsVisibility(visible) {
+            workBackButtons.forEach((btn) => btn.classList.toggle("hidden", !visible));
+            connectionsBackBtnEl?.classList.toggle("hidden", !visible);
+        }
+
+        function handleTelegramBack() {
+            const activeScreenId = getActiveScreenId();
+            if (activeScreenId === "screen-connections" && !connectionsDetailPageEl?.classList.contains("hidden")) {
+                openConnectionsMenu();
+                return;
+            }
+
+            if (activeScreenId === "screen-work") {
+                const activePageId = getActiveWorkPageId();
+                const backTarget = workBackTargetByPage.get(activePageId);
+                if (backTarget) {
+                    switchWorkPage(backTarget);
+                }
+            }
+        }
+
+        function shouldShowTelegramBackButton() {
+            const activeScreenId = getActiveScreenId();
+
+            if (activeScreenId === "screen-connections") {
+                return !connectionsDetailPageEl?.classList.contains("hidden");
+            }
+
+            if (activeScreenId === "screen-work") {
+                const activePageId = getActiveWorkPageId();
+                return Boolean(workBackTargetByPage.get(activePageId));
+            }
+
+            return false;
+        }
+
+        function updateTelegramBackButton() {
+            const backButton = window.Telegram?.WebApp?.BackButton;
+            if (!backButton) return;
+
+            const shouldShow = shouldShowTelegramBackButton();
+            if (shouldShow) {
+                if (!tgBackButtonBound && typeof backButton.onClick === "function") {
+                    backButton.onClick(handleTelegramBack);
+                    tgBackButtonBound = true;
+                }
+                backButton.show?.();
+                return;
+            }
+
+            backButton.hide?.();
+        }
+
+        function syncBackNavigationMode() {
+            const useTelegramBack = hasTelegramBackButton();
+            setCustomBackButtonsVisibility(!useTelegramBack);
+            if (useTelegramBack) {
+                updateTelegramBackButton();
+            }
+        }
+
+        function runRevealAnimation() {
+            return new Promise((resolve) => {
+                if (!orbWrapper) return resolve();
+                const done = () => {
+                    orbWrapper.removeEventListener("animationend", done);
+                    resolve();
+                };
+                orbWrapper.addEventListener("animationend", done);
+                orbWrapper.classList.add("expand");
+                loading.classList.add("exiting");
+                setTimeout(resolve, 750); // fallback
+            });
+        }
+
+        async function showApp(userName) {
+            welcomeTitle.textContent = userName ? `Lumica Service • ${userName}` : "Lumica Service";
+            await runRevealAnimation();
+            loading.classList.add("hidden");
             statusCard.classList.add("hidden");
-            welcomeTitle.textContent = userName || "пользователь Telegram";
             appContent.classList.remove("hidden");
+            mainEl.classList.remove("hidden");
+            // плавное появление контента
+            requestAnimationFrame(() => {
+                mainEl.classList.add("visible");
+            });
         }
 
         function showError(message) {
+            loading.classList.add("hidden");
+            mainEl.classList.remove("hidden");
+            requestAnimationFrame(() => {
+                mainEl.classList.add("visible");
+            });
             statusTitle.textContent = "Доступ закрыт";
-            statusText.textContent = message || "Валидация Telegram initData не прошла, повторите запуск мини-приложения.";
+            statusText.textContent = message || "Валидация Telegram initData не прошла, повторите запуск мини‑приложения.";
             appContent.classList.add("hidden");
             statusCard.classList.remove("hidden");
         }
 
-        async function validateUser() {
-            const initData = window.Telegram?.WebApp?.initData;
-            if (!initData) {
-                throw new Error("Не обнаружены данные Telegram Web App. Запустите мини-приложение через Telegram.");
+        const DEV_MODE = new URLSearchParams(window.location.search).get("dev") === "1";
+        console.log("DEV_MODE", DEV_MODE);
+
+        function fmtDate(iso) {
+            if (!iso) return "не задано";
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return "не задано";
+            return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" });
+        }
+
+        function normalizeSubscriptionStatus(status) {
+            return String(status || "").trim().toLowerCase();
+        }
+
+        function isSubscriptionActive(subscription) {
+            const status = normalizeSubscriptionStatus(subscription?.status);
+            return status === "active" || status === "lifetime";
+        }
+
+        function isSubscriptionLifetime(subscription) {
+            return normalizeSubscriptionStatus(subscription?.status) === "lifetime";
+        }
+
+        function formatSubscriptionUntil(subscription, formatter = fmtDateTime) {
+            if (!subscription) return "\u2014";
+            if (isSubscriptionLifetime(subscription)) return "\u0411\u0435\u0441\u0441\u0440\u043e\u0447\u043d\u043e";
+            return subscription?.access_until ? formatter(subscription.access_until) : "\u2014";
+        }
+
+        function maskTelegramId(raw) {
+            if (!raw) return "—";
+            const text = String(raw);
+            if (text.length <= 4) return text;
+            return `••••${text.slice(-4)}`;
+        }
+
+        function renderTelegramId() {
+            const telegramId = lastUserPayload?.user?.telegram_id;
+            if (!telegramId) {
+                profileTelegramIdEl.textContent = "—";
+                profileIdToggleEl.textContent = "Нет";
+                return;
+            }
+            profileTelegramIdEl.textContent = showFullTelegramId ? String(telegramId) : maskTelegramId(telegramId);
+            profileIdToggleEl.textContent = showFullTelegramId ? "Скрыть" : "Показать";
+        }
+
+        function fmtConnectionsCount(n) {
+            const value = Number(n) || 0;
+            const mod10 = value % 10;
+            const mod100 = value % 100;
+            if (mod10 === 1 && mod100 !== 11) return `${value} подключение`;
+            if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${value} подключения`;
+            return `${value} подключений`;
+        }
+
+        function normalizeVlessConnections(payload) {
+            const rows = Array.isArray(payload?.connections) ? payload.connections : [];
+            if (rows.length) {
+                return rows.filter((row) => row?.vless_url);
+            }
+            if (payload?.ok && payload?.vless_url) {
+                return [
+                    {
+                        label: payload?.identifier || "VLESS",
+                        host: payload?.host,
+                        port: payload?.port,
+                        vless_url: payload?.vless_url,
+                        inbound_remark: null,
+                    },
+                ];
+            }
+            return [];
+        }
+
+        function normalizeMixedConnections(payload) {
+            const rows = Array.isArray(payload?.connections) ? payload.connections : [];
+            if (rows.length) {
+                return rows.filter((row) => Array.isArray(row?.urls) && row.urls.length);
+            }
+            if (payload?.ok && Array.isArray(payload?.urls) && payload.urls.length) {
+                return [
+                    {
+                        label: payload?.username || "MIXED",
+                        host: payload?.host,
+                        port: payload?.port,
+                        username: payload?.username || null,
+                        password: payload?.password || null,
+                        urls: payload?.urls,
+                        inbound_remark: null,
+                    },
+                ];
+            }
+            return [];
+        }
+
+        function normalizeHttpConnections(payload) {
+            const rows = Array.isArray(payload?.connections) ? payload.connections : [];
+            if (rows.length) {
+                return rows.filter((row) => Array.isArray(row?.urls) && row.urls.length);
+            }
+            if (payload?.ok && Array.isArray(payload?.urls) && payload.urls.length) {
+                return [
+                    {
+                        label: payload?.username || "HTTP",
+                        host: payload?.host,
+                        port: payload?.port,
+                        urls: payload?.urls,
+                        inbound_remark: null,
+                    },
+                ];
+            }
+            return [];
+        }
+
+        function connectionProtocolTitle(protocol) {
+            if (protocol === "vless") return "VLESS";
+            if (protocol === "http") return "HTTP Proxy";
+            if (protocol === "mixed") return "Mixed (SOCKS5)";
+            return "Подключения";
+        }
+
+        function buildConnectionsInfoText(protocol, rows) {
+            const safeRows = Array.isArray(rows) ? rows : [];
+            const hosts = [...new Set(safeRows.map((r) => String(r?.host || "").trim()).filter(Boolean))];
+            const ports = [...new Set(safeRows.map((r) => String(r?.port ?? "").trim()).filter(Boolean))];
+
+            return [
+                "Информация о подключениях",
+                `Протокол: ${connectionProtocolTitle(protocol)}`,
+                `Хост: ${hosts.join(", ") || "—"}`,
+                `Порт: ${ports.join(", ") || "—"}`,
+            ].join("\n");
+        }
+
+        function detectUrlType(url) {
+            const raw = String(url || "").trim().toLowerCase();
+            if (raw.startsWith("vless://")) return "VLESS";
+            if (raw.startsWith("socks5://")) return "SOCKS5";
+            if (raw.startsWith("https://")) return "HTTPS";
+            if (raw.startsWith("http://")) return "HTTP";
+            return "Ссылка";
+        }
+
+        function buildTelegramSocksUrl(row) {
+            const host = String(row?.host || "").trim();
+            const port = String(row?.port ?? "").trim();
+            const user = String(row?.username || row?.identifier || "").trim();
+            const pass = String(row?.password || "").trim();
+            if (!host || !port || !user || !pass) return "";
+            return `https://t.me/socks?server=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`;
+        }
+
+        function openExternalLink(url) {
+            const link = String(url || "").trim();
+            if (!link) return;
+            if (link.startsWith("https://t.me/") && window.Telegram?.WebApp?.openTelegramLink) {
+                window.Telegram.WebApp.openTelegramLink(link);
+                return;
+            }
+            if (window.Telegram?.WebApp?.openLink) {
+                window.Telegram.WebApp.openLink(link);
+                return;
+            }
+            window.open(link, "_blank", "noopener,noreferrer");
+        }
+
+        async function copyToClipboard(value) {
+            const text = String(value || "").trim();
+            if (!text) throw new Error("empty value");
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+                return;
+            }
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.setAttribute("readonly", "");
+            ta.style.position = "fixed";
+            ta.style.left = "-1000px";
+            ta.style.top = "-1000px";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+        }
+
+        function connectionCopyItems(protocol, row) {
+            if (protocol === "vless") {
+                return row?.vless_url
+                    ? [{ label: "Копировать VLESS", value: row.vless_url, action: "copy" }]
+                    : [];
+            }
+            if (protocol === "mixed") {
+                const user = String(row?.username || row?.identifier || "").trim();
+                const pass = String(row?.password || "").trim();
+                const tgSocksUrl = buildTelegramSocksUrl(row);
+                const actions = [];
+                if (pass) actions.push({ label: "Копировать пароль", value: pass, action: "copy" });
+                if (tgSocksUrl) {
+                    actions.push({ label: "Добавить в Тг", value: tgSocksUrl, action: "open" });
+                }
+                return actions;
+            }
+            const urls = Array.isArray(row?.urls) ? row.urls : [];
+            return urls
+                .filter(Boolean)
+                .map((url) => ({ label: `Копировать ${detectUrlType(url)}`, value: url, action: "copy" }));
+        }
+
+        function openConnectionsMenu() {
+            connectionsState.activeProtocol = null;
+            connectionsMenuPageEl?.classList.remove("hidden");
+            connectionsDetailPageEl?.classList.add("hidden");
+            updateTelegramBackButton();
+        }
+
+        function renderConnectionsDetail(protocol) {
+            if (!connectionsDetailListEl) return;
+            const rows = Array.isArray(connectionsState.entries?.[protocol]) ? connectionsState.entries[protocol] : [];
+            const title = connectionProtocolTitle(protocol);
+            connectionsDetailTitleEl.textContent = title;
+            connectionsDetailSubtitleEl.textContent = buildConnectionsInfoText(protocol, rows);
+            connectionsDetailListEl.innerHTML = "";
+
+            if (!rows.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Подключения не найдены.";
+                connectionsDetailListEl.appendChild(empty);
+                return;
             }
 
-            const response = await fetch("/api/tg/auth", {
+            rows.forEach((row, idx) => {
+                const item = document.createElement("div");
+                item.className = "connection-item";
+
+                const itemTitle = document.createElement("div");
+                itemTitle.className = "connection-item-title";
+                const mixedEmail = String(row?.username || row?.identifier || "").trim();
+                const rawTitle = String(row?.label || "").trim();
+                let displayTitle = rawTitle || `${title} #${idx + 1}`;
+                if (protocol === "mixed" && mixedEmail) {
+                    const sameAsEmail = displayTitle.toLowerCase() === mixedEmail.toLowerCase();
+                    if (sameAsEmail) {
+                        displayTitle = `Подключение #${idx + 1}`;
+                    }
+                }
+                itemTitle.textContent = displayTitle;
+
+                if (protocol === "mixed") {
+                    const meta = document.createElement("div");
+                    meta.className = "connection-item-meta";
+
+                    const emailLine = document.createElement("div");
+                    emailLine.textContent = `Почта: ${mixedEmail || "—"}`;
+
+                    meta.appendChild(emailLine);
+                    item.appendChild(meta);
+                }
+
+                const copyRow = document.createElement("div");
+                copyRow.className = "connection-copy-row";
+                const copies = connectionCopyItems(protocol, row);
+                copies.forEach((entry) => {
+                    const copyBtn = document.createElement("button");
+                    copyBtn.type = "button";
+                    copyBtn.className = "connection-copy-btn";
+                    copyBtn.textContent = entry.label;
+                    copyBtn.addEventListener("click", async () => {
+                        const baseText = entry.label;
+                        try {
+                            if (entry.action === "open") {
+                                openExternalLink(entry.value);
+                                copyBtn.textContent = "Открыто";
+                            } else {
+                                await copyToClipboard(entry.value);
+                                copyBtn.textContent = "Скопировано";
+                            }
+                        } catch (_err) {
+                            copyBtn.textContent = "Ошибка";
+                        }
+                        setTimeout(() => {
+                            copyBtn.textContent = baseText;
+                        }, 1000);
+                    });
+                    copyRow.appendChild(copyBtn);
+                });
+
+                item.appendChild(itemTitle);
+                item.appendChild(copyRow);
+                connectionsDetailListEl.appendChild(item);
+            });
+        }
+
+        function openConnectionsDetail(protocol) {
+            if (!connectionsState.visibility?.[protocol]) return;
+            const rows = Array.isArray(connectionsState.entries?.[protocol]) ? connectionsState.entries[protocol] : [];
+            if (!rows.length) return;
+            connectionsState.activeProtocol = protocol;
+            renderConnectionsDetail(protocol);
+            connectionsMenuPageEl?.classList.add("hidden");
+            connectionsDetailPageEl?.classList.remove("hidden");
+            updateTelegramBackButton();
+        }
+
+        function renderDashboard(data) {
+            const me = data?.me;
+            const service = data?.status?.services;
+            const subscription = me?.subscription;
+            const subActive = isSubscriptionActive(subscription);
+            const lifetimeSub = isSubscriptionLifetime(subscription);
+            const subscriptionUntil = formatSubscriptionUntil(subscription, fmtDate);
+            const vless = data?.vless;
+            const http = data?.http;
+            const mixed = data?.mixed;
+
+            lastUserPayload = me || null;
+            const userRole = me?.user?.role || "user";
+            const isOwner = userRole === "owner";
+            profileRoleEl.textContent = userRole;
+            workRolePillEl.textContent = userRole;
+            workOwnerNameEl.textContent = me?.user?.name || me?.user?.first_name || me?.user?.username || "Панель управления";
+            workOwnerRoleEl.textContent = userRole;
+            navWorkBtn.classList.toggle("hidden", !isOwner);
+            bottomNavEl.classList.toggle("with-work", isOwner);
+            if (!isOwner) {
+                const activeWork = navWorkBtn.classList.contains("active");
+                if (activeWork) switchScreen("screen-home");
+            } else {
+                loadWorkClientsData().catch((err) => {
+                    console.error("load clients error:", err);
+                });
+            }
+            renderTelegramId();
+
+            const showVlessCard = service?.vless?.visible_in_app !== false;
+            const showHttpCard = service?.http?.visible_in_app === true;
+            const showMixedCard =
+                service?.mixed?.visible_in_app === true ||
+                (service?.mixed === undefined && service?.https_mixed?.visible_in_app !== false);
+            const vlessConnections = normalizeVlessConnections(vless);
+            const httpConnections = normalizeHttpConnections(http);
+            const mixedConnections = normalizeMixedConnections(mixed);
+            connectionsState.visibility.vless = showVlessCard;
+            connectionsState.visibility.http = showHttpCard;
+            connectionsState.visibility.mixed = showMixedCard;
+            connectionsState.entries.vless = showVlessCard ? vlessConnections : [];
+            connectionsState.entries.http = showHttpCard ? httpConnections : [];
+            connectionsState.entries.mixed = showMixedCard ? mixedConnections : [];
+            vlessCardEl?.classList.toggle("hidden", !showVlessCard);
+            httpCardEl?.classList.toggle("hidden", !showHttpCard);
+            mixedCardEl?.classList.toggle("hidden", !showMixedCard);
+            connectionsHiddenNoteEl?.classList.toggle("hidden", showVlessCard || showHttpCard || showMixedCard);
+            if (connectionsState.activeProtocol && !connectionsState.visibility[connectionsState.activeProtocol]) {
+                openConnectionsMenu();
+            } else if (connectionsState.activeProtocol) {
+                renderConnectionsDetail(connectionsState.activeProtocol);
+            }
+
+            homeServerSub.textContent = service?.vless?.ok || service?.https_mixed?.ok ? "Сервисы доступны" : "Сервисы недоступны";
+            if (subActive) {
+                homeSubTitle.textContent = "Подписка активна";
+                homeSubSub.textContent = "Доступ подтвержден";
+                homeSubRight.textContent = lifetimeSub ? "Без срока" : `До: ${subscriptionUntil}`;
+                profileSubTitleEl.textContent = "Подписка активна";
+                profileSubSubEl.textContent = lifetimeSub ? "Доступ: бессрочно" : `Доступ до: ${subscriptionUntil}`;
+                document.getElementById("hero-sub").textContent = lifetimeSub ? "Бессрочная подписка" : `Подписка до ${subscriptionUntil}`;
+            } else {
+                homeSubTitle.textContent = "Подписка неактивна";
+                homeSubSub.textContent = "Оформите/продлите доступ";
+                homeSubRight.textContent = "—";
+                profileSubTitleEl.textContent = "Подписка неактивна";
+                profileSubSubEl.textContent = "Доступ ограничен";
+                document.getElementById("hero-sub").textContent = "Требуется активная подписка";
+            }
+
+            if (vlessConnections.length) {
+                vlessStatusEl.textContent = `Готово • ${fmtConnectionsCount(vlessConnections.length)}`;
+                vlessDetailEl.textContent = "›";
+            } else {
+                vlessStatusEl.textContent = "Не выдано";
+                vlessDetailEl.textContent = "—";
+            }
+
+            if (httpConnections.length) {
+                httpStatusEl.textContent = `Готово • ${fmtConnectionsCount(httpConnections.length)}`;
+                httpDetailEl.textContent = "›";
+            } else {
+                httpStatusEl.textContent = "Не выдано";
+                httpDetailEl.textContent = "—";
+            }
+
+            if (mixedConnections.length) {
+                mixedStatusEl.textContent = `Готово • ${fmtConnectionsCount(mixedConnections.length)}`;
+                mixedDetailEl.textContent = "›";
+            } else {
+                mixedStatusEl.textContent = "Не выдано";
+                mixedDetailEl.textContent = "—";
+            }
+        }
+
+        async function fetchJson(url, optional = false) {
+            const response = await fetch(url, {
+                method: "GET",
+                credentials: "same-origin",
+            });
+            let payload = {};
+            try {
+                payload = await response.json();
+            } catch (_e) {
+                payload = {};
+            }
+            if (!response.ok || payload?.ok === false) {
+                if (optional) return null;
+                throw new Error(payload.error || `Ошибка запроса ${url}`);
+            }
+            return payload;
+        }
+
+        async function postJson(url, body = null) {
+            const response = await fetch(url, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: body ? JSON.stringify(body) : null,
+            });
+            let payload = {};
+            try {
+                payload = await response.json();
+            } catch (_e) {
+                payload = {};
+            }
+            if (!response.ok || payload?.ok === false) {
+                throw new Error(payload.error || `Ошибка запроса ${url}`);
+            }
+            return payload;
+        }
+
+        function fillSelect(el, items, mapLabel, mapValue, emptyText) {
+            if (!el) return;
+            el.innerHTML = "";
+            const empty = document.createElement("option");
+            empty.value = "";
+            empty.textContent = emptyText;
+            el.appendChild(empty);
+            items.forEach((item, idx) => {
+                const opt = document.createElement("option");
+                opt.value = mapValue(item, idx);
+                opt.textContent = mapLabel(item, idx);
+                el.appendChild(opt);
+            });
+        }
+
+        function inboundOptionLabel(inbound) {
+            const panelState = inbound?.enable ? "panel:on" : "panel:off";
+            const appState = inbound?.show_in_app ? "app:visible" : "app:hidden";
+            return `${inbound.panel_inbound_id} • ${inbound.protocol || "unknown"} • ${inbound.remark || "no-remark"} • ${panelState} • ${appState}`;
+        }
+
+        function renderWorkInboundSelectOptions() {
+            if (!workInboundSelectEl) return;
+            const selected = workInboundSelectEl.value;
+            fillSelect(
+                workInboundSelectEl,
+                workState.inbounds,
+                (i) => inboundOptionLabel(i),
+                (i) => String(i.panel_inbound_id),
+                "Выбери inbound"
+            );
+            if (selected && workState.inbounds.some((i) => String(i.panel_inbound_id) === selected)) {
+                workInboundSelectEl.value = selected;
+            }
+        }
+
+        function renderWorkPendingInboundSelectOptions() {
+            if (!workPendingInboundSelectEl) return;
+            const selected = workPendingInboundSelectEl.value;
+            fillSelect(
+                workPendingInboundSelectEl,
+                workState.inbounds,
+                (i) => inboundOptionLabel(i),
+                (i) => String(i.panel_inbound_id),
+                "Выбери inbound"
+            );
+            if (selected && workState.inbounds.some((i) => String(i.panel_inbound_id) === selected)) {
+                workPendingInboundSelectEl.value = selected;
+            }
+        }
+
+        function fmtDateTime(iso) {
+            if (!iso) return "—";
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return "—";
+            return d.toLocaleString("ru-RU", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+            });
+        }
+
+        function fmtMoney(value) {
+            if (value === null || value === undefined || value === "") return "—";
+            const n = Number(value);
+            if (Number.isNaN(n)) return "—";
+            return `${n.toLocaleString("ru-RU")} ₽`;
+        }
+
+        function fmtMonthsText(months) {
+            const m = Number(months) || 0;
+            if (m % 10 === 1 && m % 100 !== 11) return `${m} месяц`;
+            if (m % 10 >= 2 && m % 10 <= 4 && (m % 100 < 10 || m % 100 >= 20)) return `${m} месяца`;
+            return `${m} месяцев`;
+        }
+
+        function toInputDateValue(dateObj) {
+            if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return "";
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+            const day = String(dateObj.getDate()).padStart(2, "0");
+            return `${year}-${month}-${day}`;
+        }
+
+        function defaultSubscriptionDateValue(days = 30) {
+            const target = new Date();
+            target.setHours(0, 0, 0, 0);
+            target.setDate(target.getDate() + Math.max(1, Number(days) || 30));
+            return toInputDateValue(target);
+        }
+
+        function validateSubscriptionDateValue(rawDate) {
+            const clean = String(rawDate || "").trim();
+            if (!clean) {
+                throw new Error("Укажи дату окончания подписки");
+            }
+            const ts = Date.parse(`${clean}T00:00:00`);
+            if (Number.isNaN(ts)) {
+                throw new Error("Неверный формат даты");
+            }
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (ts < today.getTime()) {
+                throw new Error("Дата окончания не может быть в прошлом");
+            }
+            return `${clean}T23:59:59`;
+        }
+
+        function renderWorkSubscriptionControls(sub) {
+            const hasSubscription = Boolean(sub);
+            const lifetimeSubscription = isSubscriptionLifetime(sub);
+            const createAsLifetime =
+                !hasSubscription && normalizeSubscriptionStatus(workSubStatusSelectEl?.value) === "lifetime";
+            workSubExtendWrapEl?.classList.toggle("hidden", !hasSubscription || lifetimeSubscription);
+            workSubCreateWrapEl?.classList.toggle("hidden", hasSubscription || createAsLifetime);
+
+            if (workSubExtendBtnEl) {
+                if (!hasSubscription && createAsLifetime) {
+                    workSubExtendBtnEl.textContent = "Создать бессрочную подписку";
+                } else {
+                    workSubExtendBtnEl.textContent = hasSubscription ? "Продлить подписку" : "Создать подписку";
+                }
+                workSubExtendBtnEl.classList.toggle("hidden", hasSubscription && lifetimeSubscription);
+            }
+
+            if (workSubCreateDateEl) {
+                if (!hasSubscription && !createAsLifetime && !workSubCreateDateEl.value) {
+                    workSubCreateDateEl.value = defaultSubscriptionDateValue(30);
+                }
+                if (createAsLifetime) {
+                    workSubCreateDateEl.value = "";
+                }
+                if (hasSubscription && !lifetimeSubscription && sub?.access_until) {
+                    const accessUntil = new Date(sub.access_until);
+                    if (!Number.isNaN(accessUntil.getTime())) {
+                        workSubCreateDateEl.value = toInputDateValue(accessUntil);
+                    }
+                }
+            }
+        }
+
+        function renderWorkSubExtendValue() {
+            if (!workSubExtendRangeEl || !workSubExtendValueEl) return;
+            const min = Number(workSubExtendRangeEl.min || 0);
+            const max = Number(workSubExtendRangeEl.max || 100);
+            const value = Number(workSubExtendRangeEl.value || min);
+            const percent = max > min ? ((value - min) / (max - min)) * 100 : 0;
+            workSubExtendRangeEl.style.setProperty("--work-sub-progress", `${percent}%`);
+            workSubExtendValueEl.textContent = fmtMonthsText(value);
+        }
+
+        function renderWorkClientCards() {
+            if (!workClientCardsEl) return;
+            workClientCardsEl.innerHTML = "";
+
+            if (!Array.isArray(workState.users) || !workState.users.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Клиенты не найдены.";
+                workClientCardsEl.appendChild(empty);
+                return;
+            }
+
+            workState.users.forEach((user) => {
+                const card = document.createElement("button");
+                card.type = "button";
+                card.className = "work-client-card";
+                card.dataset.userId = String(user.id);
+
+                const title = document.createElement("div");
+                title.className = "work-client-card-title";
+                title.textContent = user.name || user.username || `Клиент #${user.id}`;
+
+                const sub = document.createElement("div");
+                sub.className = "work-client-card-sub";
+                sub.textContent = `${user.id} · ${user.username ? `@${user.username}` : "—"}`;
+
+                card.appendChild(title);
+                card.appendChild(sub);
+                card.addEventListener("click", () => {
+                    openWorkClientPage(user.id).catch((err) => {
+                        console.error("open client error:", err);
+                    });
+                });
+                workClientCardsEl.appendChild(card);
+            });
+        }
+
+        function renderWorkInboundsManager() {
+            if (!workInboundsListEl) return;
+            workInboundsListEl.innerHTML = "";
+
+            const rows = Array.isArray(workState.inbounds) ? workState.inbounds : [];
+            if (!rows.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Подключения не найдены. Нажми «Синхр.»";
+                workInboundsListEl.appendChild(empty);
+                return;
+            }
+
+            rows.forEach((inbound) => {
+                const panelId = Number(inbound?.panel_inbound_id || 0);
+                const panelEnabled = Boolean(inbound?.enable);
+                const visibleForUsers = Boolean(inbound?.show_in_app);
+
+                const card = document.createElement("div");
+                card.className = "work-inbound-card";
+
+                const head = document.createElement("div");
+                head.className = "work-inbound-head";
+
+                const title = document.createElement("div");
+                title.className = "work-inbound-title";
+                title.textContent = String(inbound?.remark || `Inbound ${panelId}`).trim() || `Inbound ${panelId}`;
+
+                const badges = document.createElement("div");
+                badges.className = "work-inbound-badges";
+
+                const panelBadge = document.createElement("span");
+                panelBadge.className = `work-inbound-pill${panelEnabled ? "" : " off"}`;
+                panelBadge.textContent = panelEnabled ? "Панель: on" : "Панель: off";
+
+                const visibilityBadge = document.createElement("span");
+                visibilityBadge.className = `work-inbound-pill${visibleForUsers ? "" : " off"}`;
+                visibilityBadge.textContent = visibleForUsers ? "В приложении: видно" : "В приложении: скрыто";
+
+                badges.appendChild(panelBadge);
+                badges.appendChild(visibilityBadge);
+                head.appendChild(title);
+                head.appendChild(badges);
+
+                const meta = document.createElement("div");
+                meta.className = "work-inbound-meta";
+                const protocol = String(inbound?.protocol || "unknown").toLowerCase();
+                meta.textContent = `#${panelId} • ${protocol} • порт: ${inbound?.port ?? "—"}`;
+
+                const toggleBtn = document.createElement("button");
+                toggleBtn.type = "button";
+                toggleBtn.className = "work-inbound-toggle-btn";
+                toggleBtn.textContent = visibleForUsers ? "Скрыть у пользователей" : "Показывать пользователям";
+                toggleBtn.addEventListener("click", async () => {
+                    await runWorkAction("Toggle Inbound Visibility", async () => {
+                        const result = await postJson(adminInboundVisibilityUrl(panelId), {
+                            show_in_app: !visibleForUsers,
+                        });
+                        const updated = result?.inbound || null;
+                        if (updated) {
+                            workState.inbounds = workState.inbounds.map((row) =>
+                                String(row?.panel_inbound_id) === String(updated.panel_inbound_id)
+                                    ? { ...row, ...updated }
+                                    : row
+                            );
+                            renderWorkInboundsManager();
+                            renderWorkInboundSelectOptions();
+                        } else {
+                            await loadWorkClientsData();
+                        }
+                        return result;
+                    });
+                });
+
+                card.appendChild(head);
+                card.appendChild(meta);
+                card.appendChild(toggleBtn);
+                workInboundsListEl.appendChild(card);
+            });
+        }
+
+        function renderExistingBindings(bindings) {
+            if (!workExistingLinksEl) return;
+            workExistingLinksEl.innerHTML = "";
+
+            if (!Array.isArray(bindings) || !bindings.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Связей пока нет.";
+                workExistingLinksEl.appendChild(empty);
+                return;
+            }
+
+            const groups = new Map();
+            bindings.forEach((binding) => {
+                const inboundId = binding.panel_inbound_id ?? "—";
+                const connectionName = (binding.inbound_remark || "").trim() || `Inbound ${inboundId}`;
+                const key = `${inboundId}::${connectionName}`;
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        connectionName,
+                        clients: [],
+                        statuses: [],
+                        latestUpdated: null,
+                    });
+                }
+                const group = groups.get(key);
+                const label = String(binding.label || binding.identifier || "—").trim() || "—";
+                const status = String(binding.status || "—").trim() || "—";
+                group.clients.push({
+                    id: binding.id,
+                    label,
+                });
+                if (!group.statuses.includes(status)) group.statuses.push(status);
+
+                const updated = binding.updated_at ? new Date(binding.updated_at) : null;
+                if (updated && !Number.isNaN(updated.getTime())) {
+                    if (!group.latestUpdated || updated > group.latestUpdated) {
+                        group.latestUpdated = updated;
+                    }
+                }
+            });
+
+            groups.forEach((group) => {
+                const item = document.createElement("div");
+                item.className = "work-link-item";
+
+                const title = document.createElement("div");
+                title.className = "work-link-item-title";
+                title.textContent = group.connectionName;
+
+                const statusLine = document.createElement("div");
+                statusLine.className = "work-link-item-sub";
+                statusLine.textContent = `status: ${group.statuses.join(" • ") || "—"}`;
+
+                const updatedLine = document.createElement("div");
+                updatedLine.className = "work-link-item-sub";
+                updatedLine.textContent = `обновлено: ${group.latestUpdated ? fmtDateTime(group.latestUpdated.toISOString()) : "—"}`;
+
+                const clientsWrap = document.createElement("div");
+                clientsWrap.className = "work-link-clients";
+                group.clients.forEach((client) => {
+                    const row = document.createElement("div");
+                    row.className = "work-link-client";
+
+                    const name = document.createElement("div");
+                    name.className = "work-link-client-name";
+                    name.textContent = client.label;
+
+                    const removeBtn = document.createElement("button");
+                    removeBtn.type = "button";
+                    removeBtn.className = "work-link-client-remove";
+                    removeBtn.textContent = "Удалить";
+                    removeBtn.addEventListener("click", async (event) => {
+                        event.stopPropagation();
+                        await runWorkAction("Delete Binding", async () => {
+                            await postJson(adminUnbindClientUrl, { binding_id: client.id });
+                            await loadSelectedUserBindings();
+                            await loadSelectedUserOverview();
+                            return { deleted: client.id };
+                        });
+                    });
+
+                    row.appendChild(name);
+                    row.appendChild(removeBtn);
+                    clientsWrap.appendChild(row);
+                });
+
+                item.appendChild(title);
+                item.appendChild(statusLine);
+                item.appendChild(updatedLine);
+                item.appendChild(clientsWrap);
+                workExistingLinksEl.appendChild(item);
+            });
+        }
+
+        function resolveInboundClientSelection(inboundSelectEl, clientSelectEl, clients, emptyMessage) {
+            const panelInboundId = inboundSelectEl?.value;
+            const clientIndex = clientSelectEl?.value;
+            if (!panelInboundId || clientIndex === "") {
+                throw new Error(emptyMessage || "Выбери inbound и клиента");
+            }
+
+            const inbound = workState.inbounds.find((i) => String(i.panel_inbound_id) === String(panelInboundId));
+            const client = Array.isArray(clients) ? clients[Number(clientIndex)] : null;
+            if (!client || !inbound) {
+                throw new Error("Данные inbound/client не найдены");
+            }
+            return { panelInboundId: Number(panelInboundId), inbound, client };
+        }
+
+        function renderPendingBindings(rows) {
+            if (!workPendingListEl) return;
+            workPendingListEl.innerHTML = "";
+
+            if (!Array.isArray(rows) || !rows.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Pending-привязок пока нет.";
+                workPendingListEl.appendChild(empty);
+                return;
+            }
+
+            rows.forEach((row) => {
+                const item = document.createElement("div");
+                item.className = "work-link-item";
+
+                const title = document.createElement("div");
+                title.className = "work-link-item-title";
+                title.textContent = row?.inbound_remark || row?.label || row?.identifier || `Inbound ${row?.panel_inbound_id ?? "—"}`;
+
+                const line1 = document.createElement("div");
+                line1.className = "work-link-item-sub";
+                line1.textContent = `TG: ${row?.telegram_id || "—"} • client: ${row?.label || row?.identifier || "—"}`;
+
+                const line2 = document.createElement("div");
+                line2.className = "work-link-item-sub";
+                line2.textContent = `status: ${row?.status || "—"} • protocol: ${row?.protocol || "—"}`;
+
+                item.appendChild(title);
+                item.appendChild(line1);
+                item.appendChild(line2);
+
+                if (String(row?.status || "").toLowerCase() === "pending") {
+                    const rowActions = document.createElement("div");
+                    rowActions.className = "work-link-clients";
+
+                    const rowActionWrap = document.createElement("div");
+                    rowActionWrap.className = "work-link-client";
+
+                    const rowActionName = document.createElement("div");
+                    rowActionName.className = "work-link-client-name";
+                    rowActionName.textContent = "Ожидает первого входа";
+
+                    const cancelBtn = document.createElement("button");
+                    cancelBtn.type = "button";
+                    cancelBtn.className = "work-link-client-remove";
+                    cancelBtn.textContent = "Отменить";
+                    cancelBtn.addEventListener("click", async (event) => {
+                        event.stopPropagation();
+                        await runWorkAction("Cancel Pending Binding", async () => {
+                            await postJson(adminCancelPendingBindingUrl(row.id));
+                            await loadPendingBindings(workPendingTelegramIdEl?.value);
+                            return { canceled: row.id };
+                        });
+                    });
+
+                    rowActionWrap.appendChild(rowActionName);
+                    rowActionWrap.appendChild(cancelBtn);
+                    rowActions.appendChild(rowActionWrap);
+                    item.appendChild(rowActions);
+                }
+
+                workPendingListEl.appendChild(item);
+            });
+        }
+
+        async function loadPendingBindings(telegramIdRaw) {
+            const telegramId = String(telegramIdRaw || "").trim();
+            if (!telegramId) {
+                workState.pendingBindings = [];
+                renderPendingBindings([]);
+                return { ok: true, pending_bindings: [] };
+            }
+            const url = `${adminPendingBindingsUrl}?telegram_id=${encodeURIComponent(telegramId)}&limit=200`;
+            const resp = await fetchJson(url, false);
+            workState.pendingBindings = Array.isArray(resp?.pending_bindings) ? resp.pending_bindings : [];
+            renderPendingBindings(workState.pendingBindings);
+            return resp;
+        }
+
+        function renderWorkClientOverview(overview) {
+            workState.overview = overview || null;
+            const sub = overview?.subscription || null;
+            const conn = overview?.connections || null;
+            renderWorkSubscriptionControls(sub);
+
+            workClientSubStatusEl.textContent = sub?.status || "нет";
+            workClientSubUntilEl.textContent = formatSubscriptionUntil(sub, fmtDateTime);
+            workClientSubPriceEl.textContent = fmtMoney(sub?.price_amount);
+
+            if (!conn) {
+                workClientConnectionsAvailableEl.textContent = "—";
+            } else if (conn.limit === null || conn.limit === undefined) {
+                workClientConnectionsAvailableEl.textContent = `${conn.active ?? 0}/∞`;
+            } else {
+                workClientConnectionsAvailableEl.textContent = `${conn.active ?? 0}/${conn.limit}`;
+            }
+
+            if (workSubStatusSelectEl) {
+                workSubStatusSelectEl.value = sub?.status || "active";
+            }
+            if (workSubPriceInputEl) {
+                workSubPriceInputEl.value = sub?.price_amount ?? "";
+            }
+            if (workSubLimitInputEl) {
+                workSubLimitInputEl.value =
+                    conn?.limit === null || conn?.limit === undefined ? "" : String(conn.limit);
+            }
+        }
+
+        async function loadSelectedUserOverview() {
+            if (!workState.selectedUserId) {
+                renderWorkClientOverview(null);
+                return { ok: true, overview: null };
+            }
+            const resp = await fetchJson(adminUserOverviewUrl(workState.selectedUserId), false);
+            renderWorkClientOverview(resp?.overview || null);
+            return resp;
+        }
+
+        function setSelectedWorkClient(user) {
+            if (!user) {
+                workClientPageTitleEl.textContent = "Клиент";
+                workClientNameEl.textContent = "—";
+                workClientMetaEl.textContent = "—";
+                renderWorkClientOverview(null);
+                return;
+            }
+            const title = user.name || user.username || `Клиент #${user.id}`;
+            workClientPageTitleEl.textContent = title;
+            workClientNameEl.textContent = title;
+            workClientMetaEl.textContent = `${user.id} · ${user.username ? `@${user.username}` : "—"}`;
+        }
+
+        async function loadWorkClientsData() {
+            const [usersResp, inboundsResp] = await Promise.all([
+                fetchJson(adminUsersUrl, false),
+                fetchJson(adminInboundsUrl, false),
+            ]);
+            workState.users = Array.isArray(usersResp?.users) ? usersResp.users : [];
+            workState.inbounds = Array.isArray(inboundsResp?.inbounds) ? inboundsResp.inbounds : [];
+            renderWorkClientCards();
+            renderWorkInboundsManager();
+            renderWorkInboundSelectOptions();
+            renderWorkPendingInboundSelectOptions();
+            fillSelect(
+                workClientSelectEl,
+                [],
+                () => "",
+                () => "",
+                "Select client from inbound"
+            );
+            fillSelect(
+                workPendingClientSelectEl,
+                [],
+                () => "",
+                () => "",
+                "Select client from inbound"
+            );
+            workState.clients = [];
+            workState.pendingClients = [];
+            if (workPendingInboundSelectEl?.value) {
+                await loadPendingInboundClients(workPendingInboundSelectEl.value);
+            }
+            const pendingTgId = workPendingTelegramIdEl?.value?.trim();
+            if (pendingTgId) {
+                await loadPendingBindings(pendingTgId);
+            } else {
+                workState.pendingBindings = [];
+                renderPendingBindings([]);
+            }
+            return { users: workState.users.length, inbounds: workState.inbounds.length };
+        }
+
+        async function loadSelectedUserBindings() {
+            if (!workState.selectedUserId) {
+                workState.bindings = [];
+                renderExistingBindings([]);
+                return { bindings: 0 };
+            }
+            const resp = await fetchJson(adminUserBindingsUrl(workState.selectedUserId), false);
+            workState.bindings = Array.isArray(resp?.bindings) ? resp.bindings : [];
+            renderExistingBindings(workState.bindings);
+            return { bindings: workState.bindings.length };
+        }
+
+        async function openWorkClientPage(userId) {
+            const user = workState.users.find((u) => String(u.id) === String(userId));
+            if (!user) {
+                throw new Error("Клиент не найден");
+            }
+
+            workState.selectedUserId = user.id;
+            setSelectedWorkClient(user);
+            if (workPendingTelegramIdEl) {
+                workPendingTelegramIdEl.value = user?.telegram_id ? String(user.telegram_id) : "";
+            }
+            if (workSubCreateDateEl) {
+                workSubCreateDateEl.value = "";
+            }
+            switchWorkPage("work-client-page");
+
+            fillSelect(
+                workClientSelectEl,
+                [],
+                () => "",
+                () => "",
+                "Выбери клиента из inbound"
+            );
+            workState.clients = [];
+            if (workInboundSelectEl?.value) {
+                await loadInboundClients(workInboundSelectEl.value);
+            }
+            const pendingTgId = workPendingTelegramIdEl?.value?.trim();
+            await Promise.all([
+                loadSelectedUserBindings(),
+                loadSelectedUserOverview(),
+                pendingTgId ? loadPendingBindings(pendingTgId) : Promise.resolve(),
+            ]);
+        }
+
+        async function loadInboundClients(panelInboundId) {
+            if (!panelInboundId) {
+                workState.clients = [];
+                fillSelect(workClientSelectEl, [], () => "", () => "", "Выбери клиента из inbound");
+                return;
+            }
+            const resp = await fetchJson(`${window.location.origin}/api/admin/inbounds/${panelInboundId}/clients`, false);
+            workState.clients = Array.isArray(resp?.clients) ? resp.clients : [];
+            fillSelect(
+                workClientSelectEl,
+                workState.clients,
+                (c, idx) => `${idx + 1}. ${c.label || "Клиент"}`,
+                (_, idx) => String(idx),
+                "Выбери клиента из inbound"
+            );
+        }
+
+        async function refreshInboundClientsFromPanel() {
+            const panelInboundId = workInboundSelectEl?.value?.trim();
+            if (!panelInboundId) {
+                throw new Error("Сначала выбери inbound");
+            }
+
+            await postJson(adminSyncInboundsUrl);
+            const inboundsResp = await fetchJson(adminInboundsUrl, false);
+            workState.inbounds = Array.isArray(inboundsResp?.inbounds) ? inboundsResp.inbounds : [];
+            renderWorkInboundsManager();
+            renderWorkInboundSelectOptions();
+            renderWorkPendingInboundSelectOptions();
+
+            const exists = workState.inbounds.some((row) => String(row?.panel_inbound_id) === panelInboundId);
+            if (!exists) {
+                workState.clients = [];
+                fillSelect(workClientSelectEl, [], () => "", () => "", "Выбери клиента из inbound");
+                throw new Error(`Inbound ${panelInboundId} не найден после обновления`);
+            }
+
+            if (workInboundSelectEl) {
+                workInboundSelectEl.value = panelInboundId;
+            }
+            await loadInboundClients(panelInboundId);
+            if (workPendingInboundSelectEl?.value === panelInboundId) {
+                await loadPendingInboundClients(panelInboundId);
+            }
+
+            return { inbounds: workState.inbounds.length, clients: workState.clients.length };
+        }
+
+
+        async function loadPendingInboundClients(panelInboundId) {
+            if (!panelInboundId) {
+                workState.pendingClients = [];
+                fillSelect(workPendingClientSelectEl, [], () => "", () => "", "Select client from inbound");
+                return;
+            }
+            const resp = await fetchJson(`${window.location.origin}/api/admin/inbounds/${panelInboundId}/clients`, false);
+            workState.pendingClients = Array.isArray(resp?.clients) ? resp.clients : [];
+            fillSelect(
+                workPendingClientSelectEl,
+                workState.pendingClients,
+                (c, idx) => `${idx + 1}. ${c.label || "Client"}`,
+                (_, idx) => String(idx),
+                "Select client from inbound"
+            );
+        }
+
+        function switchWorkPage(target) {
+            const next = target || "work-menu-page";
+            workPages.forEach((page) => page.classList.toggle("hidden", page.id !== next));
+            const hideWorkHeaders = next !== "work-menu-page";
+            setTopbarVisibility(hideWorkHeaders);
+            workSectionTitleEl?.classList.toggle("hidden", hideWorkHeaders);
+            updateTelegramBackButton();
+        }
+
+        function switchScreen(target) {
+            heroCardEl?.classList.toggle("hidden", target !== "screen-home");
+            navButtons.forEach((b) => b.classList.toggle("active", b.dataset.screen === target));
+            screens.forEach((s) => s.classList.toggle("hidden", s.id !== target));
+            if (target !== "screen-work") {
+                setTopbarVisibility(false);
+                workSectionTitleEl?.classList.remove("hidden");
+            }
+            if (target === "screen-work") {
+                switchWorkPage("work-menu-page");
+            }
+            if (target !== "screen-connections") {
+                openConnectionsMenu();
+            }
+            updateTelegramBackButton();
+        }
+
+        async function runWorkAction(title, action) {
+            try {
+                await action();
+            } catch (err) {
+                console.error(`${title} ERROR:`, err);
+            }
+        }
+
+        async function loadRuntimeData() {
+            if (DEV_MODE) {
+                return {
+                    me: {
+                        ok: true,
+                        user: { telegram_id: "999000111", role: "admin", name: "Dev Mode" },
+                        subscription: { status: "active", access_until: new Date(Date.now() + 86400000 * 30).toISOString() },
+                    },
+                    status: {
+                        ok: true,
+                        services: {
+                            vless: { ok: true, visible_in_app: true },
+                            http: { ok: true, visible_in_app: true },
+                            mixed: { ok: true, visible_in_app: true },
+                            https_mixed: { ok: true, visible_in_app: true },
+                        },
+                    },
+                    vless: {
+                        ok: true,
+                        host: "dev.local",
+                        port: 443,
+                        vless_url: "vless://demo",
+                        connections: [
+                            { label: "Dev-VLESS-1", host: "dev.local", port: 443, vless_url: "vless://demo1" },
+                            { label: "Dev-VLESS-2", host: "dev.local", port: 443, vless_url: "vless://demo2" },
+                        ],
+                    },
+                    http: {
+                        ok: true,
+                        host: "dev.local",
+                        port: 8080,
+                        urls: ["http://demo"],
+                        connections: [
+                            { label: "Dev-HTTP-1", host: "dev.local", port: 8080, urls: ["http://demo-http-1"] },
+                        ],
+                    },
+                    mixed: {
+                        ok: true,
+                        host: "dev.local",
+                        port: 8443,
+                        username: "DEV_USER",
+                        password: "DEV_PASS",
+                        urls: ["socks5://demo"],
+                        connections: [
+                            { label: "Dev-Mixed-1", host: "dev.local", port: 8443, username: "CAR011NA", password: "yLO06l4AFM", urls: ["socks5://demo1", "http://demo1"] },
+                            { label: "Dev-Mixed-2", host: "dev.local", port: 8443, username: "BYTEARC", password: "pass_2", urls: ["socks5://demo2", "http://demo2"] },
+                        ],
+                    },
+                };
+            }
+
+            const [me, status, vless, http, mixed] = await Promise.all([
+                fetchJson(meUrl, false),
+                fetchJson(statusUrl, false),
+                fetchJson(vpnConfigUrl, true),
+                fetchJson(vpnHttpUrl, true),
+                fetchJson(vpnMixedUrl, true),
+            ]);
+            return { me, status, vless, http, mixed };
+        }
+
+        const statusSteps = [
+            { text: "Проверяем сервер…", glow: "rgba(55, 224, 255, 0.55)" },
+            { text: "Загружаем подключения…", glow: "rgba(79, 123, 255, 0.55)" },
+            { text: "Готовим данные…", glow: "rgba(168, 85, 247, 0.55)" },
+        ];
+        let statusIndex = 0;
+
+        function cycleStatus() {
+            statusLabel.classList.add("fade-out");
+            setTimeout(() => {
+                statusIndex = (statusIndex + 1) % statusSteps.length;
+                const step = statusSteps[statusIndex];
+                statusLabel.textContent = step.text;
+                pulseScene?.style.setProperty("--glow-color", step.glow);
+                statusLabel.classList.remove("fade-out");
+            }, 160);
+        }
+
+        const CYCLE_MS = 4800; // удлинённый цикл для тестов (было 2400)
+        setInterval(cycleStatus, CYCLE_MS);
+        pulseScene?.style.setProperty("--glow-color", statusSteps[0].glow);
+
+        async function validateUser() {
+            if (DEV_MODE) {
+                const fakeUser = {
+                    id: 0,
+                    username: "dev_user",
+                    first_name: "Dev",
+                    last_name: "Mode",
+                };
+                return { ok: true, user: fakeUser };
+            }
+
+            const initData = window.Telegram?.WebApp?.initData;
+            console.log("initData present:", Boolean(initData));
+            if (!initData) {
+                throw new Error("Не обнаружены данные Telegram Web App. Запустите мини‑приложение через Telegram.");
+            }
+
+            console.log("sending /api/tg/auth");
+            const response = await fetch(authUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "same-origin",
                 body: JSON.stringify({ initData }),
             });
 
-            const payload = await response.json();
+            let payload;
+            try {
+                payload = await response.json();
+            } catch (e) {
+                const raw = await response.text();
+                console.error("Auth raw response:", raw);
+                throw new Error("Сервер вернул не-JSON: " + raw.slice(0, 120));
+            }
+
             if (!response.ok || !payload.ok) {
                 throw new Error(payload.error || "Телеграм не подтвердил данные пользователя.");
             }
@@ -161,20 +2995,251 @@
         }
 
         async function init() {
+            console.log("Init start");
             try {
-                const { user } = await validateUser();
-                showApp(user?.name || user?.username);
+                window.Telegram?.WebApp?.ready?.();
+                ensureSafeViewportMode();
+                syncBackNavigationMode();
+                setTopbarVisibility(false);
+                const payload = await validateUser();
+                console.log("Auth ok", payload.user);
+                const runtime = await loadRuntimeData();
+                renderDashboard(runtime);
+                const delay = payload?.show_long_intro ? 2400 : 400;
+                await wait(delay);
+                await showApp(payload.user?.first_name || payload.user?.username);
             } catch (err) {
-                console.error(err);
+                console.error("Auth failed", err);
                 showError(err.message);
+            } finally {
+                // страхуемся от зависания лоадера
+                loading.classList.add("hidden");
+                mainEl.classList.remove("hidden");
             }
         }
 
-        ctaButton.addEventListener("click", () => {
-            alert("Вы можете расширить этот экран любым интерактивным контентом.");
+        if (document.readyState === "loading") {
+            window.addEventListener("DOMContentLoaded", init);
+        } else {
+            init();
+        }
+
+        // bottom nav (простое переключение экранов)
+        navButtons.forEach((btn) =>
+            btn.addEventListener("click", () => {
+                switchScreen(btn.dataset.screen);
+            })
+        );
+
+        connectionProtocolButtons.forEach((btn) =>
+            btn.addEventListener("click", () => {
+                const protocol = btn.dataset.connectionProtocol;
+                if (!protocol) return;
+                openConnectionsDetail(protocol);
+            })
+        );
+
+        connectionsBackBtnEl?.addEventListener("click", () => {
+            openConnectionsMenu();
         });
 
-        window.addEventListener("DOMContentLoaded", init);
+        workNavButtons.forEach((btn) =>
+            btn.addEventListener("click", () => {
+                switchWorkPage(btn.dataset.workNav || "work-menu-page");
+            })
+        );
+
+        workBackButtons.forEach((btn) =>
+            btn.addEventListener("click", () => {
+                switchWorkPage(btn.dataset.workBack || "work-menu-page");
+            })
+        );
+
+        profileIdToggleEl?.addEventListener("click", () => {
+            showFullTelegramId = !showFullTelegramId;
+            renderTelegramId();
+        });
+
+        workRefreshUsersBtnEl?.addEventListener("click", async () => {
+            await runWorkAction("Load Clients List", async () => {
+                return loadWorkClientsData();
+            });
+        });
+
+        workSyncInboundsBtnEl?.addEventListener("click", async () => {
+            await runWorkAction("Sync Inbounds", async () => {
+                await postJson(adminSyncInboundsUrl);
+                return loadWorkClientsData();
+            });
+        });
+
+        workRefreshInboundClientsBtnEl?.addEventListener("click", async () => {
+            await runWorkAction("Refresh Inbound Clients", async () => {
+                return refreshInboundClientsFromPanel();
+            });
+        });
+
+        workInboundSelectEl?.addEventListener("change", async () => {
+            workState.clients = [];
+            fillSelect(workClientSelectEl, [], () => "", () => "", "Select client from inbound");
+            if (!workInboundSelectEl?.value) {
+                return;
+            }
+            try {
+                await loadInboundClients(workInboundSelectEl.value);
+            } catch (err) {
+                console.error("load inbound clients error:", err);
+            }
+        });
+
+        workPendingInboundSelectEl?.addEventListener("change", async () => {
+            workState.pendingClients = [];
+            fillSelect(workPendingClientSelectEl, [], () => "", () => "", "Select client from inbound");
+            if (!workPendingInboundSelectEl?.value) {
+                return;
+            }
+            try {
+                await loadPendingInboundClients(workPendingInboundSelectEl.value);
+            } catch (err) {
+                console.error("load pending inbound clients error:", err);
+            }
+        });
+
+        workPendingTelegramIdEl?.addEventListener("change", async () => {
+            try {
+                await loadPendingBindings(workPendingTelegramIdEl.value);
+            } catch (err) {
+                console.error("load pending bindings error:", err);
+            }
+        });
+
+        workBindBtnEl?.addEventListener("click", async () => {
+            await runWorkAction("Bind Client", async () => {
+                const userId = workState.selectedUserId;
+                if (!userId) {
+                    throw new Error("Open client card first");
+                }
+                const { panelInboundId, inbound, client } = resolveInboundClientSelection(
+                    workInboundSelectEl,
+                    workClientSelectEl,
+                    workState.clients,
+                    "Select inbound and client"
+                );
+
+                const payload = {
+                    user_id: Number(userId),
+                    panel_inbound_id: panelInboundId,
+                    client_identifier: client.identifier,
+                    protocol: (inbound.protocol || client.protocol || "").toLowerCase(),
+                    label: client.label,
+                    secret: client.secret,
+                    sub_id: client.sub_id,
+                };
+
+                const result = await postJson(adminBindClientUrl, payload);
+                await loadSelectedUserBindings();
+                await loadSelectedUserOverview();
+                return result;
+            });
+        });
+
+        workPendingAddBtnEl?.addEventListener("click", async () => {
+            await runWorkAction("Add Pending Binding", async () => {
+                const telegramId = String(workPendingTelegramIdEl?.value || "").trim();
+                if (!telegramId || !/^\d+$/.test(telegramId)) {
+                    throw new Error("Enter valid Telegram ID");
+                }
+
+                const { panelInboundId, inbound, client } = resolveInboundClientSelection(
+                    workPendingInboundSelectEl,
+                    workPendingClientSelectEl,
+                    workState.pendingClients,
+                    "Select inbound and client for pending"
+                );
+
+                const payload = {
+                    telegram_id: telegramId,
+                    panel_inbound_id: panelInboundId,
+                    client_identifier: client.identifier,
+                    protocol: (inbound.protocol || client.protocol || "").toLowerCase(),
+                    label: client.label,
+                    secret: client.secret,
+                    sub_id: client.sub_id,
+                };
+
+                const result = await postJson(adminPendingBindingsUrl, payload);
+                await loadPendingBindings(telegramId);
+                return result;
+            });
+        });
+
+        workSubSaveBtnEl?.addEventListener("click", async () => {
+            await runWorkAction("Save Subscription", async () => {
+                if (!workState.selectedUserId) {
+                    throw new Error("Сначала открой карточку клиента");
+                }
+
+                const creatingSubscription = !workState.overview?.subscription;
+                const selectedStatus = normalizeSubscriptionStatus(workSubStatusSelectEl?.value || "active");
+                const payload = {
+                    status: selectedStatus || "active",
+                    price_amount: workSubPriceInputEl?.value?.trim() || null,
+                    connections_limit: workSubLimitInputEl?.value?.trim() || null,
+                };
+                if (selectedStatus === "lifetime") {
+                    payload.access_until = null;
+                } else if (creatingSubscription) {
+                    payload.access_until = validateSubscriptionDateValue(workSubCreateDateEl?.value);
+                }
+                const result = await postJson(adminUserSubscriptionUrl(workState.selectedUserId), payload);
+                renderWorkClientOverview(result?.overview || null);
+                return result;
+            });
+        });
+
+        workSubExtendBtnEl?.addEventListener("click", async () => {
+            await runWorkAction("Extend Subscription", async () => {
+                if (!workState.selectedUserId) {
+                    throw new Error("Сначала открой карточку клиента");
+                }
+                const hasSubscription = Boolean(workState.overview?.subscription);
+                if (!hasSubscription) {
+                    const selectedStatus = normalizeSubscriptionStatus(workSubStatusSelectEl?.value || "active");
+                    const payload =
+                        selectedStatus === "lifetime"
+                            ? { status: "lifetime", access_until: null }
+                            : {
+                                  status: "active",
+                                  access_until: validateSubscriptionDateValue(workSubCreateDateEl?.value),
+                              };
+                    const result = await postJson(adminUserSubscriptionUrl(workState.selectedUserId), payload);
+                    renderWorkClientOverview(result?.overview || null);
+                    return result;
+                }
+                if (isSubscriptionLifetime(workState.overview?.subscription)) {
+                    throw new Error("Бессрочную подписку не нужно продлевать");
+                }
+                const months = Number(workSubExtendRangeEl?.value || 0);
+                if (!Number.isInteger(months) || months <= 0) {
+                    throw new Error("Выбери срок продления");
+                }
+                const result = await postJson(adminUserSubscriptionUrl(workState.selectedUserId), {
+                    extend_months: months,
+                });
+                renderWorkClientOverview(result?.overview || null);
+                return result;
+            });
+        });
+
+        workSubExtendRangeEl?.addEventListener("input", () => {
+            renderWorkSubExtendValue();
+        });
+        workSubStatusSelectEl?.addEventListener("change", () => {
+            renderWorkSubscriptionControls(workState.overview?.subscription || null);
+        });
+        renderWorkSubExtendValue();
     </script>
 </body>
 </html>
+
+

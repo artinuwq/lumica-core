@@ -4,9 +4,6 @@ import os
 import threading
 from pathlib import Path
 
-from backend.app import create_app
-from bot.bot import start_bot
-
 BASE_DIR = Path(__file__).resolve().parent
 ENV_FILE = BASE_DIR / ".env"
 
@@ -30,6 +27,9 @@ def load_dotenv(path: Path) -> None:
 
 
 load_dotenv(ENV_FILE)
+
+from backend.app import create_app  # noqa: E402
+from bot.bot import start_bot  # noqa: E402
 
 
 def run_api():
