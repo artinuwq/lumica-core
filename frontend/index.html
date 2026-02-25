@@ -290,19 +290,19 @@
             left: 50%;
             bottom: calc(16px + var(--app-bottom-offset));
             transform: translateX(-50%);
-            width: min(520px, 92vw);
+            width: min(560px, 94vw);
             padding: 0.35rem;
             border-radius: 16px;
             background: rgba(12, 18, 33, 0.92);
             border: 1px solid rgba(255, 255, 255, 0.06);
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 0.25rem;
             box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
             backdrop-filter: blur(12px);
         }
         .bottom-nav.with-work {
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
         }
 
         .nav-btn {
@@ -322,6 +322,11 @@
 
         .nav-btn .icon {
             font-size: 1.05rem;
+        }
+        .nav-btn span:last-child {
+            font-size: 0.84rem;
+            line-height: 1.12;
+            white-space: nowrap;
         }
 
         .nav-btn.active {
@@ -343,6 +348,7 @@
             margin-left: calc(50% - 50vw);
             margin-right: calc(50% - 50vw);
             padding-inline: 1rem;
+            --context-popup-offset: -1.6rem;
             box-sizing: border-box;
             align-items: stretch;
         }
@@ -351,6 +357,18 @@
             margin-left: calc(50% - 50vw);
             margin-right: calc(50% - 50vw);
             padding-inline: 1rem;
+            padding-top: 0.6rem;
+            --context-popup-offset: -2.8rem;
+            box-sizing: border-box;
+            align-items: stretch;
+        }
+        #screen-cloud {
+            width: 100vw;
+            margin-left: calc(50% - 50vw);
+            margin-right: calc(50% - 50vw);
+            padding-inline: 1rem;
+            padding-top: 0.6rem;
+            --context-popup-offset: -2.8rem;
             box-sizing: border-box;
             align-items: stretch;
         }
@@ -384,6 +402,55 @@
             justify-content: space-between;
             flex-wrap: wrap;
             gap: 0.6rem;
+        }
+        #screen-work .work-page-head .work-page-title {
+            display: none;
+        }
+        #screen-connections .work-page-head .work-page-title {
+            display: none;
+        }
+        .work-page-context {
+            display: flex;
+            justify-content: center;
+            position: relative;
+            z-index: 4;
+            margin-top: var(--context-popup-offset, -2.8rem);
+            margin-bottom: 0.35rem;
+        }
+        .work-page-context.hidden {
+            display: none;
+        }
+        .work-page-pill {
+            position: relative;
+            display: inline-block;
+            max-width: clamp(8rem, 56vw, 18rem);
+            padding: 0.34rem 0.78rem 0.34rem 1.34rem;
+            border-radius: 999px;
+            border: 1px solid rgba(155, 206, 255, 0.45);
+            background: rgba(17, 30, 56, 0.92);
+            box-shadow: 0 8px 20px rgba(4, 10, 24, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+            color: #ebf4ff;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: center;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .work-page-pill::before {
+            content: "";
+            position: absolute;
+            left: 0.56rem;
+            top: 50%;
+            width: 0.44rem;
+            height: 0.44rem;
+            border-radius: 999px;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, #8be7ff, #7d8cff);
+            box-shadow: 0 0 10px rgba(125, 140, 255, 0.5);
         }
         .work-back-btn {
             border: 1px solid rgba(255, 255, 255, 0.15);
@@ -840,6 +907,151 @@
         .work-inbound-toggle-btn:active {
             transform: translateY(1px);
         }
+        .cloud-page {
+            display: grid;
+            gap: 0.68rem;
+            padding: 0.85rem;
+        }
+        .cloud-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.55rem;
+            flex-wrap: wrap;
+        }
+        .cloud-path {
+            border: 1px solid rgba(126, 189, 255, 0.34);
+            border-radius: 10px;
+            background: rgba(17, 28, 50, 0.72);
+            color: #ecf6ff;
+            font-size: 0.82rem;
+            line-height: 1.35;
+            padding: 0.48rem 0.58rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cloud-actions {
+            display: grid;
+            gap: 0.55rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .cloud-upload-btn {
+            width: 100%;
+            text-align: center;
+        }
+        .cloud-upload-btn.disabled {
+            opacity: 0.58;
+            pointer-events: none;
+        }
+        .cloud-upload-progress {
+            position: relative;
+            width: 100%;
+            height: 0.42rem;
+            border-radius: 999px;
+            border: 1px solid rgba(132, 185, 255, 0.28);
+            background: rgba(19, 30, 52, 0.75);
+            overflow: hidden;
+        }
+        .cloud-upload-progress-bar {
+            width: 0%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #56b8ff, #7bdcff);
+            box-shadow: 0 0 10px rgba(86, 184, 255, 0.35);
+            transition: width 0.16s ease;
+        }
+        .cloud-upload-progress-text {
+            font-size: 0.76rem;
+            line-height: 1.2;
+            color: rgba(212, 232, 255, 0.82);
+            margin-top: -0.12rem;
+        }
+        .cloud-list {
+            display: grid;
+            gap: 0.54rem;
+        }
+        .cloud-node-card {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            background: rgba(12, 19, 36, 0.88);
+            padding: 0.62rem 0.68rem;
+            display: grid;
+            gap: 0.48rem;
+        }
+        .cloud-node-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.52rem;
+        }
+        .cloud-node-open {
+            border: none;
+            background: transparent;
+            color: #eef6ff;
+            font-weight: 700;
+            font-size: 0.86rem;
+            line-height: 1.3;
+            padding: 0;
+            margin: 0;
+            cursor: pointer;
+            min-width: 0;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cloud-node-open:active {
+            transform: translateY(1px);
+        }
+        .cloud-node-sub {
+            color: rgba(219, 234, 255, 0.75);
+            font-size: 0.79rem;
+            line-height: 1.34;
+            overflow-wrap: anywhere;
+        }
+        .cloud-node-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.42rem;
+            flex-wrap: wrap;
+        }
+        .cloud-node-action {
+            border: 1px solid rgba(120, 171, 255, 0.42);
+            background: rgba(28, 44, 80, 0.9);
+            color: #edf6ff;
+            border-radius: 8px;
+            padding: 0.26rem 0.5rem;
+            font-size: 0.76rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .cloud-node-action.danger {
+            border-color: rgba(255, 126, 126, 0.45);
+            background: rgba(86, 20, 20, 0.36);
+            color: #ffd3d3;
+        }
+        .cloud-node-action:disabled {
+            opacity: 0.56;
+            cursor: default;
+        }
+        .cloud-status-note {
+            font-size: 0.8rem;
+            line-height: 1.34;
+            color: rgba(212, 232, 255, 0.78);
+            min-height: 1.08rem;
+        }
+        .cloud-status-note.error {
+            color: #ffd0d8;
+        }
+        .cloud-status-note.success {
+            color: #bafcd7;
+        }
+        @media (max-width: 420px) {
+            .cloud-actions {
+                grid-template-columns: 1fr;
+            }
+        }
         .work-empty {
             border: 1px dashed rgba(255, 255, 255, 0.15);
             border-radius: 12px;
@@ -1114,6 +1326,9 @@
                     </div>
 
                     <div id="screen-connections" class="screen hidden">
+                        <div class="work-page-context hidden" id="connections-page-context">
+                            <div class="work-page-pill" id="connections-page-context-pill" aria-live="polite">Подключения</div>
+                        </div>
                         <div class="connection-pages">
                             <section id="connections-menu-page">
                                 <div class="cards">
@@ -1166,6 +1381,9 @@
 
                     <div id="screen-work" class="screen hidden">
                         <div class="section-title" id="work-section-title">Работа</div>
+                        <div class="work-page-context hidden" id="work-page-context">
+                            <div class="work-page-pill" id="work-page-context-pill" aria-live="polite">Работа</div>
+                        </div>
 
                         <section id="work-menu-page" class="work-page">
                             <div class="work-profile-card" id="work-header-card">
@@ -1358,6 +1576,31 @@
                             </div>
                         </section>
                     </div>
+                    <div id="screen-cloud" class="screen hidden">
+                        <div class="work-page-context" id="cloud-page-context">
+                            <div class="work-page-pill" id="cloud-page-context-pill" aria-live="polite">Облако</div>
+                        </div>
+                        <section class="work-page cloud-page">
+                            <div class="cloud-toolbar">
+                                <button id="cloud-up-btn" type="button" class="work-back-btn hidden">← Назад</button>
+                                <button id="cloud-refresh-btn" type="button" class="work-back-btn">Обновить</button>
+                            </div>
+                            <div class="cloud-path" id="cloud-path">/</div>
+                            <div class="cloud-actions">
+                                <button id="cloud-new-folder-btn" type="button" class="work-btn">Новая папка</button>
+                                <label id="cloud-upload-label" class="work-btn cloud-upload-btn" for="cloud-upload-input">Загрузить файл</label>
+                                <input id="cloud-upload-input" type="file" class="hidden" multiple>
+                            </div>
+                            <div id="cloud-upload-progress" class="cloud-upload-progress hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                <div id="cloud-upload-progress-bar" class="cloud-upload-progress-bar"></div>
+                            </div>
+                            <div id="cloud-upload-progress-text" class="cloud-upload-progress-text hidden">0%</div>
+                            <div id="cloud-status-note" class="cloud-status-note hidden"></div>
+                            <div id="cloud-list" class="cloud-list">
+                                <div class="work-empty">Откройте облако для загрузки списка.</div>
+                            </div>
+                        </section>
+                    </div>
                     <div id="screen-profile" class="screen hidden">
                         <div class="section-title">Главная</div>
                         <div class="card">
@@ -1397,6 +1640,10 @@
                         <span class="icon">&#x2B07;&#xFE0F;</span>
                         <span>Подключения</span>
                     </button>
+                    <button class="nav-btn" data-screen="screen-cloud">
+                        <span class="icon">☁️</span>
+                        <span>Облако</span>
+                    </button>
                     <button class="nav-btn hidden" id="nav-work-btn" data-screen="screen-work">
                         <span class="icon">🛠</span>
                         <span>Работа</span>
@@ -1428,6 +1675,12 @@
         const heroCardEl = document.getElementById("hero-card");
         const topbarEl = document.getElementById("topbar");
         const workSectionTitleEl = document.getElementById("work-section-title");
+        const connectionsPageContextEl = document.getElementById("connections-page-context");
+        const connectionsPageContextPillEl = document.getElementById("connections-page-context-pill");
+        const workPageContextEl = document.getElementById("work-page-context");
+        const workPageContextPillEl = document.getElementById("work-page-context-pill");
+        const cloudPageContextEl = document.getElementById("cloud-page-context");
+        const cloudPageContextPillEl = document.getElementById("cloud-page-context-pill");
         const bottomNavEl = document.querySelector(".bottom-nav");
         const navWorkBtn = document.getElementById("nav-work-btn");
         const workPages = document.querySelectorAll(".work-page");
@@ -1451,6 +1704,11 @@
         const adminUserBindingsUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/bindings`;
         const adminUserOverviewUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/overview`;
         const adminUserSubscriptionUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/subscription`;
+        const cloudListUrl = `${window.location.origin}/api/cloud/list`;
+        const cloudMkdirUrl = `${window.location.origin}/api/cloud/mkdir`;
+        const cloudUploadUrl = `${window.location.origin}/api/cloud/upload`;
+        const cloudDeleteNodeUrl = (nodeId) => `${window.location.origin}/api/cloud/nodes/${nodeId}`;
+        const cloudDownloadFileUrl = (fileId) => `${window.location.origin}/api/cloud/files/${fileId}/download`;
         const homeServerSub = document.getElementById("home-server-sub");
         const homeSubTitle = document.getElementById("home-sub-title");
         const homeSubSub = document.getElementById("home-sub-sub");
@@ -1511,6 +1769,17 @@
         const workSubExtendRangeEl = document.getElementById("work-sub-extend-range");
         const workSubExtendValueEl = document.getElementById("work-sub-extend-value");
         const workSubExtendBtnEl = document.getElementById("work-sub-extend-btn");
+        const cloudUpBtnEl = document.getElementById("cloud-up-btn");
+        const cloudRefreshBtnEl = document.getElementById("cloud-refresh-btn");
+        const cloudNewFolderBtnEl = document.getElementById("cloud-new-folder-btn");
+        const cloudUploadInputEl = document.getElementById("cloud-upload-input");
+        const cloudUploadLabelEl = document.getElementById("cloud-upload-label");
+        const cloudUploadProgressEl = document.getElementById("cloud-upload-progress");
+        const cloudUploadProgressBarEl = document.getElementById("cloud-upload-progress-bar");
+        const cloudUploadProgressTextEl = document.getElementById("cloud-upload-progress-text");
+        const cloudPathEl = document.getElementById("cloud-path");
+        const cloudStatusNoteEl = document.getElementById("cloud-status-note");
+        const cloudListEl = document.getElementById("cloud-list");
         const workState = {
             users: [],
             inbounds: [],
@@ -1537,6 +1806,13 @@
                 mixed: false,
             },
         };
+        const cloudState = {
+            path: "/",
+            folders: [],
+            files: [],
+            initialized: false,
+            isUploading: false,
+        };
         let lastUserPayload = null;
         let showFullTelegramId = false;
         let viewportListenerBound = false;
@@ -1547,6 +1823,15 @@
             if (!pageId) return;
             workBackTargetByPage.set(pageId, btn.dataset.workBack || "work-menu-page");
         });
+        const workContextTitleByPage = new Map([
+            ["work-staff-page", "Персонал"],
+            ["work-clients-page", "Клиенты"],
+            ["work-pending-page", "Pending до первого входа"],
+            ["work-inbounds-page", "Подключения"],
+            ["work-client-page", "Клиент"],
+            ["work-client-connections-page", "Подключения"],
+            ["work-client-subscription-page", "Подписка"],
+        ]);
 
         function isMobileTelegramPlatform(tg) {
             const platform = String(tg?.platform || "").toLowerCase();
@@ -1625,6 +1910,87 @@
             return active?.id || "";
         }
 
+        function resolveWorkContextTitle(pageId) {
+            if (pageId === "work-client-page") {
+                const dynamicTitle = String(workClientPageTitleEl?.textContent || "").trim();
+                return dynamicTitle || "Клиент";
+            }
+            return workContextTitleByPage.get(pageId) || "";
+        }
+
+        function updateWorkPageContext(pageId) {
+            if (!workPageContextEl || !workPageContextPillEl) return;
+            if (!pageId || pageId === "work-menu-page") {
+                workPageContextEl.classList.add("hidden");
+                return;
+            }
+            const title = resolveWorkContextTitle(pageId);
+            if (!title) {
+                workPageContextEl.classList.add("hidden");
+                return;
+            }
+            workPageContextPillEl.textContent = title;
+            workPageContextPillEl.title = title;
+            workPageContextEl.classList.remove("hidden");
+        }
+
+        function updateConnectionsPageContext(protocol) {
+            if (!connectionsPageContextEl || !connectionsPageContextPillEl) return;
+            if (!protocol) {
+                connectionsPageContextEl.classList.add("hidden");
+                return;
+            }
+            const title = connectionProtocolTitle(protocol);
+            connectionsPageContextPillEl.textContent = title;
+            connectionsPageContextPillEl.title = title;
+            connectionsPageContextEl.classList.remove("hidden");
+        }
+
+        function cloudPathParts(path) {
+            if (!path || path === "/") return [];
+            return String(path)
+                .split("/")
+                .map((part) => part.trim())
+                .filter(Boolean);
+        }
+
+        function normalizeCloudPath(rawPath) {
+            const value = String(rawPath || "/").replace(/\\/g, "/").trim();
+            if (!value || value === "/") return "/";
+            const parts = value
+                .split("/")
+                .map((part) => part.trim())
+                .filter((part) => part && part !== "." && part !== "..");
+            return parts.length ? `/${parts.join("/")}` : "/";
+        }
+
+        function cloudParentPath(path) {
+            const parts = cloudPathParts(path);
+            if (!parts.length) return "/";
+            parts.pop();
+            return parts.length ? `/${parts.join("/")}` : "/";
+        }
+
+        function cloudContextTitle(path) {
+            const parts = cloudPathParts(path);
+            return parts.length ? parts[parts.length - 1] : "Облако";
+        }
+
+        function updateCloudPageContext(path) {
+            if (!cloudPageContextEl || !cloudPageContextPillEl) return;
+            const title = cloudContextTitle(path);
+            cloudPageContextPillEl.textContent = title;
+            cloudPageContextPillEl.title = title;
+            cloudPageContextEl.classList.remove("hidden");
+        }
+
+        function updateCloudUpButton() {
+            if (!cloudUpBtnEl) return;
+            const canGoUp = normalizeCloudPath(cloudState.path) !== "/";
+            const hideForTelegramBack = hasTelegramBackButton();
+            cloudUpBtnEl.classList.toggle("hidden", !canGoUp || hideForTelegramBack);
+        }
+
         function hasTelegramBackButton() {
             const backButton = window.Telegram?.WebApp?.BackButton;
             return Boolean(backButton && typeof backButton.show === "function" && typeof backButton.hide === "function");
@@ -1633,12 +1999,24 @@
         function setCustomBackButtonsVisibility(visible) {
             workBackButtons.forEach((btn) => btn.classList.toggle("hidden", !visible));
             connectionsBackBtnEl?.classList.toggle("hidden", !visible);
+            if (!visible) {
+                cloudUpBtnEl?.classList.add("hidden");
+                return;
+            }
+            updateCloudUpButton();
         }
 
         function handleTelegramBack() {
             const activeScreenId = getActiveScreenId();
             if (activeScreenId === "screen-connections" && !connectionsDetailPageEl?.classList.contains("hidden")) {
                 openConnectionsMenu();
+                return;
+            }
+
+            if (activeScreenId === "screen-cloud" && normalizeCloudPath(cloudState.path) !== "/") {
+                loadCloudPath(cloudParentPath(cloudState.path)).catch((err) => {
+                    console.error("cloud back error:", err);
+                });
                 return;
             }
 
@@ -1663,6 +2041,10 @@
                 return Boolean(workBackTargetByPage.get(activePageId));
             }
 
+            if (activeScreenId === "screen-cloud") {
+                return normalizeCloudPath(cloudState.path) !== "/";
+            }
+
             return false;
         }
 
@@ -1681,6 +2063,7 @@
             }
 
             backButton.hide?.();
+            updateCloudUpButton();
         }
 
         function syncBackNavigationMode() {
@@ -1689,6 +2072,7 @@
             if (useTelegramBack) {
                 updateTelegramBackButton();
             }
+            updateCloudUpButton();
         }
 
         function runRevealAnimation() {
@@ -1943,6 +2327,7 @@
             connectionsState.activeProtocol = null;
             connectionsMenuPageEl?.classList.remove("hidden");
             connectionsDetailPageEl?.classList.add("hidden");
+            updateConnectionsPageContext(null);
             updateTelegramBackButton();
         }
 
@@ -1951,6 +2336,8 @@
             const rows = Array.isArray(connectionsState.entries?.[protocol]) ? connectionsState.entries[protocol] : [];
             const title = connectionProtocolTitle(protocol);
             connectionsDetailTitleEl.textContent = title;
+            connectionsDetailTitleEl.title = title;
+            updateConnectionsPageContext(protocol);
             connectionsDetailSubtitleEl.textContent = buildConnectionsInfoText(protocol, rows);
             connectionsDetailListEl.innerHTML = "";
 
@@ -2166,6 +2553,452 @@
                 throw new Error(payload.error || `Ошибка запроса ${url}`);
             }
             return payload;
+        }
+
+        async function deleteJson(url) {
+            const response = await fetch(url, {
+                method: "DELETE",
+                credentials: "same-origin",
+            });
+            let payload = {};
+            try {
+                payload = await response.json();
+            } catch (_e) {
+                payload = {};
+            }
+            if (!response.ok || payload?.ok === false) {
+                throw new Error(payload.error || `Ошибка запроса ${url}`);
+            }
+            return payload;
+        }
+
+        function fmtCloudSize(sizeBytes) {
+            const value = Number(sizeBytes);
+            if (!Number.isFinite(value) || value < 0) return "—";
+            if (value < 1024) return `${value} Б`;
+            const units = ["КБ", "МБ", "ГБ", "ТБ"];
+            let current = value;
+            let unitIdx = -1;
+            while (current >= 1024 && unitIdx < units.length - 1) {
+                current /= 1024;
+                unitIdx += 1;
+            }
+            return `${current.toFixed(current >= 100 ? 0 : 1)} ${units[unitIdx]}`;
+        }
+
+        function setCloudStatus(text = "", tone = "info") {
+            if (!cloudStatusNoteEl) return;
+            const message = String(text || "").trim();
+            cloudStatusNoteEl.classList.remove("error", "success");
+            if (!message) {
+                cloudStatusNoteEl.textContent = "";
+                cloudStatusNoteEl.classList.add("hidden");
+                return;
+            }
+            if (tone === "error" || tone === "success") {
+                cloudStatusNoteEl.classList.add(tone);
+            }
+            cloudStatusNoteEl.textContent = message;
+            cloudStatusNoteEl.classList.remove("hidden");
+        }
+
+        function setCloudUploadProgress(percent, text = "") {
+            const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+            if (cloudUploadProgressBarEl) {
+                cloudUploadProgressBarEl.style.width = `${safePercent}%`;
+            }
+            if (cloudUploadProgressEl) {
+                cloudUploadProgressEl.classList.remove("hidden");
+                cloudUploadProgressEl.setAttribute("aria-valuenow", String(Math.round(safePercent)));
+            }
+            if (cloudUploadProgressTextEl) {
+                cloudUploadProgressTextEl.textContent = text || `${Math.round(safePercent)}%`;
+                cloudUploadProgressTextEl.classList.remove("hidden");
+            }
+        }
+
+        function resetCloudUploadProgress(hide = true) {
+            if (cloudUploadProgressBarEl) {
+                cloudUploadProgressBarEl.style.width = "0%";
+            }
+            if (cloudUploadProgressEl) {
+                cloudUploadProgressEl.setAttribute("aria-valuenow", "0");
+                if (hide) {
+                    cloudUploadProgressEl.classList.add("hidden");
+                }
+            }
+            if (cloudUploadProgressTextEl) {
+                cloudUploadProgressTextEl.textContent = "0%";
+                if (hide) {
+                    cloudUploadProgressTextEl.classList.add("hidden");
+                }
+            }
+        }
+
+        async function uploadSingleCloudFile(file, targetPath, onProgress) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", cloudUploadUrl, true);
+                xhr.withCredentials = true;
+                xhr.timeout = 0;
+
+                xhr.upload.onprogress = (event) => {
+                    if (!onProgress) return;
+                    const total = event.lengthComputable ? Number(event.total) : Number(file?.size || 0);
+                    onProgress(Number(event.loaded || 0), total);
+                };
+
+                xhr.onerror = () => {
+                    reject(new Error("Сетевая ошибка при загрузке"));
+                };
+                xhr.ontimeout = () => {
+                    reject(new Error("Таймаут загрузки файла"));
+                };
+                xhr.onabort = () => {
+                    reject(new Error("Загрузка отменена"));
+                };
+                xhr.onload = () => {
+                    let payload = {};
+                    try {
+                        payload = JSON.parse(xhr.responseText || "{}");
+                    } catch (_e) {
+                        payload = {};
+                    }
+                    if (xhr.status >= 200 && xhr.status < 300 && payload?.ok !== false) {
+                        resolve(payload);
+                        return;
+                    }
+
+                    const rawText = String(xhr.responseText || "").trim();
+                    const serverError = String(payload?.error || "").trim();
+                    const looksLikeHtml = /^<!doctype|^<html/i.test(rawText);
+                    const fallbackByStatus =
+                        xhr.status === 413
+                            ? "Файл слишком большой для nginx (лимит client_max_body_size)"
+                            : xhr.status === 504
+                                ? "Nginx не дождался ответа бэкенда (увеличьте proxy_read_timeout/proxy_send_timeout)"
+                                : xhr.status === 502
+                                    ? "Ошибка шлюза между nginx и бэкендом/Telegram"
+                            : xhr.statusText || `HTTP ${xhr.status}`;
+                    const detail =
+                        serverError
+                        || (xhr.status === 413
+                            ? fallbackByStatus
+                            : (!looksLikeHtml && rawText ? rawText : fallbackByStatus));
+                    reject(new Error(`${detail} (HTTP ${xhr.status})`));
+                };
+
+                const formData = new FormData();
+                formData.append("path", targetPath);
+                formData.append("file", file, file.name);
+                xhr.send(formData);
+            });
+        }
+
+        function renderCloudList() {
+            if (!cloudListEl) return;
+            cloudListEl.innerHTML = "";
+            const folders = Array.isArray(cloudState.folders) ? cloudState.folders : [];
+            const files = Array.isArray(cloudState.files) ? cloudState.files : [];
+
+            if (!folders.length && !files.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Папка пуста. Загрузите файл или создайте папку.";
+                cloudListEl.appendChild(empty);
+                return;
+            }
+
+            folders.forEach((folder) => {
+                const row = document.createElement("div");
+                row.className = "cloud-node-card";
+
+                const head = document.createElement("div");
+                head.className = "cloud-node-head";
+
+                const openBtn = document.createElement("button");
+                openBtn.type = "button";
+                openBtn.className = "cloud-node-open";
+                openBtn.textContent = `📁 ${folder.name || "Папка"}`;
+                openBtn.addEventListener("click", () => {
+                    loadCloudPath(folder.path || "/").catch((err) => {
+                        console.error("open folder error:", err);
+                        setCloudStatus(err.message || "Не удалось открыть папку", "error");
+                    });
+                });
+
+                const actions = document.createElement("div");
+                actions.className = "cloud-node-actions";
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.type = "button";
+                deleteBtn.className = "cloud-node-action danger";
+                deleteBtn.textContent = "Удалить";
+                deleteBtn.addEventListener("click", async () => {
+                    if (!window.confirm(`Удалить папку "${folder.name}"?`)) return;
+                    try {
+                        await deleteJson(cloudDeleteNodeUrl(folder.node_id));
+                        await loadCloudPath(cloudState.path);
+                        setCloudStatus(`Папка "${folder.name}" удалена`, "success");
+                    } catch (err) {
+                        console.error("delete folder error:", err);
+                        setCloudStatus(err.message || "Не удалось удалить папку", "error");
+                    }
+                });
+
+                actions.appendChild(deleteBtn);
+                head.appendChild(openBtn);
+                head.appendChild(actions);
+
+                const sub = document.createElement("div");
+                sub.className = "cloud-node-sub";
+                sub.textContent = "Папка";
+
+                row.appendChild(head);
+                row.appendChild(sub);
+                cloudListEl.appendChild(row);
+            });
+
+            files.forEach((fileNode) => {
+                const fileMeta = fileNode?.file || {};
+                const isReady = String(fileMeta?.status || "").toLowerCase() === "ready";
+
+                const row = document.createElement("div");
+                row.className = "cloud-node-card";
+
+                const head = document.createElement("div");
+                head.className = "cloud-node-head";
+
+                const title = document.createElement("div");
+                title.className = "cloud-node-open";
+                title.textContent = `📄 ${fileNode?.name || "Файл"}`;
+                title.style.cursor = "default";
+
+                const actions = document.createElement("div");
+                actions.className = "cloud-node-actions";
+
+                const downloadBtn = document.createElement("button");
+                downloadBtn.type = "button";
+                downloadBtn.className = "cloud-node-action";
+                downloadBtn.textContent = "Скачать";
+                downloadBtn.disabled = !isReady || !fileMeta?.file_id;
+                downloadBtn.addEventListener("click", () => {
+                    if (!fileMeta?.file_id || !isReady) return;
+                    const a = document.createElement("a");
+                    a.href = cloudDownloadFileUrl(fileMeta.file_id);
+                    a.download = String(fileMeta.original_name || fileNode?.name || "download.bin");
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setCloudStatus(`Скачивание: ${fileNode?.name || "файл"}`, "success");
+                });
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.type = "button";
+                deleteBtn.className = "cloud-node-action danger";
+                deleteBtn.textContent = "Удалить";
+                deleteBtn.addEventListener("click", async () => {
+                    if (!window.confirm(`Удалить файл "${fileNode?.name}"?`)) return;
+                    try {
+                        await deleteJson(cloudDeleteNodeUrl(fileNode.node_id));
+                        await loadCloudPath(cloudState.path);
+                        setCloudStatus(`Файл "${fileNode?.name}" удален`, "success");
+                    } catch (err) {
+                        console.error("delete file error:", err);
+                        setCloudStatus(err.message || "Не удалось удалить файл", "error");
+                    }
+                });
+
+                actions.appendChild(downloadBtn);
+                actions.appendChild(deleteBtn);
+                head.appendChild(title);
+                head.appendChild(actions);
+
+                const sizeText = fmtCloudSize(fileMeta?.size_bytes);
+                const chunksText = Number(fileMeta?.chunk_count) > 0 ? `${fileMeta.chunk_count} чанк(ов)` : "0 чанков";
+                const statusText = fileMeta?.status || "unknown";
+                const sub = document.createElement("div");
+                sub.className = "cloud-node-sub";
+                sub.textContent = `${sizeText} • ${chunksText} • ${statusText}`;
+
+                row.appendChild(head);
+                row.appendChild(sub);
+                cloudListEl.appendChild(row);
+            });
+        }
+
+        async function loadCloudPath(path, options = {}) {
+            const preserveStatus = Boolean(options?.preserveStatus);
+            const nextPath = normalizeCloudPath(path || "/");
+            cloudState.path = nextPath;
+            if (cloudPathEl) {
+                cloudPathEl.textContent = nextPath;
+                cloudPathEl.title = nextPath;
+            }
+            updateCloudPageContext(nextPath);
+            updateCloudUpButton();
+            updateTelegramBackButton();
+
+            if (cloudListEl) {
+                cloudListEl.innerHTML = '<div class="work-empty">Загрузка...</div>';
+            }
+            try {
+                const payload = await fetchJson(`${cloudListUrl}?path=${encodeURIComponent(nextPath)}`, false);
+                cloudState.folders = Array.isArray(payload?.folders) ? payload.folders : [];
+                cloudState.files = Array.isArray(payload?.files) ? payload.files : [];
+                cloudState.path = normalizeCloudPath(payload?.path || nextPath);
+                if (cloudPathEl) {
+                    cloudPathEl.textContent = cloudState.path;
+                    cloudPathEl.title = cloudState.path;
+                }
+                updateCloudPageContext(cloudState.path);
+                cloudState.initialized = true;
+                renderCloudList();
+                if (!preserveStatus) {
+                    setCloudStatus("");
+                }
+            } catch (err) {
+                const message = String(err?.message || "Не удалось загрузить облако");
+                if (nextPath !== "/" && message.toLowerCase().includes("folder not found")) {
+                    return loadCloudPath(cloudParentPath(nextPath), options);
+                }
+                cloudState.folders = [];
+                cloudState.files = [];
+                if (cloudListEl) {
+                    cloudListEl.innerHTML = '<div class="work-empty">Не удалось загрузить содержимое облака.</div>';
+                }
+                setCloudStatus(message, "error");
+                throw err;
+            } finally {
+                updateCloudUpButton();
+                updateTelegramBackButton();
+            }
+        }
+
+        async function ensureCloudLoaded(force = false) {
+            updateCloudPageContext(cloudState.path);
+            if (!force && cloudState.initialized) {
+                updateCloudUpButton();
+                return;
+            }
+            await loadCloudPath(cloudState.path);
+        }
+
+        async function createCloudFolder() {
+            const rawName = window.prompt("Введите имя папки");
+            if (rawName === null) return;
+            const name = String(rawName).trim();
+            if (!name) {
+                setCloudStatus("Имя папки не может быть пустым", "error");
+                return;
+            }
+            try {
+                const result = await postJson(cloudMkdirUrl, {
+                    parent_path: cloudState.path,
+                    name,
+                });
+                await loadCloudPath(cloudState.path);
+                setCloudStatus(
+                    result?.existing ? `Папка "${name}" уже существует` : `Папка "${name}" создана`,
+                    result?.existing ? "info" : "success"
+                );
+            } catch (err) {
+                console.error("mkdir error:", err);
+                setCloudStatus(err.message || "Не удалось создать папку", "error");
+            }
+        }
+
+        async function uploadCloudFiles(fileList) {
+            const files = Array.from(fileList || []);
+            if (!files.length || cloudState.isUploading) return;
+
+            cloudState.isUploading = true;
+            cloudUploadInputEl && (cloudUploadInputEl.disabled = true);
+            cloudUploadLabelEl?.classList.add("disabled");
+            cloudRefreshBtnEl && (cloudRefreshBtnEl.disabled = true);
+            cloudNewFolderBtnEl && (cloudNewFolderBtnEl.disabled = true);
+            cloudUpBtnEl && (cloudUpBtnEl.disabled = true);
+
+            let uploaded = 0;
+            let failed = 0;
+            const uploadErrors = [];
+            const totalBytes = files.reduce((sum, file) => sum + Math.max(0, Number(file?.size) || 0), 0);
+            const totalFiles = files.length;
+            let processedBytes = 0;
+            resetCloudUploadProgress(false);
+            setCloudUploadProgress(0, "Загрузка: 0%");
+
+            try {
+                for (const file of files) {
+                    const fileSize = Math.max(0, Number(file?.size) || 0);
+                    setCloudStatus(`Загрузка: ${file.name}`);
+                    try {
+                        await uploadSingleCloudFile(file, cloudState.path, (loaded, total) => {
+                            const effectiveTotal = total > 0 ? total : fileSize;
+                            let percent = 0;
+                            if (totalBytes > 0) {
+                                const safeLoaded = Math.max(0, Math.min(Number(loaded || 0), effectiveTotal || Number(loaded || 0)));
+                                const overallLoaded = Math.min(processedBytes + safeLoaded, totalBytes);
+                                percent = (overallLoaded / totalBytes) * 100;
+                            } else {
+                                const perFileProgress = effectiveTotal > 0 ? Math.min(Number(loaded || 0) / effectiveTotal, 1) : 0;
+                                percent = ((uploaded + perFileProgress) / totalFiles) * 100;
+                            }
+                            setCloudUploadProgress(percent, `Загрузка: ${Math.round(percent)}%`);
+                        });
+                        uploaded += 1;
+                    } catch (err) {
+                        failed += 1;
+                        console.error("upload error:", err);
+                        const reason = String(err?.message || "upload failed").trim();
+                        uploadErrors.push({
+                            fileName: file.name,
+                            reason,
+                        });
+                    } finally {
+                        processedBytes += fileSize;
+                        const processedFiles = uploaded + failed;
+                        const percent =
+                            totalBytes > 0
+                                ? (processedBytes / totalBytes) * 100
+                                : (processedFiles / totalFiles) * 100;
+                        setCloudUploadProgress(percent, `Загрузка: ${Math.round(percent)}%`);
+                    }
+                }
+
+                await loadCloudPath(cloudState.path, { preserveStatus: true });
+                if (failed === 0) {
+                    setCloudUploadProgress(100, "Загрузка: 100%");
+                    setCloudStatus(`Загружено файлов: ${uploaded}`, "success");
+                    setTimeout(() => {
+                        if (!cloudState.isUploading) {
+                            resetCloudUploadProgress(true);
+                        }
+                    }, 1200);
+                    return;
+                }
+
+                const firstError = uploadErrors[0];
+                if (uploaded === 0 && failed === 1 && firstError) {
+                    setCloudStatus(`Ошибка загрузки "${firstError.fileName}": ${firstError.reason}`, "error");
+                    return;
+                }
+
+                const summary = `Загружено: ${uploaded}, ошибок: ${failed}`;
+                if (firstError) {
+                    const prefix = failed > 1 ? "Первая ошибка" : "Ошибка";
+                    setCloudStatus(`${summary}. ${prefix}: "${firstError.fileName}" — ${firstError.reason}`, "error");
+                    return;
+                }
+                setCloudStatus(summary, "error");
+            } finally {
+                cloudState.isUploading = false;
+                cloudUploadInputEl && (cloudUploadInputEl.disabled = false);
+                cloudUploadLabelEl?.classList.remove("disabled");
+                cloudRefreshBtnEl && (cloudRefreshBtnEl.disabled = false);
+                cloudNewFolderBtnEl && (cloudNewFolderBtnEl.disabled = false);
+                cloudUpBtnEl && (cloudUpBtnEl.disabled = false);
+            }
         }
 
         function fillSelect(el, items, mapLabel, mapValue, emptyText) {
@@ -2672,6 +3505,10 @@
         function setSelectedWorkClient(user) {
             if (!user) {
                 workClientPageTitleEl.textContent = "Клиент";
+                workClientPageTitleEl.title = "Клиент";
+                if (getActiveWorkPageId() === "work-client-page") {
+                    updateWorkPageContext("work-client-page");
+                }
                 workClientNameEl.textContent = "—";
                 workClientMetaEl.textContent = "—";
                 renderWorkClientOverview(null);
@@ -2679,6 +3516,10 @@
             }
             const title = user.name || user.username || `Клиент #${user.id}`;
             workClientPageTitleEl.textContent = title;
+            workClientPageTitleEl.title = title;
+            if (getActiveWorkPageId() === "work-client-page") {
+                updateWorkPageContext("work-client-page");
+            }
             workClientNameEl.textContent = title;
             workClientMetaEl.textContent = `${user.id} · ${user.username ? `@${user.username}` : "—"}`;
         }
@@ -2842,6 +3683,7 @@
             const hideWorkHeaders = next !== "work-menu-page";
             setTopbarVisibility(hideWorkHeaders);
             workSectionTitleEl?.classList.toggle("hidden", hideWorkHeaders);
+            updateWorkPageContext(next);
             updateTelegramBackButton();
         }
 
@@ -2859,7 +3701,13 @@
             if (target !== "screen-connections") {
                 openConnectionsMenu();
             }
+            if (target === "screen-cloud") {
+                ensureCloudLoaded().catch((err) => {
+                    console.error("cloud init error:", err);
+                });
+            }
             updateTelegramBackButton();
+            updateCloudUpButton();
         }
 
         async function runWorkAction(title, action) {
@@ -3041,6 +3889,34 @@
 
         connectionsBackBtnEl?.addEventListener("click", () => {
             openConnectionsMenu();
+        });
+
+        cloudUpBtnEl?.addEventListener("click", () => {
+            loadCloudPath(cloudParentPath(cloudState.path)).catch((err) => {
+                console.error("cloud up error:", err);
+                setCloudStatus(err.message || "Не удалось открыть родительскую папку", "error");
+            });
+        });
+
+        cloudRefreshBtnEl?.addEventListener("click", () => {
+            ensureCloudLoaded(true).catch((err) => {
+                console.error("cloud refresh error:", err);
+                setCloudStatus(err.message || "Не удалось обновить список", "error");
+            });
+        });
+
+        cloudNewFolderBtnEl?.addEventListener("click", async () => {
+            await createCloudFolder();
+        });
+
+        cloudUploadInputEl?.addEventListener("change", async () => {
+            const files = cloudUploadInputEl?.files;
+            if (!files || !files.length) return;
+            try {
+                await uploadCloudFiles(files);
+            } finally {
+                cloudUploadInputEl.value = "";
+            }
         });
 
         workNavButtons.forEach((btn) =>
@@ -3238,6 +4114,8 @@
             renderWorkSubscriptionControls(workState.overview?.subscription || null);
         });
         renderWorkSubExtendValue();
+        updateCloudPageContext(cloudState.path);
+        updateCloudUpButton();
     </script>
 </body>
 </html>

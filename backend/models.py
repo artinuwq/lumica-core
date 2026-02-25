@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, Numeric, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -36,6 +36,24 @@ class User(Base):
     vpn_accounts = relationship(
         "VpnAccount",
         back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    cloud_nodes = relationship(
+        "CloudNode",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    cloud_files = relationship(
+        "CloudFile",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    cloud_chunks = relationship(
+        "CloudChunk",
+        back_populates="owner",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
@@ -129,3 +147,67 @@ class Inbound(Base):
     stream_settings = Column(JSON, nullable=True)
     settings = Column(JSON, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class CloudNode(Base, TimestampMixin):
+    __tablename__ = "cloud_nodes"
+    __table_args__ = (
+        UniqueConstraint("owner_user_id", "parent_id", "name", name="uq_cloud_node_sibling_name"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("cloud_nodes.id", ondelete="CASCADE"), nullable=True)
+    node_type = Column(String, nullable=False)  # folder | file
+    name = Column(String, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    owner = relationship("User", back_populates="cloud_nodes")
+    parent = relationship("CloudNode", remote_side=[id], back_populates="children")
+    children = relationship("CloudNode", back_populates="parent", cascade="all, delete-orphan")
+    file = relationship("CloudFile", back_populates="node", uselist=False, cascade="all, delete-orphan")
+
+
+class CloudFile(Base, TimestampMixin):
+    __tablename__ = "cloud_files"
+
+    id = Column(Integer, primary_key=True)
+    node_id = Column(Integer, ForeignKey("cloud_nodes.id", ondelete="CASCADE"), nullable=False, unique=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    original_name = Column(String, nullable=False)
+    extension = Column(String, nullable=True)
+    mime_type = Column(String, nullable=True)
+    size_bytes = Column(Integer, nullable=False, default=0, server_default="0")
+    chunk_size_bytes = Column(Integer, nullable=False, default=0, server_default="0")
+    chunk_count = Column(Integer, nullable=False, default=0, server_default="0")
+    checksum_sha256 = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="uploading", server_default="uploading")
+    error_text = Column(String, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    node = relationship("CloudNode", back_populates="file")
+    owner = relationship("User", back_populates="cloud_files")
+    chunks = relationship("CloudChunk", back_populates="file", cascade="all, delete-orphan")
+
+
+class CloudChunk(Base, TimestampMixin):
+    __tablename__ = "cloud_chunks"
+    __table_args__ = (
+        UniqueConstraint("file_id", "chunk_index", name="uq_cloud_file_chunk_index"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    file_id = Column(Integer, ForeignKey("cloud_files.id", ondelete="CASCADE"), nullable=False)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    checksum_sha256 = Column(String, nullable=True)
+    tg_chat_id = Column(String, nullable=False)
+    tg_message_id = Column(Integer, nullable=False)
+    tg_file_id = Column(String, nullable=False)
+    tg_file_unique_id = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="uploaded", server_default="uploaded")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    file = relationship("CloudFile", back_populates="chunks")
+    owner = relationship("User", back_populates="cloud_chunks")
