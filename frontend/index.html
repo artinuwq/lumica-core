@@ -37,19 +37,27 @@
 
         html, body {
             height: 100%;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
         }
 
         body {
             margin: 0;
             min-height: 100vh;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
             background: radial-gradient(circle at 50% -10%, rgba(99, 140, 255, 0.18), rgba(5, 10, 25, 0.85) 42%), linear-gradient(145deg, #0b1224, #090f1f 55%);
             color: #f4f5f7;
         }
 
         main {
             width: 100%;
+            max-width: 100%;
             min-height: 100vh;
             padding: calc(1.2rem + var(--app-top-offset)) 1rem 1rem;
+            overflow-x: hidden;
             opacity: 0;
             transform: translateY(10px);
             transition: opacity 0.45s ease, transform 0.45s ease;
@@ -61,9 +69,19 @@
         }
 
         .content {
+            width: 100%;
             max-width: 540px;
             margin: 0 auto;
             padding-bottom: calc(110px + var(--app-bottom-offset));
+            min-width: 0;
+            overflow-x: hidden;
+        }
+        .app-content,
+        .app-shell {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            overflow-x: hidden;
         }
 
         .status-card,
@@ -287,10 +305,12 @@
 
         .bottom-nav {
             position: fixed;
-            left: 50%;
+            left: max(0.5rem, env(safe-area-inset-left, 0px));
+            right: max(0.5rem, env(safe-area-inset-right, 0px));
             bottom: calc(16px + var(--app-bottom-offset));
-            transform: translateX(-50%);
-            width: min(560px, 94vw);
+            width: auto;
+            max-width: 560px;
+            margin-inline: auto;
             padding: 0.35rem;
             border-radius: 16px;
             background: rgba(12, 18, 33, 0.92);
@@ -342,6 +362,8 @@
             gap: 0.8rem;
             width: 100%;
             min-width: 0;
+            max-width: 100%;
+            overflow-x: hidden;
         }
         #screen-work {
             width: 100vw;
@@ -363,14 +385,16 @@
             align-items: stretch;
         }
         #screen-cloud {
-            width: 100vw;
-            margin-left: calc(50% - 50vw);
-            margin-right: calc(50% - 50vw);
-            padding-inline: 1rem;
+            width: 100%;
+            max-width: 100%;
+            margin-left: 0;
+            margin-right: 0;
+            padding-inline: 0;
             padding-top: 0.6rem;
             --context-popup-offset: -2.8rem;
             box-sizing: border-box;
             align-items: stretch;
+            overflow-x: hidden;
         }
         .work-page {
             display: flex;
@@ -909,8 +933,12 @@
         }
         .cloud-page {
             display: grid;
+            width: 100%;
+            max-width: 100%;
             gap: 0.68rem;
             padding: 0.85rem;
+            min-width: 0;
+            overflow-x: hidden;
         }
         .cloud-toolbar {
             display: flex;
@@ -935,10 +963,15 @@
             display: grid;
             gap: 0.55rem;
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            min-width: 0;
+            max-width: 100%;
         }
         .cloud-upload-btn {
+            display: block;
             width: 100%;
             text-align: center;
+            max-width: 100%;
+            min-width: 0;
         }
         .cloud-upload-btn.disabled {
             opacity: 0.58;
@@ -970,6 +1003,9 @@
         .cloud-list {
             display: grid;
             gap: 0.54rem;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
         }
         .cloud-node-card {
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -984,6 +1020,8 @@
             align-items: center;
             justify-content: space-between;
             gap: 0.52rem;
+            min-width: 0;
+            max-width: 100%;
         }
         .cloud-node-open {
             border: none;
@@ -1015,6 +1053,8 @@
             align-items: center;
             gap: 0.42rem;
             flex-wrap: wrap;
+            min-width: 0;
+            max-width: 100%;
         }
         .cloud-node-action {
             border: 1px solid rgba(120, 171, 255, 0.42);
@@ -1040,6 +1080,8 @@
             line-height: 1.34;
             color: rgba(212, 232, 255, 0.78);
             min-height: 1.08rem;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
         .cloud-status-note.error {
             color: #ffd0d8;

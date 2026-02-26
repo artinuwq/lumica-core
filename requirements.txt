@@ -3,3 +3,4 @@ SQLAlchemy==2.0.32
 aiogram==3.13.1
 psutil==5.9.8
 requests==2.32.3
+gunicorn==22.0.0
