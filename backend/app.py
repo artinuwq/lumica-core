@@ -35,7 +35,11 @@ from .models import (
     User,
     VpnAccount,
 )
-from .settings_manager import SettingsManager
+from .settings_manager import (
+    CLOUD_VISIBILITY_KEY,
+    SettingsManager,
+    to_bool,
+)
 from .tg_auth import validate_init_data
 from .xui_api import XUIClient
 
@@ -651,6 +655,13 @@ def create_app():
     CLOUD_NODE_TYPE_FOLDER = "folder"
     CLOUD_NODE_TYPE_FILE = "file"
 
+    def _cloud_visibility_enabled(db) -> bool:
+        raw = SettingsManager(db).get_value(
+            CLOUD_VISIBILITY_KEY,
+            default=os.getenv("CLOUD_VISIBILITY", "true"),
+        )
+        return to_bool(raw, default=True)
+
     def _sanitize_cloud_name(raw_name: str | None) -> str:
         value = (raw_name or "").replace("\\", "/").strip()
         value = value.split("/")[-1].strip()
@@ -788,6 +799,9 @@ def create_app():
             return jsonify({"ok": False, "error": str(exc)}), 400
 
         with SessionLocal() as db:
+            if not _cloud_visibility_enabled(db):
+                return jsonify({"ok": False, "error": "Cloud feature is disabled"}), 403
+
             folder = _resolve_cloud_folder(db, owner_user_id=auth["user_id"], path=current_path)
             if current_path != "/" and not folder:
                 return jsonify({"ok": False, "error": "Folder not found"}), 404
@@ -886,6 +900,9 @@ def create_app():
             return jsonify({"ok": False, "error": str(exc)}), 400
 
         with SessionLocal() as db:
+            if not _cloud_visibility_enabled(db):
+                return jsonify({"ok": False, "error": "Cloud feature is disabled"}), 403
+
             parent_folder = _resolve_cloud_folder(
                 db,
                 owner_user_id=auth["user_id"],
@@ -961,6 +978,9 @@ def create_app():
         rolling_hash = hashlib.sha256()
 
         with SessionLocal() as db:
+            if not _cloud_visibility_enabled(db):
+                return jsonify({"ok": False, "error": "Cloud feature is disabled"}), 403
+
             folder = _resolve_cloud_folder(db, owner_user_id=auth["user_id"], path=target_path)
             if target_path != "/" and not folder:
                 return jsonify({"ok": False, "error": "Target folder not found"}), 404
@@ -1124,6 +1144,9 @@ def create_app():
             return err
 
         with SessionLocal() as db:
+            if not _cloud_visibility_enabled(db):
+                return jsonify({"ok": False, "error": "Cloud feature is disabled"}), 403
+
             cloud_file = (
                 db.query(CloudFile)
                 .filter(
@@ -1176,6 +1199,9 @@ def create_app():
         message_ids: list[int] = []
 
         with SessionLocal() as db:
+            if not _cloud_visibility_enabled(db):
+                return jsonify({"ok": False, "error": "Cloud feature is disabled"}), 403
+
             node = (
                 db.query(CloudNode)
                 .filter(
@@ -2000,6 +2026,7 @@ def create_app():
                 return jsonify({"ok": False, "error": "Unauthorized"}), 401
 
             sub = _active_subscription(db, user.id)
+            cloud_enabled = _cloud_visibility_enabled(db)
             return jsonify(
                 {
                     "ok": True,
@@ -2016,6 +2043,9 @@ def create_app():
                         "status": sub.status,
                         "access_until": sub.access_until.isoformat() if sub.access_until else None,
                         "price_amount": str(sub.price_amount) if sub.price_amount is not None else None,
+                    },
+                    "features": {
+                        "cloud_enabled": cloud_enabled,
                     },
                 }
             )

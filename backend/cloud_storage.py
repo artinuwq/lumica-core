@@ -4,6 +4,15 @@ import time
 
 import requests
 
+from .settings_manager import (
+    CLOUD_TELEGRAM_SEND_RETRIES_KEY,
+    CLOUD_TELEGRAM_SEND_RETRY_DELAY_SEC_KEY,
+    CLOUD_TELEGRAM_SEND_TIMEOUT_SEC_KEY,
+    CLOUD_UPLOAD_CHUNK_SIZE_MB_KEY,
+    get_runtime_setting_values,
+    to_int,
+)
+
 
 class TelegramStorageError(RuntimeError):
     pass
@@ -29,13 +38,21 @@ def _env_int(name: str, default: int, *, min_value: int | None = None, max_value
     return value
 
 
-def cloud_chunk_size_bytes() -> int:
-    raw = os.getenv("CLOUD_CHUNK_SIZE_MB", "15")
-    try:
-        mb = int(raw)
-    except (TypeError, ValueError):
-        mb = 15
-    mb = max(1, min(mb, 20))
+def _cloud_runtime_settings() -> dict[str, object]:
+    return get_runtime_setting_values(
+        [
+            CLOUD_UPLOAD_CHUNK_SIZE_MB_KEY,
+            CLOUD_TELEGRAM_SEND_TIMEOUT_SEC_KEY,
+            CLOUD_TELEGRAM_SEND_RETRIES_KEY,
+            CLOUD_TELEGRAM_SEND_RETRY_DELAY_SEC_KEY,
+        ]
+    )
+
+
+def cloud_chunk_size_bytes(settings: dict[str, object] | None = None) -> int:
+    runtime = settings or _cloud_runtime_settings()
+    raw = runtime.get(CLOUD_UPLOAD_CHUNK_SIZE_MB_KEY, os.getenv("CLOUD_CHUNK_SIZE_MB", "15"))
+    mb = to_int(raw, 15, min_value=1, max_value=20)
     return mb * 1024 * 1024
 
 
@@ -84,16 +101,22 @@ def _send_connect_timeout_sec() -> int:
     return _env_int("TELEGRAM_SEND_CONNECT_TIMEOUT_SEC", 15, min_value=3, max_value=120)
 
 
-def _send_read_timeout_sec() -> int:
-    return _env_int("TELEGRAM_SEND_TIMEOUT_SEC", 300, min_value=30, max_value=1800)
+def _send_read_timeout_sec(settings: dict[str, object] | None = None) -> int:
+    runtime = settings or _cloud_runtime_settings()
+    raw = runtime.get(CLOUD_TELEGRAM_SEND_TIMEOUT_SEC_KEY, os.getenv("TELEGRAM_SEND_TIMEOUT_SEC", "300"))
+    return to_int(raw, 300, min_value=30, max_value=1800)
 
 
-def _send_retries() -> int:
-    return _env_int("TELEGRAM_SEND_RETRIES", 3, min_value=1, max_value=10)
+def _send_retries(settings: dict[str, object] | None = None) -> int:
+    runtime = settings or _cloud_runtime_settings()
+    raw = runtime.get(CLOUD_TELEGRAM_SEND_RETRIES_KEY, os.getenv("TELEGRAM_SEND_RETRIES", "3"))
+    return to_int(raw, 3, min_value=1, max_value=10)
 
 
-def _send_retry_delay_sec() -> int:
-    return _env_int("TELEGRAM_SEND_RETRY_DELAY_SEC", 2, min_value=1, max_value=60)
+def _send_retry_delay_sec(settings: dict[str, object] | None = None) -> int:
+    runtime = settings or _cloud_runtime_settings()
+    raw = runtime.get(CLOUD_TELEGRAM_SEND_RETRY_DELAY_SEC_KEY, os.getenv("TELEGRAM_SEND_RETRY_DELAY_SEC", "2"))
+    return to_int(raw, 2, min_value=1, max_value=60)
 
 
 def send_chunk_to_telegram(
@@ -103,14 +126,15 @@ def send_chunk_to_telegram(
     caption: str | None = None,
 ) -> dict:
     token, chat_id = _require_config()
+    runtime = _cloud_runtime_settings()
 
     form = {"chat_id": chat_id, "disable_notification": "true"}
     if caption:
         form["caption"] = caption[:1024]
 
-    retries = _send_retries()
-    retry_delay = _send_retry_delay_sec()
-    timeout = (_send_connect_timeout_sec(), _send_read_timeout_sec())
+    retries = _send_retries(runtime)
+    retry_delay = _send_retry_delay_sec(runtime)
+    timeout = (_send_connect_timeout_sec(), _send_read_timeout_sec(runtime))
     last_request_error: requests.RequestException | None = None
 
     response = None

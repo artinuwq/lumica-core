@@ -59,13 +59,11 @@
             padding: calc(1.2rem + var(--app-top-offset)) 1rem 1rem;
             overflow-x: hidden;
             opacity: 0;
-            transform: translateY(10px);
-            transition: opacity 0.45s ease, transform 0.45s ease;
+            transition: opacity 0.45s ease;
         }
 
         main.visible {
             opacity: 1;
-            transform: translateY(0);
         }
 
         .content {
@@ -307,7 +305,7 @@
             position: fixed;
             left: max(0.5rem, env(safe-area-inset-left, 0px));
             right: max(0.5rem, env(safe-area-inset-right, 0px));
-            bottom: calc(16px + var(--app-bottom-offset));
+            bottom: calc(8px + var(--app-bottom-offset));
             width: auto;
             max-width: 560px;
             margin-inline: auto;
@@ -323,6 +321,12 @@
         }
         .bottom-nav.with-work {
             grid-template-columns: repeat(5, 1fr);
+        }
+        .bottom-nav.cloud-hidden {
+            grid-template-columns: repeat(3, 1fr);
+        }
+        .bottom-nav.with-work.cloud-hidden {
+            grid-template-columns: repeat(4, 1fr);
         }
 
         .nav-btn {
@@ -366,21 +370,20 @@
             overflow-x: hidden;
         }
         #screen-work {
-            width: 100vw;
-            margin-left: calc(50% - 50vw);
-            margin-right: calc(50% - 50vw);
-            padding-inline: 1rem;
-            --context-popup-offset: -1.6rem;
+            width: 100%;
+            margin-left: 0;
+            margin-right: 0;
+            padding-inline: 0;
+            padding-top: 0.2rem;
             box-sizing: border-box;
             align-items: stretch;
         }
         #screen-connections {
-            width: 100vw;
-            margin-left: calc(50% - 50vw);
-            margin-right: calc(50% - 50vw);
-            padding-inline: 1rem;
-            padding-top: 0.6rem;
-            --context-popup-offset: -2.8rem;
+            width: 100%;
+            margin-left: 0;
+            margin-right: 0;
+            padding-inline: 0;
+            padding-top: 0.25rem;
             box-sizing: border-box;
             align-items: stretch;
         }
@@ -390,8 +393,7 @@
             margin-left: 0;
             margin-right: 0;
             padding-inline: 0;
-            padding-top: 0.6rem;
-            --context-popup-offset: -2.8rem;
+            padding-top: 0.25rem;
             box-sizing: border-box;
             align-items: stretch;
             overflow-x: hidden;
@@ -437,9 +439,23 @@
             display: flex;
             justify-content: center;
             position: relative;
-            z-index: 4;
-            margin-top: var(--context-popup-offset, -2.8rem);
-            margin-bottom: 0.35rem;
+            z-index: 6;
+            margin-top: 0;
+            margin-bottom: 0.45rem;
+            pointer-events: none;
+        }
+        body.context-near-system-bar .work-page-context {
+            position: fixed;
+            top: calc(var(--safe-top) + 0.55rem);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1200;
+            width: fit-content;
+            max-width: min(18rem, calc(100vw - 9rem));
+            margin: 0;
+        }
+        body.context-near-system-bar .work-page-pill {
+            max-width: 100%;
         }
         .work-page-context.hidden {
             display: none;
@@ -641,6 +657,12 @@
             font-size: 0.82rem;
             color: rgba(221, 235, 255, 0.72);
             line-height: 1.35;
+        }
+        .work-note.success {
+            color: #a7f3c5;
+        }
+        .work-note.error {
+            color: #ffb8b8;
         }
         .work-client-summary-card {
             padding: 0.85rem 0.95rem;
@@ -1451,6 +1473,7 @@
                                     <div class="work-menu-group-title">Работа с подключениями</div>
                                     <div class="work-menu-buttons">
                                         <button type="button" class="work-menu-btn" data-work-nav="work-inbounds-page">Подключения</button>
+                                        <button type="button" class="work-menu-btn" data-work-nav="work-system-settings-page">Системные настройки</button>
                                     </div>
                                 </section>
                             </div>
@@ -1511,6 +1534,37 @@
                             <div class="work-note">Управляй, какие inbound показывать пользователям во вкладке подключений.</div>
                             <div id="work-inbounds-list" class="work-inbounds-list">
                                 <div class="work-empty">Загрузка подключений...</div>
+                            </div>
+                        </section>
+
+                        <section id="work-system-settings-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
+                                <div class="work-page-title">Системные настройки</div>
+                                <button id="work-settings-refresh-btn" class="work-back-btn">Обновить</button>
+                            </div>
+                            <div class="work-note">Настройки применяются без перезапуска.</div>
+                            <div class="work-bind">
+                                <label class="work-sub-create-label" for="work-setting-cloud-visibility">cloud.visibility</label>
+                                <select id="work-setting-cloud-visibility">
+                                    <option value="true">true</option>
+                                    <option value="false">false</option>
+                                </select>
+
+                                <label class="work-sub-create-label" for="work-setting-cloud-chunk-mb">cloud.upload.chunk_size_mb</label>
+                                <input id="work-setting-cloud-chunk-mb" type="number" min="1" max="20" step="1" placeholder="1-20">
+
+                                <label class="work-sub-create-label" for="work-setting-cloud-send-timeout">cloud.telegram.send.timeout_sec</label>
+                                <input id="work-setting-cloud-send-timeout" type="number" min="30" max="1800" step="1" placeholder="30-1800">
+
+                                <label class="work-sub-create-label" for="work-setting-cloud-send-retries">cloud.telegram.send.retries</label>
+                                <input id="work-setting-cloud-send-retries" type="number" min="1" max="10" step="1" placeholder="1-10">
+
+                                <label class="work-sub-create-label" for="work-setting-cloud-send-retry-delay">cloud.telegram.send.retry_delay_sec</label>
+                                <input id="work-setting-cloud-send-retry-delay" type="number" min="1" max="60" step="1" placeholder="1-60">
+
+                                <button id="work-settings-save-btn" class="work-btn">Сохранить настройки</button>
+                                <div id="work-settings-save-status" class="work-note hidden"></div>
                             </div>
                         </section>
 
@@ -1725,6 +1779,7 @@
         const cloudPageContextPillEl = document.getElementById("cloud-page-context-pill");
         const bottomNavEl = document.querySelector(".bottom-nav");
         const navWorkBtn = document.getElementById("nav-work-btn");
+        const navCloudBtn = document.querySelector('.nav-btn[data-screen="screen-cloud"]');
         const workPages = document.querySelectorAll(".work-page");
         const workNavButtons = document.querySelectorAll("[data-work-nav]");
         const workBackButtons = document.querySelectorAll("[data-work-back]");
@@ -1746,6 +1801,8 @@
         const adminUserBindingsUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/bindings`;
         const adminUserOverviewUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/overview`;
         const adminUserSubscriptionUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/subscription`;
+        const adminSettingsUrl = `${window.location.origin}/api/admin/settings`;
+        const adminSettingUrl = (settingKey) => `${adminSettingsUrl}/${encodeURIComponent(settingKey)}`;
         const cloudListUrl = `${window.location.origin}/api/cloud/list`;
         const cloudMkdirUrl = `${window.location.origin}/api/cloud/mkdir`;
         const cloudUploadUrl = `${window.location.origin}/api/cloud/upload`;
@@ -1782,6 +1839,14 @@
         const workRolePillEl = document.getElementById("work-role-pill");
         const workRefreshUsersBtnEl = document.getElementById("work-refresh-users-btn");
         const workSyncInboundsBtnEl = document.getElementById("work-sync-inbounds-btn");
+        const workSettingsRefreshBtnEl = document.getElementById("work-settings-refresh-btn");
+        const workSettingsSaveBtnEl = document.getElementById("work-settings-save-btn");
+        const workSettingsSaveStatusEl = document.getElementById("work-settings-save-status");
+        const workSettingCloudVisibilityEl = document.getElementById("work-setting-cloud-visibility");
+        const workSettingCloudChunkMbEl = document.getElementById("work-setting-cloud-chunk-mb");
+        const workSettingCloudSendTimeoutEl = document.getElementById("work-setting-cloud-send-timeout");
+        const workSettingCloudSendRetriesEl = document.getElementById("work-setting-cloud-send-retries");
+        const workSettingCloudSendRetryDelayEl = document.getElementById("work-setting-cloud-send-retry-delay");
         const workInboundsListEl = document.getElementById("work-inbounds-list");
         const workClientCardsEl = document.getElementById("work-client-cards");
         const workClientPageTitleEl = document.getElementById("work-client-page-title");
@@ -1822,6 +1887,13 @@
         const cloudPathEl = document.getElementById("cloud-path");
         const cloudStatusNoteEl = document.getElementById("cloud-status-note");
         const cloudListEl = document.getElementById("cloud-list");
+        const systemSettingKeys = {
+            cloudVisibility: "cloud.visibility",
+            cloudChunkSizeMb: "cloud.upload.chunk_size_mb",
+            cloudSendTimeoutSec: "cloud.telegram.send.timeout_sec",
+            cloudSendRetries: "cloud.telegram.send.retries",
+            cloudSendRetryDelaySec: "cloud.telegram.send.retry_delay_sec",
+        };
         const workState = {
             users: [],
             inbounds: [],
@@ -1829,6 +1901,7 @@
             bindings: [],
             pendingClients: [],
             pendingBindings: [],
+            settings: {},
             selectedUserId: null,
             overview: null,
         };
@@ -1855,6 +1928,9 @@
             initialized: false,
             isUploading: false,
         };
+        const uiFeatures = {
+            cloudEnabled: true,
+        };
         let lastUserPayload = null;
         let showFullTelegramId = false;
         let viewportListenerBound = false;
@@ -1870,6 +1946,7 @@
             ["work-clients-page", "Клиенты"],
             ["work-pending-page", "Pending до первого входа"],
             ["work-inbounds-page", "Подключения"],
+            ["work-system-settings-page", "Системные настройки"],
             ["work-client-page", "Клиент"],
             ["work-client-connections-page", "Подключения"],
             ["work-client-subscription-page", "Подписка"],
@@ -2026,6 +2103,19 @@
             cloudPageContextEl.classList.remove("hidden");
         }
 
+        function applyCloudVisibility(me) {
+            const enabled = me?.features?.cloud_enabled !== false;
+            uiFeatures.cloudEnabled = enabled;
+            navCloudBtn?.classList.toggle("hidden", !enabled);
+            bottomNavEl?.classList.toggle("cloud-hidden", !enabled);
+            if (!enabled) {
+                cloudPageContextEl?.classList.add("hidden");
+                if (getActiveScreenId() === "screen-cloud") {
+                    switchScreen("screen-home");
+                }
+            }
+        }
+
         function updateCloudUpButton() {
             if (!cloudUpBtnEl) return;
             const canGoUp = normalizeCloudPath(cloudState.path) !== "/";
@@ -2110,6 +2200,7 @@
 
         function syncBackNavigationMode() {
             const useTelegramBack = hasTelegramBackButton();
+            document.body.classList.toggle("context-near-system-bar", useTelegramBack);
             setCustomBackButtonsVisibility(!useTelegramBack);
             if (useTelegramBack) {
                 updateTelegramBackButton();
@@ -2475,6 +2566,7 @@
             const http = data?.http;
             const mixed = data?.mixed;
 
+            applyCloudVisibility(me);
             lastUserPayload = me || null;
             const userRole = me?.user?.role || "user";
             const isOwner = userRole === "owner";
@@ -3314,6 +3406,126 @@
             });
         }
 
+        function parseBoolValue(value, fallback = true) {
+            if (typeof value === "boolean") return value;
+            if (typeof value === "number") return value !== 0;
+            if (typeof value === "string") {
+                const normalized = value.trim().toLowerCase();
+                if (["1", "true", "yes", "on"].includes(normalized)) return true;
+                if (["0", "false", "no", "off"].includes(normalized)) return false;
+            }
+            return fallback;
+        }
+
+        function parseIntInRange(value, fallback, minValue, maxValue) {
+            const parsed = Number.parseInt(String(value ?? "").trim(), 10);
+            let out = Number.isInteger(parsed) ? parsed : fallback;
+            if (typeof minValue === "number") out = Math.max(minValue, out);
+            if (typeof maxValue === "number") out = Math.min(maxValue, out);
+            return out;
+        }
+
+        function setWorkSettingsStatus(message, tone = "") {
+            if (!workSettingsSaveStatusEl) return;
+            workSettingsSaveStatusEl.classList.remove("success", "error");
+            if (!message) {
+                workSettingsSaveStatusEl.textContent = "";
+                workSettingsSaveStatusEl.classList.add("hidden");
+                return;
+            }
+            if (tone === "success" || tone === "error") {
+                workSettingsSaveStatusEl.classList.add(tone);
+            }
+            workSettingsSaveStatusEl.textContent = message;
+            workSettingsSaveStatusEl.classList.remove("hidden");
+        }
+
+        function applyWorkSettingsFormValues(settingsMap) {
+            const cloudVisible = parseBoolValue(settingsMap?.[systemSettingKeys.cloudVisibility], true);
+            const chunkSizeMb = parseIntInRange(settingsMap?.[systemSettingKeys.cloudChunkSizeMb], 15, 1, 20);
+            const sendTimeoutSec = parseIntInRange(settingsMap?.[systemSettingKeys.cloudSendTimeoutSec], 300, 30, 1800);
+            const sendRetries = parseIntInRange(settingsMap?.[systemSettingKeys.cloudSendRetries], 3, 1, 10);
+            const sendRetryDelaySec = parseIntInRange(settingsMap?.[systemSettingKeys.cloudSendRetryDelaySec], 2, 1, 60);
+
+            if (workSettingCloudVisibilityEl) {
+                workSettingCloudVisibilityEl.value = cloudVisible ? "true" : "false";
+            }
+            if (workSettingCloudChunkMbEl) {
+                workSettingCloudChunkMbEl.value = String(chunkSizeMb);
+            }
+            if (workSettingCloudSendTimeoutEl) {
+                workSettingCloudSendTimeoutEl.value = String(sendTimeoutSec);
+            }
+            if (workSettingCloudSendRetriesEl) {
+                workSettingCloudSendRetriesEl.value = String(sendRetries);
+            }
+            if (workSettingCloudSendRetryDelayEl) {
+                workSettingCloudSendRetryDelayEl.value = String(sendRetryDelaySec);
+            }
+        }
+
+        async function loadWorkSystemSettings() {
+            setWorkSettingsStatus("", "");
+            const resp = await fetchJson(`${adminSettingsUrl}?prefix=cloud.`, false);
+            const rows = Array.isArray(resp?.settings) ? resp.settings : [];
+            const settingsMap = {};
+            rows.forEach((row) => {
+                const key = String(row?.key || "").trim();
+                if (!key) return;
+                settingsMap[key] = row?.value;
+            });
+            workState.settings = settingsMap;
+            applyWorkSettingsFormValues(settingsMap);
+            return settingsMap;
+        }
+
+        async function saveWorkSystemSettings() {
+            const cloudVisible = workSettingCloudVisibilityEl?.value !== "false";
+            const chunkSizeMb = parseIntInRange(workSettingCloudChunkMbEl?.value, 15, 1, 20);
+            const sendTimeoutSec = parseIntInRange(workSettingCloudSendTimeoutEl?.value, 300, 30, 1800);
+            const sendRetries = parseIntInRange(workSettingCloudSendRetriesEl?.value, 3, 1, 10);
+            const sendRetryDelaySec = parseIntInRange(workSettingCloudSendRetryDelayEl?.value, 2, 1, 60);
+
+            const payloads = [
+                {
+                    key: systemSettingKeys.cloudVisibility,
+                    value: cloudVisible,
+                    description: "Show or hide Cloud section in app",
+                },
+                {
+                    key: systemSettingKeys.cloudChunkSizeMb,
+                    value: chunkSizeMb,
+                    description: "Cloud upload chunk size in megabytes",
+                },
+                {
+                    key: systemSettingKeys.cloudSendTimeoutSec,
+                    value: sendTimeoutSec,
+                    description: "Telegram send timeout in seconds",
+                },
+                {
+                    key: systemSettingKeys.cloudSendRetries,
+                    value: sendRetries,
+                    description: "Telegram send retry attempts",
+                },
+                {
+                    key: systemSettingKeys.cloudSendRetryDelaySec,
+                    value: sendRetryDelaySec,
+                    description: "Telegram send retry delay in seconds",
+                },
+            ];
+
+            for (const item of payloads) {
+                await postJson(adminSettingUrl(item.key), {
+                    value: item.value,
+                    description: item.description,
+                });
+            }
+
+            await loadWorkSystemSettings();
+            applyCloudVisibility({ features: { cloud_enabled: cloudVisible } });
+            return payloads;
+        }
+
         function renderExistingBindings(bindings) {
             if (!workExistingLinksEl) return;
             workExistingLinksEl.innerHTML = "";
@@ -3727,9 +3939,18 @@
             workSectionTitleEl?.classList.toggle("hidden", hideWorkHeaders);
             updateWorkPageContext(next);
             updateTelegramBackButton();
+            if (next === "work-system-settings-page") {
+                loadWorkSystemSettings().catch((err) => {
+                    console.error("load system settings error:", err);
+                    setWorkSettingsStatus(err?.message || "Не удалось загрузить настройки", "error");
+                });
+            }
         }
 
         function switchScreen(target) {
+            if (target === "screen-cloud" && !uiFeatures.cloudEnabled) {
+                target = "screen-home";
+            }
             heroCardEl?.classList.toggle("hidden", target !== "screen-home");
             navButtons.forEach((b) => b.classList.toggle("active", b.dataset.screen === target));
             screens.forEach((s) => s.classList.toggle("hidden", s.id !== target));
@@ -3767,6 +3988,7 @@
                         ok: true,
                         user: { telegram_id: "999000111", role: "admin", name: "Dev Mode" },
                         subscription: { status: "active", access_until: new Date(Date.now() + 86400000 * 30).toISOString() },
+                        features: { cloud_enabled: true },
                     },
                     status: {
                         ok: true,
@@ -3989,6 +4211,26 @@
                 await postJson(adminSyncInboundsUrl);
                 return loadWorkClientsData();
             });
+        });
+
+        workSettingsRefreshBtnEl?.addEventListener("click", async () => {
+            try {
+                await loadWorkSystemSettings();
+                setWorkSettingsStatus("Настройки обновлены", "success");
+            } catch (err) {
+                console.error("refresh system settings error:", err);
+                setWorkSettingsStatus(err?.message || "Не удалось обновить настройки", "error");
+            }
+        });
+
+        workSettingsSaveBtnEl?.addEventListener("click", async () => {
+            try {
+                await saveWorkSystemSettings();
+                setWorkSettingsStatus("Настройки сохранены", "success");
+            } catch (err) {
+                console.error("save system settings error:", err);
+                setWorkSettingsStatus(err?.message || "Не удалось сохранить настройки", "error");
+            }
         });
 
         workRefreshInboundClientsBtnEl?.addEventListener("click", async () => {
