@@ -24,6 +24,7 @@ from .cloud_storage import (
 )
 from .db import Base, SessionLocal, engine
 from .models import (
+    AppSetting,
     AuthSession,
     CloudChunk,
     CloudFile,
@@ -34,6 +35,7 @@ from .models import (
     User,
     VpnAccount,
 )
+from .settings_manager import SettingsManager
 from .tg_auth import validate_init_data
 from .xui_api import XUIClient
 
@@ -175,6 +177,17 @@ def _load_role_bindings() -> dict[str, str]:
             set_role(tg_id, role)
 
     return bindings
+
+
+def _serialize_app_setting(row: AppSetting) -> dict:
+    return {
+        "id": row.id,
+        "key": row.key,
+        "value": row.value_json,
+        "description": row.description,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
 
 
 def create_app():
@@ -1358,6 +1371,80 @@ def create_app():
                     ],
                 }
             )
+
+    @app.get("/api/admin/settings")
+    def admin_settings_list():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+
+        prefix = (request.args.get("prefix") or "").strip() or None
+        with SessionLocal() as db:
+            settings = SettingsManager(db).list_settings(prefix=prefix)
+            return jsonify({"ok": True, "settings": [_serialize_app_setting(item) for item in settings]})
+
+    @app.get("/api/admin/settings/<setting_key>")
+    def admin_settings_get(setting_key: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+
+        with SessionLocal() as db:
+            manager = SettingsManager(db)
+            try:
+                item = manager.get_setting(setting_key)
+            except ValueError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 400
+
+            if not item:
+                return jsonify({"ok": False, "error": "Setting not found"}), 404
+            return jsonify({"ok": True, "setting": _serialize_app_setting(item)})
+
+    @app.post("/api/admin/settings/<setting_key>")
+    def admin_settings_upsert(setting_key: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+
+        body = request.get_json(silent=True) or {}
+        if "value" not in body:
+            return jsonify({"ok": False, "error": "value is required"}), 400
+
+        description = body.get("description")
+        if description is not None and not isinstance(description, str):
+            return jsonify({"ok": False, "error": "description must be a string"}), 400
+
+        with SessionLocal() as db:
+            manager = SettingsManager(db)
+            try:
+                item, created = manager.set_setting(
+                    setting_key,
+                    body.get("value"),
+                    description=description,
+                )
+            except ValueError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 400
+
+            db.commit()
+            return jsonify({"ok": True, "created": created, "setting": _serialize_app_setting(item)})
+
+    @app.post("/api/admin/settings/<setting_key>/delete")
+    def admin_settings_delete(setting_key: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+
+        with SessionLocal() as db:
+            manager = SettingsManager(db)
+            try:
+                deleted = manager.delete_setting(setting_key)
+            except ValueError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 400
+
+            if not deleted:
+                return jsonify({"ok": False, "error": "Setting not found"}), 404
+            db.commit()
+            return jsonify({"ok": True, "deleted": True})
 
     @app.post("/api/admin/inbounds/<int:panel_inbound_id>/visibility")
     def admin_inbound_visibility(panel_inbound_id: int):

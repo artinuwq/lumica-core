@@ -133,6 +133,16 @@ class PendingBinding(Base, TimestampMixin):
     applied_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class AppSetting(Base, TimestampMixin):
+    __tablename__ = "app_settings"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String, nullable=False, unique=True)
+    value_json = Column("value", JSON, nullable=True)
+    description = Column(String, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class Inbound(Base):
     __tablename__ = "inbounds"
 
