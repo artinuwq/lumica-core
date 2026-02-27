@@ -2146,6 +2146,7 @@
             secondItem: "connections",
         };
         let lastUserPayload = null;
+        let csrfToken = "";
         let showFullTelegramId = false;
         let viewportListenerBound = false;
         let tgBackButtonBound = false;
@@ -3159,11 +3160,19 @@
             return payload;
         }
 
+        function withCsrfHeaders(headers = {}) {
+            const merged = { ...headers };
+            if (csrfToken) {
+                merged["X-CSRF-Token"] = csrfToken;
+            }
+            return merged;
+        }
+
         async function postJson(url, body = null) {
             const response = await fetch(url, {
                 method: "POST",
                 credentials: "same-origin",
-                headers: { "Content-Type": "application/json" },
+                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                 body: body ? JSON.stringify(body) : null,
             });
             let payload = {};
@@ -3182,6 +3191,7 @@
             const response = await fetch(url, {
                 method: "DELETE",
                 credentials: "same-origin",
+                headers: withCsrfHeaders(),
             });
             let payload = {};
             try {
@@ -3393,6 +3403,9 @@
                 xhr.open("POST", cloudUploadUrl, true);
                 xhr.withCredentials = true;
                 xhr.timeout = 0;
+                if (csrfToken) {
+                    xhr.setRequestHeader("X-CSRF-Token", csrfToken);
+                }
 
                 xhr.upload.onprogress = (event) => {
                     if (!onProgress) return;
@@ -4741,6 +4754,10 @@
                 throw new Error(payload.error || "Телеграм не подтвердил данные пользователя.");
             }
 
+            csrfToken = typeof payload?.csrf_token === "string" ? payload.csrf_token : "";
+            if (!csrfToken) {
+                throw new Error("Сервер не вернул CSRF token.");
+            }
             return payload;
         }
 

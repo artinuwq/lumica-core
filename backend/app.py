@@ -73,6 +73,11 @@ def _token_hash(raw_token: str) -> str:
     return hashlib.sha256(f"{raw_token}:{pepper}".encode("utf-8")).hexdigest()
 
 
+def _csrf_hash(raw_token: str) -> str:
+    pepper = os.getenv("CSRF_PEPPER", os.getenv("SESSION_PEPPER", ""))
+    return hashlib.sha256(f"{raw_token}:{pepper}".encode("utf-8")).hexdigest()
+
+
 def _safe_json(value):
     if isinstance(value, dict):
         return value
@@ -210,6 +215,8 @@ def create_app():
     session_cookie_name = os.getenv("SESSION_COOKIE_NAME", "session")
     session_ttl_days = int(os.getenv("SESSION_TTL_DAYS", "7"))
     role_bindings = _load_role_bindings()
+    csrf_exempt_paths = {"/api/tg/auth"}
+    csrf_protected_methods = {"POST", "PUT", "PATCH", "DELETE"}
 
     def _active_subscription(db, user_id: int) -> Subscription | None:
         sub = (
@@ -330,22 +337,67 @@ def create_app():
                 "name": user.name,
             }, None
 
+    def _session_csrf_hash(auth_session: AuthSession) -> str:
+        session_data = _safe_json(auth_session.init_data)
+        value = session_data.get("csrf_hash")
+        return value if isinstance(value, str) else ""
+
+    def _verify_csrf_request():
+        if request.method not in csrf_protected_methods:
+            return None
+        if request.path in csrf_exempt_paths:
+            return None
+
+        raw_token = request.cookies.get(session_cookie_name)
+        if not raw_token:
+            return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+        token_hash = _token_hash(raw_token)
+        request_csrf_token = request.headers.get("X-CSRF-Token", "")
+        if not request_csrf_token:
+            return jsonify({"ok": False, "error": "CSRF token missing"}), 403
+
+        with SessionLocal() as db:
+            auth_session = db.query(AuthSession).filter(AuthSession.session_token == token_hash).first()
+            if not auth_session:
+                return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+            expires_at = _as_utc(auth_session.expires_at)
+            if not expires_at or expires_at < utcnow():
+                db.delete(auth_session)
+                db.commit()
+                return jsonify({"ok": False, "error": "Session expired"}), 401
+
+            stored_csrf_hash = _session_csrf_hash(auth_session)
+            if not stored_csrf_hash:
+                return jsonify({"ok": False, "error": "CSRF token is not initialized"}), 403
+
+        if not hmac.compare_digest(_csrf_hash(request_csrf_token), stored_csrf_hash):
+            return jsonify({"ok": False, "error": "Invalid CSRF token"}), 403
+        return None
+
+    @app.before_request
+    def _enforce_csrf_protection():
+        return _verify_csrf_request()
+
     def _new_session(db, user: User, init_data: str):
         raw_token = secrets.token_urlsafe(32)
+        raw_csrf_token = secrets.token_urlsafe(32)
         expires_at = utcnow() + timedelta(days=session_ttl_days)
         token_hash = _token_hash(raw_token)
+        csrf_hash = _csrf_hash(raw_csrf_token)
 
         db.query(AuthSession).filter(AuthSession.expires_at < utcnow()).delete()
         db.add(
             AuthSession(
                 user_id=user.id,
-                init_data={"raw": init_data[:4096]},
+                init_data={"raw": init_data[:4096], "csrf_hash": csrf_hash},
                 session_token=token_hash,
                 expires_at=expires_at,
             )
         )
         db.commit()
-        return raw_token
+        return raw_token, raw_csrf_token
 
     @app.get("/")
     def index():
@@ -1976,7 +2028,7 @@ def create_app():
                 applied_pending_bindings = _apply_pending_bindings_for_user(db, user)
                 db.commit()
 
-                raw_session_token = _new_session(db, user, init_data)
+                raw_session_token, raw_csrf_token = _new_session(db, user, init_data)
         except SQLAlchemyError:
             app.logger.exception("tg_auth: database error")
             return jsonify({"ok": False, "error": "Database error, please try again later"}), 500
@@ -1989,15 +2041,19 @@ def create_app():
                     "first_visit": last_seen is None,
                     "show_long_intro": show_long_intro,
                     "applied_pending_bindings": applied_pending_bindings,
+                    "csrf_token": raw_csrf_token,
                 }
             )
         )
-        same_site = os.getenv("COOKIE_SAMESITE", "Lax")
+        cookie_secure = _env_bool("COOKIE_SECURE", True)
+        same_site = os.getenv("COOKIE_SAMESITE", "Lax").strip().capitalize()
+        if same_site not in {"Lax", "Strict", "None"}:
+            same_site = "Lax"
         response.set_cookie(
             session_cookie_name,
             raw_session_token,
             httponly=True,
-            secure=_env_bool("COOKIE_SECURE", False),
+            secure=cookie_secure,
             samesite=same_site,
             max_age=session_ttl_days * 24 * 60 * 60,
             path="/",
