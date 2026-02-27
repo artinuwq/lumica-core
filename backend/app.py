@@ -1142,6 +1142,8 @@ def create_app():
         auth, err = _auth_context()
         if err:
             return err
+        inline_raw = str(request.args.get("inline", "")).strip().lower()
+        inline_mode = inline_raw in {"1", "true", "yes", "on"}
 
         with SessionLocal() as db:
             if not _cloud_visibility_enabled(db):
@@ -1183,7 +1185,8 @@ def create_app():
                     yield piece
 
         response = Response(stream_with_context(_stream()), mimetype=mime_type)
-        response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(file_name)}"
+        disposition = "inline" if inline_mode else "attachment"
+        response.headers["Content-Disposition"] = f"{disposition}; filename*=UTF-8''{quote(file_name)}"
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Cloud-File-Id"] = str(file_id)
         if size_bytes >= 0:

@@ -207,6 +207,20 @@
             color: rgba(230, 240, 255, 0.7);
             font-size: 0.92rem;
         }
+        .profile-nav-select {
+            min-width: 9.6rem;
+            border: 1px solid rgba(120, 182, 255, 0.4);
+            border-radius: 10px;
+            background: rgba(14, 26, 50, 0.92);
+            color: #eef6ff;
+            font-size: 0.86rem;
+            line-height: 1.25;
+            padding: 0.38rem 0.52rem;
+        }
+        .profile-nav-select:focus {
+            outline: 2px solid rgba(133, 194, 255, 0.92);
+            outline-offset: 2px;
+        }
 
         .chevron {
             color: rgba(230, 240, 255, 0.7);
@@ -217,6 +231,26 @@
             font: inherit;
             color: inherit;
             cursor: pointer;
+        }
+        .home-main-actions {
+            display: grid;
+            gap: 0.8rem;
+            margin-top: 0.1rem;
+        }
+        .home-main-btn {
+            width: 100%;
+            text-align: left;
+            font: inherit;
+            color: inherit;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .home-main-btn:active {
+            transform: translateY(1px);
+        }
+        .home-main-btn.active {
+            border-color: rgba(120, 184, 255, 0.5);
+            box-shadow: inset 0 0 0 1px rgba(120, 184, 255, 0.25), 0 14px 34px rgba(0, 0, 0, 0.3);
         }
         .connection-protocol-btn:active {
             transform: translateY(1px);
@@ -314,13 +348,13 @@
             background: rgba(12, 18, 33, 0.92);
             border: 1px solid rgba(255, 255, 255, 0.06);
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 0.25rem;
             box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
             backdrop-filter: blur(12px);
         }
         .bottom-nav.with-work {
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(4, 1fr);
         }
         .bottom-nav.cloud-hidden {
             grid-template-columns: repeat(3, 1fr);
@@ -383,7 +417,7 @@
             margin-left: 0;
             margin-right: 0;
             padding-inline: 0;
-            padding-top: 0.25rem;
+            padding-top: 0.6rem;
             box-sizing: border-box;
             align-items: stretch;
         }
@@ -397,6 +431,9 @@
             box-sizing: border-box;
             align-items: stretch;
             overflow-x: hidden;
+        }
+        #screen-profile {
+            padding-top: 0.55rem;
         }
         .work-page {
             display: flex;
@@ -459,6 +496,39 @@
         }
         .work-page-context.hidden {
             display: none;
+        }
+        .screen-menu-context {
+            position: fixed;
+            top: calc(var(--safe-top) + 0.55rem);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1180;
+            width: fit-content;
+            max-width: min(18rem, calc(100vw - 9rem));
+            margin: 0;
+            pointer-events: none;
+            display: flex;
+            justify-content: center;
+        }
+        .screen-menu-context.clickable {
+            pointer-events: auto;
+        }
+        .screen-menu-context.hidden {
+            display: none;
+        }
+        .screen-menu-context .work-page-pill {
+            max-width: 100%;
+        }
+        .screen-menu-context.clickable .work-page-pill {
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        .screen-menu-context.clickable .work-page-pill:active {
+            transform: translateY(1px);
+        }
+        .screen-menu-context.clickable .work-page-pill:focus-visible {
+            outline: 2px solid rgba(133, 194, 255, 0.9);
+            outline-offset: 2px;
         }
         .work-page-pill {
             position: relative;
@@ -1055,7 +1125,9 @@
             padding: 0;
             margin: 0;
             cursor: pointer;
+            flex: 1 1 auto;
             min-width: 0;
+            max-width: 100%;
             text-align: left;
             white-space: nowrap;
             overflow: hidden;
@@ -1072,9 +1144,10 @@
         }
         .cloud-node-actions {
             display: flex;
-            align-items: center;
-            gap: 0.42rem;
-            flex-wrap: wrap;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.3rem;
+            flex: 0 0 auto;
             min-width: 0;
             max-width: 100%;
         }
@@ -1087,6 +1160,9 @@
             font-size: 0.76rem;
             font-weight: 700;
             cursor: pointer;
+            min-width: 6.1rem;
+            text-align: center;
+            white-space: nowrap;
         }
         .cloud-node-action.danger {
             border-color: rgba(255, 126, 126, 0.45);
@@ -1110,6 +1186,62 @@
         }
         .cloud-status-note.success {
             color: #bafcd7;
+        }
+        .cloud-preview-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1600;
+            background: rgba(5, 10, 20, 0.82);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem max(0.7rem, env(safe-area-inset-right, 0px))
+                calc(1rem + var(--app-bottom-offset))
+                max(0.7rem, env(safe-area-inset-left, 0px));
+        }
+        .cloud-preview-card {
+            width: min(940px, 100%);
+            border: 1px solid rgba(140, 189, 255, 0.24);
+            border-radius: 14px;
+            background: rgba(8, 14, 28, 0.98);
+            box-shadow: 0 22px 56px rgba(0, 0, 0, 0.55);
+            padding: 0.72rem;
+            display: grid;
+            gap: 0.62rem;
+        }
+        .cloud-preview-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.55rem;
+        }
+        .cloud-preview-title {
+            color: #eef6ff;
+            font-size: 0.9rem;
+            line-height: 1.25;
+            font-weight: 700;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cloud-preview-media-wrap {
+            width: 100%;
+            min-height: 2.6rem;
+            display: grid;
+            place-items: center;
+        }
+        .cloud-preview-video {
+            width: 100%;
+            max-height: min(62vh, 520px);
+            border-radius: 10px;
+            background: #000;
+        }
+        .cloud-preview-audio {
+            width: 100%;
+        }
+        .cloud-node-open.previewable {
+            cursor: pointer;
         }
         @media (max-width: 420px) {
             .cloud-actions {
@@ -1363,6 +1495,9 @@
                     <div class="hero-caption" id="welcome-title">Lumica Service</div>
                     <div class="hero-sub" id="hero-sub">Сервер активен • Онлайн</div>
                 </div>
+                <div class="screen-menu-context hidden" id="screen-menu-context">
+                    <div class="work-page-pill" id="screen-menu-context-pill" aria-live="polite"></div>
+                </div>
 
                     <div id="screen-home" class="screen">
                         <div class="cards">
@@ -1386,6 +1521,28 @@
                                 </div>
                                 <span class="card-sub" id="home-sub-right">...</span>
                             </div>
+                        </div>
+                        <div class="home-main-actions">
+                            <button type="button" class="card home-main-btn" data-screen="screen-connections">
+                                <div class="left">
+                                    <div class="badge">↧</div>
+                                    <div>
+                                        <div class="card-title">Подключения</div>
+                                        <div class="card-sub">Открыть меню подключений</div>
+                                    </div>
+                                </div>
+                                <span class="chevron">›</span>
+                            </button>
+                            <button type="button" class="card home-main-btn" id="home-cloud-btn" data-screen="screen-cloud">
+                                <div class="left">
+                                    <div class="badge">☁</div>
+                                    <div>
+                                        <div class="card-title">Облако</div>
+                                        <div class="card-sub">Открыть файловое облако</div>
+                                    </div>
+                                </div>
+                                <span class="chevron">›</span>
+                            </button>
                         </div>
                     </div>
 
@@ -1444,7 +1601,6 @@
                     </div>
 
                     <div id="screen-work" class="screen hidden">
-                        <div class="section-title" id="work-section-title">Работа</div>
                         <div class="work-page-context hidden" id="work-page-context">
                             <div class="work-page-pill" id="work-page-context-pill" aria-live="polite">Работа</div>
                         </div>
@@ -1673,13 +1829,12 @@
                         </section>
                     </div>
                     <div id="screen-cloud" class="screen hidden">
-                        <div class="work-page-context" id="cloud-page-context">
+                        <div class="work-page-context hidden" id="cloud-page-context">
                             <div class="work-page-pill" id="cloud-page-context-pill" aria-live="polite">Облако</div>
                         </div>
                         <section class="work-page cloud-page">
                             <div class="cloud-toolbar">
                                 <button id="cloud-up-btn" type="button" class="work-back-btn hidden">← Назад</button>
-                                <button id="cloud-refresh-btn" type="button" class="work-back-btn">Обновить</button>
                             </div>
                             <div class="cloud-path" id="cloud-path">/</div>
                             <div class="cloud-actions">
@@ -1696,9 +1851,18 @@
                                 <div class="work-empty">Откройте облако для загрузки списка.</div>
                             </div>
                         </section>
+                        <div id="cloud-preview-overlay" class="cloud-preview-overlay hidden" aria-hidden="true">
+                            <div id="cloud-preview-card" class="cloud-preview-card" role="dialog" aria-modal="true" aria-label="Предпросмотр медиафайла">
+                                <div class="cloud-preview-head">
+                                    <div id="cloud-preview-title" class="cloud-preview-title">Предпросмотр</div>
+                                    <button id="cloud-preview-close-btn" type="button" class="work-back-btn">Закрыть</button>
+                                </div>
+                                <div id="cloud-preview-media-wrap" class="cloud-preview-media-wrap"></div>
+                                <div id="cloud-preview-note" class="cloud-status-note hidden"></div>
+                            </div>
+                        </div>
                     </div>
                     <div id="screen-profile" class="screen hidden">
-                        <div class="section-title">Главная</div>
                         <div class="card">
                             <div class="left">
                                 <div class="badge">ID</div>
@@ -1720,10 +1884,35 @@
                             </div>
                             <div class="pill-soft" id="profile-role">user</div>
                         </div>
+                        <button type="button" class="card home-main-btn" data-screen="screen-settings">
+                            <div class="left">
+                                <div class="badge">⚙</div>
+                                <div>
+                                    <div class="card-title">Настройки</div>
+                                    <div class="card-sub">Параметры интерфейса</div>
+                                </div>
+                            </div>
+                            <span class="chevron">›</span>
+                        </button>
 
                         <div class="card support-card">
                             <div class="card-title">Поддержка</div>
                             <div class="card-sub">Задайте вопрос в чате</div>
+                        </div>
+                    </div>
+                    <div id="screen-settings" class="screen hidden">
+                        <div class="card">
+                            <div class="left">
+                                <div class="badge">⚙️</div>
+                                <div>
+                                    <div class="card-title">Нижнее меню</div>
+                                    <div class="card-sub">Второй пункт</div>
+                                </div>
+                            </div>
+                            <select id="settings-nav-second-select" class="profile-nav-select">
+                                <option value="connections">Подключения</option>
+                                <option value="cloud">Облако</option>
+                            </select>
                         </div>
                     </div>
 
@@ -1732,13 +1921,9 @@
                         <span class="icon">🏠</span>
                         <span>Главная</span>
                     </button>
-                    <button class="nav-btn" data-screen="screen-connections">
-                        <span class="icon">&#x2B07;&#xFE0F;</span>
-                        <span>Подключения</span>
-                    </button>
-                    <button class="nav-btn" data-screen="screen-cloud">
-                        <span class="icon">☁️</span>
-                        <span>Облако</span>
+                    <button class="nav-btn" id="nav-second-btn" data-screen="screen-connections">
+                        <span class="icon" id="nav-second-icon">&#x2B07;&#xFE0F;</span>
+                        <span id="nav-second-label">Подключения</span>
                     </button>
                     <button class="nav-btn hidden" id="nav-work-btn" data-screen="screen-work">
                         <span class="icon">🛠</span>
@@ -1777,10 +1962,14 @@
         const workPageContextPillEl = document.getElementById("work-page-context-pill");
         const cloudPageContextEl = document.getElementById("cloud-page-context");
         const cloudPageContextPillEl = document.getElementById("cloud-page-context-pill");
+        const screenMenuContextEl = document.getElementById("screen-menu-context");
+        const screenMenuContextPillEl = document.getElementById("screen-menu-context-pill");
         const bottomNavEl = document.querySelector(".bottom-nav");
+        const navSecondBtnEl = document.getElementById("nav-second-btn");
+        const navSecondIconEl = document.getElementById("nav-second-icon");
+        const navSecondLabelEl = document.getElementById("nav-second-label");
         const navWorkBtn = document.getElementById("nav-work-btn");
-        const navCloudBtn = document.querySelector('.nav-btn[data-screen="screen-cloud"]');
-        const workPages = document.querySelectorAll(".work-page");
+        const workPages = document.querySelectorAll("#screen-work .work-page");
         const workNavButtons = document.querySelectorAll("[data-work-nav]");
         const workBackButtons = document.querySelectorAll("[data-work-back]");
         const authUrl = `${window.location.origin}/api/tg/auth`;
@@ -1812,6 +2001,8 @@
         const homeSubTitle = document.getElementById("home-sub-title");
         const homeSubSub = document.getElementById("home-sub-sub");
         const homeSubRight = document.getElementById("home-sub-right");
+        const homeCloudBtnEl = document.getElementById("home-cloud-btn");
+        const settingsNavSecondSelectEl = document.getElementById("settings-nav-second-select");
         const connectionsMenuPageEl = document.getElementById("connections-menu-page");
         const connectionsDetailPageEl = document.getElementById("connections-detail-page");
         const connectionsBackBtnEl = document.getElementById("connections-back-btn");
@@ -1877,7 +2068,6 @@
         const workSubExtendValueEl = document.getElementById("work-sub-extend-value");
         const workSubExtendBtnEl = document.getElementById("work-sub-extend-btn");
         const cloudUpBtnEl = document.getElementById("cloud-up-btn");
-        const cloudRefreshBtnEl = document.getElementById("cloud-refresh-btn");
         const cloudNewFolderBtnEl = document.getElementById("cloud-new-folder-btn");
         const cloudUploadInputEl = document.getElementById("cloud-upload-input");
         const cloudUploadLabelEl = document.getElementById("cloud-upload-label");
@@ -1887,6 +2077,12 @@
         const cloudPathEl = document.getElementById("cloud-path");
         const cloudStatusNoteEl = document.getElementById("cloud-status-note");
         const cloudListEl = document.getElementById("cloud-list");
+        const cloudPreviewOverlayEl = document.getElementById("cloud-preview-overlay");
+        const cloudPreviewCardEl = document.getElementById("cloud-preview-card");
+        const cloudPreviewTitleEl = document.getElementById("cloud-preview-title");
+        const cloudPreviewCloseBtnEl = document.getElementById("cloud-preview-close-btn");
+        const cloudPreviewMediaWrapEl = document.getElementById("cloud-preview-media-wrap");
+        const cloudPreviewNoteEl = document.getElementById("cloud-preview-note");
         const systemSettingKeys = {
             cloudVisibility: "cloud.visibility",
             cloudChunkSizeMb: "cloud.upload.chunk_size_mb",
@@ -1931,10 +2127,30 @@
         const uiFeatures = {
             cloudEnabled: true,
         };
+        const NAV_SECOND_ITEM_KEY = "nav_second_item";
+        const navSecondButtonByKey = {
+            connections: {
+                key: "connections",
+                screen: "screen-connections",
+                icon: "⬇️",
+                label: "Подключения",
+            },
+            cloud: {
+                key: "cloud",
+                screen: "screen-cloud",
+                icon: "☁️",
+                label: "Облако",
+            },
+        };
+        const navPreference = {
+            secondItem: "connections",
+        };
         let lastUserPayload = null;
         let showFullTelegramId = false;
         let viewportListenerBound = false;
         let tgBackButtonBound = false;
+        let screenMenuActionBusy = false;
+        let screenMenuActionCurrent = "";
         const workBackTargetByPage = new Map();
         workBackButtons.forEach((btn) => {
             const pageId = btn.closest(".work-page")?.id;
@@ -1950,6 +2166,59 @@
             ["work-client-page", "Клиент"],
             ["work-client-connections-page", "Подключения"],
             ["work-client-subscription-page", "Подписка"],
+        ]);
+        const menuContextTitleByScreen = new Map([
+            ["screen-connections", "Подключения"],
+            ["screen-cloud", "Облако"],
+            ["screen-work", "Работа"],
+            ["screen-profile", "Профиль"],
+            ["screen-settings", "Настройки"],
+        ]);
+        const cloudAudioExtensions = new Set(["mp3", "m4a", "aac", "ogg", "opus", "wav", "flac", "alac", "wma", "amr", "mid", "midi"]);
+        const cloudVideoExtensions = new Set(["mp4", "m4v", "mov", "mkv", "webm", "avi", "wmv", "flv", "mpeg", "mpg", "3gp", "ts"]);
+        const cloudImageExtensions = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif", "svg", "heic", "heif", "ico", "avif"]);
+        const cloudArchiveExtensions = new Set(["zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "tbz", "txz", "zst"]);
+        const cloudDocumentExtensions = new Set(["doc", "docx", "odt", "pages"]);
+        const cloudSheetExtensions = new Set(["xls", "xlsx", "ods", "csv", "tsv", "numbers"]);
+        const cloudSlideExtensions = new Set(["ppt", "pptx", "odp", "key"]);
+        const cloudCodeExtensions = new Set([
+            "py",
+            "js",
+            "ts",
+            "jsx",
+            "tsx",
+            "html",
+            "htm",
+            "css",
+            "scss",
+            "sass",
+            "less",
+            "json",
+            "xml",
+            "yaml",
+            "yml",
+            "toml",
+            "ini",
+            "cfg",
+            "env",
+            "sh",
+            "bat",
+            "ps1",
+            "sql",
+            "go",
+            "rs",
+            "java",
+            "kt",
+            "c",
+            "h",
+            "cpp",
+            "hpp",
+            "cs",
+            "php",
+            "rb",
+            "swift",
+            "dart",
+            "lua",
         ]);
 
         function isMobileTelegramPlatform(tg) {
@@ -2029,6 +2298,83 @@
             return active?.id || "";
         }
 
+        function updateScreenMenuContext(screenId = getActiveScreenId()) {
+            if (!screenMenuContextEl || !screenMenuContextPillEl) return;
+            let title = "";
+            let action = "";
+
+            if (screenId === "screen-connections" && connectionsDetailPageEl?.classList.contains("hidden")) {
+                title = menuContextTitleByScreen.get("screen-connections") || "";
+                action = "refresh-connections";
+            } else if (screenId === "screen-cloud") {
+                title = menuContextTitleByScreen.get("screen-cloud") || "";
+                action = "refresh-cloud";
+            } else if (screenId === "screen-work" && getActiveWorkPageId() === "work-menu-page") {
+                title = menuContextTitleByScreen.get("screen-work") || "";
+            } else if (screenId === "screen-profile") {
+                title = menuContextTitleByScreen.get("screen-profile") || "";
+            } else if (screenId === "screen-settings") {
+                title = menuContextTitleByScreen.get("screen-settings") || "";
+            }
+
+            if (!title) {
+                screenMenuContextEl.dataset.action = "";
+                screenMenuContextEl.classList.remove("clickable");
+                screenMenuContextPillEl.tabIndex = -1;
+                screenMenuContextPillEl.removeAttribute("role");
+                screenMenuContextEl.classList.add("hidden");
+                return;
+            }
+
+            const isBusyForAction = Boolean(action) && screenMenuActionBusy && action === screenMenuActionCurrent;
+            const displayTitle = isBusyForAction
+                ? `${title} ⏳`
+                : action
+                    ? `${title} 🔄`
+                    : title;
+
+            screenMenuContextEl.dataset.action = action || "";
+            screenMenuContextEl.classList.toggle("clickable", Boolean(action) && !screenMenuActionBusy);
+            screenMenuContextPillEl.tabIndex = Boolean(action) && !screenMenuActionBusy ? 0 : -1;
+            if (action) {
+                screenMenuContextPillEl.setAttribute("role", "button");
+            } else {
+                screenMenuContextPillEl.removeAttribute("role");
+            }
+            screenMenuContextPillEl.textContent = displayTitle;
+            screenMenuContextPillEl.title = displayTitle;
+            screenMenuContextEl.classList.remove("hidden");
+        }
+
+        async function runScreenMenuContextAction() {
+            const action = String(screenMenuContextEl?.dataset?.action || "").trim();
+            if (!action || screenMenuActionBusy) {
+                return;
+            }
+
+            screenMenuActionBusy = true;
+            screenMenuActionCurrent = action;
+            updateScreenMenuContext(getActiveScreenId());
+
+            try {
+                if (action === "refresh-cloud") {
+                    await ensureCloudLoaded(true);
+                } else if (action === "refresh-connections") {
+                    const runtime = await loadRuntimeData();
+                    renderDashboard(runtime);
+                }
+            } catch (err) {
+                console.error("screen menu action error:", err);
+                if (action === "refresh-cloud") {
+                    setCloudStatus(err?.message || "Не удалось обновить файлы", "error");
+                }
+            } finally {
+                screenMenuActionBusy = false;
+                screenMenuActionCurrent = "";
+                updateScreenMenuContext(getActiveScreenId());
+            }
+        }
+
         function resolveWorkContextTitle(pageId) {
             if (pageId === "work-client-page") {
                 const dynamicTitle = String(workClientPageTitleEl?.textContent || "").trim();
@@ -2096,18 +2442,136 @@
         }
 
         function updateCloudPageContext(path) {
-            if (!cloudPageContextEl || !cloudPageContextPillEl) return;
-            const title = cloudContextTitle(path);
-            cloudPageContextPillEl.textContent = title;
-            cloudPageContextPillEl.title = title;
-            cloudPageContextEl.classList.remove("hidden");
+            if (!cloudPageContextEl) return;
+            cloudPageContextEl.classList.add("hidden");
+        }
+
+        function normalizeNavSecondItemKey(rawValue) {
+            const value = String(rawValue || "").trim().toLowerCase();
+            return value === "cloud" ? "cloud" : "connections";
+        }
+
+        function getTelegramCloudStorageApi() {
+            return window.Telegram?.WebApp?.CloudStorage || null;
+        }
+
+        function cloudStorageGetItem(key) {
+            return new Promise((resolve, reject) => {
+                const api = getTelegramCloudStorageApi();
+                if (!api || typeof api.getItem !== "function") {
+                    resolve(null);
+                    return;
+                }
+                try {
+                    api.getItem(String(key), (error, value) => {
+                        if (error) {
+                            reject(new Error(String(error)));
+                            return;
+                        }
+                        resolve(value ?? null);
+                    });
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
+        function cloudStorageSetItem(key, value) {
+            return new Promise((resolve, reject) => {
+                const api = getTelegramCloudStorageApi();
+                if (!api || typeof api.setItem !== "function") {
+                    resolve(false);
+                    return;
+                }
+                try {
+                    api.setItem(String(key), String(value), (error) => {
+                        if (error) {
+                            reject(new Error(String(error)));
+                            return;
+                        }
+                        resolve(true);
+                    });
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
+        function resolveEffectiveNavSecondItemKey() {
+            const selected = normalizeNavSecondItemKey(navPreference.secondItem);
+            if (selected === "cloud" && !uiFeatures.cloudEnabled) {
+                return "connections";
+            }
+            return selected;
+        }
+
+        function applyNavSecondButtonConfig() {
+            const effectiveKey = resolveEffectiveNavSecondItemKey();
+            const config = navSecondButtonByKey[effectiveKey] || navSecondButtonByKey.connections;
+            if (navSecondBtnEl) {
+                navSecondBtnEl.dataset.screen = config.screen;
+                navSecondBtnEl.title = config.label;
+                navSecondBtnEl.classList.remove("hidden");
+            }
+            if (navSecondIconEl) {
+                navSecondIconEl.textContent = config.icon;
+            }
+            if (navSecondLabelEl) {
+                navSecondLabelEl.textContent = config.label;
+            }
+            if (settingsNavSecondSelectEl) {
+                const cloudOption = settingsNavSecondSelectEl.querySelector('option[value="cloud"]');
+                if (cloudOption) {
+                    cloudOption.disabled = !uiFeatures.cloudEnabled;
+                }
+                settingsNavSecondSelectEl.value = normalizeNavSecondItemKey(navPreference.secondItem);
+            }
+            const activeScreenId = getActiveScreenId();
+            navButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.screen === activeScreenId));
+        }
+
+        async function loadNavSecondPreference() {
+            let storedValue = null;
+            try {
+                storedValue = window.localStorage?.getItem(NAV_SECOND_ITEM_KEY) || null;
+            } catch (_err) {
+                storedValue = null;
+            }
+
+            try {
+                const cloudValue = await cloudStorageGetItem(NAV_SECOND_ITEM_KEY);
+                if (typeof cloudValue === "string" && cloudValue.trim()) {
+                    storedValue = cloudValue;
+                }
+            } catch (err) {
+                console.warn("CloudStorage get nav_second_item failed:", err);
+            }
+
+            navPreference.secondItem = normalizeNavSecondItemKey(storedValue);
+            applyNavSecondButtonConfig();
+        }
+
+        async function saveNavSecondPreference(nextValue) {
+            const normalized = normalizeNavSecondItemKey(nextValue);
+            navPreference.secondItem = normalized;
+            applyNavSecondButtonConfig();
+            try {
+                window.localStorage?.setItem(NAV_SECOND_ITEM_KEY, normalized);
+            } catch (_err) {
+                // ignore localStorage failures
+            }
+            try {
+                await cloudStorageSetItem(NAV_SECOND_ITEM_KEY, normalized);
+            } catch (err) {
+                console.warn("CloudStorage set nav_second_item failed:", err);
+            }
         }
 
         function applyCloudVisibility(me) {
             const enabled = me?.features?.cloud_enabled !== false;
             uiFeatures.cloudEnabled = enabled;
-            navCloudBtn?.classList.toggle("hidden", !enabled);
-            bottomNavEl?.classList.toggle("cloud-hidden", !enabled);
+            homeCloudBtnEl?.classList.toggle("hidden", !enabled);
+            applyNavSecondButtonConfig();
             if (!enabled) {
                 cloudPageContextEl?.classList.add("hidden");
                 if (getActiveScreenId() === "screen-cloud") {
@@ -2140,15 +2604,35 @@
 
         function handleTelegramBack() {
             const activeScreenId = getActiveScreenId();
+            if (
+                activeScreenId === "screen-cloud"
+                && cloudPreviewOverlayEl
+                && !cloudPreviewOverlayEl.classList.contains("hidden")
+            ) {
+                closeCloudPreview();
+                return;
+            }
             if (activeScreenId === "screen-connections" && !connectionsDetailPageEl?.classList.contains("hidden")) {
                 openConnectionsMenu();
                 return;
             }
+            if (activeScreenId === "screen-connections") {
+                switchScreen("screen-home");
+                return;
+            }
 
-            if (activeScreenId === "screen-cloud" && normalizeCloudPath(cloudState.path) !== "/") {
-                loadCloudPath(cloudParentPath(cloudState.path)).catch((err) => {
-                    console.error("cloud back error:", err);
-                });
+            if (activeScreenId === "screen-cloud") {
+                if (normalizeCloudPath(cloudState.path) !== "/") {
+                    loadCloudPath(cloudParentPath(cloudState.path)).catch((err) => {
+                        console.error("cloud back error:", err);
+                    });
+                    return;
+                }
+                switchScreen("screen-home");
+                return;
+            }
+            if (activeScreenId === "screen-settings") {
+                switchScreen("screen-profile");
                 return;
             }
 
@@ -2165,7 +2649,7 @@
             const activeScreenId = getActiveScreenId();
 
             if (activeScreenId === "screen-connections") {
-                return !connectionsDetailPageEl?.classList.contains("hidden");
+                return true;
             }
 
             if (activeScreenId === "screen-work") {
@@ -2174,7 +2658,10 @@
             }
 
             if (activeScreenId === "screen-cloud") {
-                return normalizeCloudPath(cloudState.path) !== "/";
+                return true;
+            }
+            if (activeScreenId === "screen-settings") {
+                return true;
             }
 
             return false;
@@ -2461,6 +2948,7 @@
             connectionsMenuPageEl?.classList.remove("hidden");
             connectionsDetailPageEl?.classList.add("hidden");
             updateConnectionsPageContext(null);
+            updateScreenMenuContext("screen-connections");
             updateTelegramBackButton();
         }
 
@@ -2552,6 +3040,7 @@
             renderConnectionsDetail(protocol);
             connectionsMenuPageEl?.classList.add("hidden");
             connectionsDetailPageEl?.classList.remove("hidden");
+            updateScreenMenuContext("screen-connections");
             updateTelegramBackButton();
         }
 
@@ -2718,6 +3207,135 @@
                 unitIdx += 1;
             }
             return `${current.toFixed(current >= 100 ? 0 : 1)} ${units[unitIdx]}`;
+        }
+
+        function cloudFileExtension(fileNode) {
+            const fileMeta = fileNode?.file || {};
+            const extFromMeta = String(fileMeta?.extension || "")
+                .trim()
+                .toLowerCase()
+                .replace(/^\./, "");
+            if (extFromMeta) return extFromMeta;
+
+            const rawName = String(fileMeta?.original_name || fileNode?.name || "").trim();
+            const dotIndex = rawName.lastIndexOf(".");
+            if (dotIndex <= 0 || dotIndex >= rawName.length - 1) return "";
+            return rawName.slice(dotIndex + 1).toLowerCase();
+        }
+
+        function cloudFileIcon(fileNode) {
+            const fileMeta = fileNode?.file || {};
+            const mime = String(fileMeta?.mime_type || "").trim().toLowerCase();
+            const ext = cloudFileExtension(fileNode);
+
+            if (mime.startsWith("audio/") || cloudAudioExtensions.has(ext)) return "🎵";
+            if (mime.startsWith("video/") || cloudVideoExtensions.has(ext)) return "🎬";
+            if (mime.startsWith("image/") || cloudImageExtensions.has(ext)) return "🖼️";
+            if (
+                mime.includes("zip")
+                || mime.includes("compressed")
+                || mime.includes("archive")
+                || mime.includes("x-7z")
+                || mime.includes("x-rar")
+                || cloudArchiveExtensions.has(ext)
+            ) {
+                return "🗜️";
+            }
+            if (mime === "application/pdf" || ext === "pdf") return "📕";
+            if (cloudSheetExtensions.has(ext) || mime.includes("spreadsheet") || mime.includes("excel") || mime.includes("csv")) return "📊";
+            if (cloudSlideExtensions.has(ext) || mime.includes("presentation") || mime.includes("powerpoint")) return "📽️";
+            if (cloudDocumentExtensions.has(ext) || mime.includes("wordprocessingml") || mime.includes("msword")) return "📘";
+            if (cloudCodeExtensions.has(ext)) return "💻";
+            if (mime.startsWith("text/") || ["txt", "md", "log", "rtf"].includes(ext)) return "📝";
+            return "📄";
+        }
+
+        function cloudFilePreviewKind(fileNode) {
+            const fileMeta = fileNode?.file || {};
+            const mime = String(fileMeta?.mime_type || "").trim().toLowerCase();
+            const ext = cloudFileExtension(fileNode);
+            if (mime.startsWith("video/") || cloudVideoExtensions.has(ext)) return "video";
+            if (mime.startsWith("audio/") || cloudAudioExtensions.has(ext)) return "audio";
+            return "";
+        }
+
+        function cloudInlineFileUrl(fileId) {
+            return `${cloudDownloadFileUrl(fileId)}?inline=1`;
+        }
+
+        function setCloudPreviewNote(text = "", tone = "info") {
+            if (!cloudPreviewNoteEl) return;
+            const message = String(text || "").trim();
+            cloudPreviewNoteEl.classList.remove("error", "success");
+            if (!message) {
+                cloudPreviewNoteEl.textContent = "";
+                cloudPreviewNoteEl.classList.add("hidden");
+                return;
+            }
+            if (tone === "error" || tone === "success") {
+                cloudPreviewNoteEl.classList.add(tone);
+            }
+            cloudPreviewNoteEl.textContent = message;
+            cloudPreviewNoteEl.classList.remove("hidden");
+        }
+
+        function clearCloudPreviewMedia() {
+            if (!cloudPreviewMediaWrapEl) return;
+            const media = cloudPreviewMediaWrapEl.querySelector("audio, video");
+            if (media) {
+                try {
+                    media.pause?.();
+                } catch (_e) {
+                    // no-op
+                }
+                media.removeAttribute("src");
+                media.load?.();
+            }
+            cloudPreviewMediaWrapEl.innerHTML = "";
+        }
+
+        function closeCloudPreview() {
+            if (!cloudPreviewOverlayEl) return;
+            clearCloudPreviewMedia();
+            setCloudPreviewNote("");
+            cloudPreviewOverlayEl.classList.add("hidden");
+            cloudPreviewOverlayEl.setAttribute("aria-hidden", "true");
+        }
+
+        function openCloudPreview(fileNode) {
+            const fileMeta = fileNode?.file || {};
+            const previewKind = cloudFilePreviewKind(fileNode);
+            const fileId = Number(fileMeta?.file_id || 0);
+            if (!previewKind || !fileId) return;
+
+            const fileName = String(fileNode?.name || fileMeta?.original_name || "Медиафайл");
+            if (!cloudPreviewOverlayEl || !cloudPreviewMediaWrapEl || !cloudPreviewTitleEl) {
+                window.open(cloudInlineFileUrl(fileId), "_blank", "noopener");
+                return;
+            }
+
+            clearCloudPreviewMedia();
+            setCloudPreviewNote("");
+            cloudPreviewTitleEl.textContent = fileName;
+            cloudPreviewTitleEl.title = fileName;
+
+            const mediaEl = document.createElement(previewKind);
+            mediaEl.controls = true;
+            mediaEl.autoplay = true;
+            mediaEl.preload = "metadata";
+            mediaEl.src = cloudInlineFileUrl(fileId);
+            mediaEl.className = previewKind === "video" ? "cloud-preview-video" : "cloud-preview-audio";
+            if (previewKind === "video") {
+                mediaEl.setAttribute("playsinline", "playsinline");
+                mediaEl.setAttribute("webkit-playsinline", "webkit-playsinline");
+            }
+            mediaEl.addEventListener("error", () => {
+                setCloudPreviewNote("Не удалось воспроизвести файл. Попробуйте скачать его кнопкой.", "error");
+            });
+
+            cloudPreviewMediaWrapEl.appendChild(mediaEl);
+            cloudPreviewOverlayEl.classList.remove("hidden");
+            cloudPreviewOverlayEl.setAttribute("aria-hidden", "false");
         }
 
         function setCloudStatus(text = "", tone = "info") {
@@ -2896,6 +3514,8 @@
             files.forEach((fileNode) => {
                 const fileMeta = fileNode?.file || {};
                 const isReady = String(fileMeta?.status || "").toLowerCase() === "ready";
+                const previewKind = cloudFilePreviewKind(fileNode);
+                const canPreview = Boolean(previewKind && isReady && fileMeta?.file_id);
 
                 const row = document.createElement("div");
                 row.className = "cloud-node-card";
@@ -2903,10 +3523,20 @@
                 const head = document.createElement("div");
                 head.className = "cloud-node-head";
 
-                const title = document.createElement("div");
-                title.className = "cloud-node-open";
-                title.textContent = `📄 ${fileNode?.name || "Файл"}`;
-                title.style.cursor = "default";
+                const title = document.createElement(canPreview ? "button" : "div");
+                if (canPreview) {
+                    title.type = "button";
+                }
+                title.className = `cloud-node-open${canPreview ? " previewable" : ""}`;
+                title.textContent = `${cloudFileIcon(fileNode)} ${fileNode?.name || "Файл"}`;
+                if (canPreview) {
+                    title.title = previewKind === "video" ? "Открыть видео" : "Открыть аудио";
+                    title.addEventListener("click", () => {
+                        openCloudPreview(fileNode);
+                    });
+                } else {
+                    title.style.cursor = "default";
+                }
 
                 const actions = document.createElement("div");
                 actions.className = "cloud-node-actions";
@@ -3049,7 +3679,6 @@
             cloudState.isUploading = true;
             cloudUploadInputEl && (cloudUploadInputEl.disabled = true);
             cloudUploadLabelEl?.classList.add("disabled");
-            cloudRefreshBtnEl && (cloudRefreshBtnEl.disabled = true);
             cloudNewFolderBtnEl && (cloudNewFolderBtnEl.disabled = true);
             cloudUpBtnEl && (cloudUpBtnEl.disabled = true);
 
@@ -3129,7 +3758,6 @@
                 cloudState.isUploading = false;
                 cloudUploadInputEl && (cloudUploadInputEl.disabled = false);
                 cloudUploadLabelEl?.classList.remove("disabled");
-                cloudRefreshBtnEl && (cloudRefreshBtnEl.disabled = false);
                 cloudNewFolderBtnEl && (cloudNewFolderBtnEl.disabled = false);
                 cloudUpBtnEl && (cloudUpBtnEl.disabled = false);
             }
@@ -3938,6 +4566,7 @@
             setTopbarVisibility(hideWorkHeaders);
             workSectionTitleEl?.classList.toggle("hidden", hideWorkHeaders);
             updateWorkPageContext(next);
+            updateScreenMenuContext("screen-work");
             updateTelegramBackButton();
             if (next === "work-system-settings-page") {
                 loadWorkSystemSettings().catch((err) => {
@@ -3948,6 +4577,7 @@
         }
 
         function switchScreen(target) {
+            const previousScreen = getActiveScreenId();
             if (target === "screen-cloud" && !uiFeatures.cloudEnabled) {
                 target = "screen-home";
             }
@@ -3964,11 +4594,19 @@
             if (target !== "screen-connections") {
                 openConnectionsMenu();
             }
+            if (target !== "screen-cloud") {
+                closeCloudPreview();
+            }
             if (target === "screen-cloud") {
-                ensureCloudLoaded().catch((err) => {
+                if (previousScreen !== "screen-cloud") {
+                    cloudState.path = "/";
+                }
+                ensureCloudLoaded(true).catch((err) => {
                     console.error("cloud init error:", err);
+                    setCloudStatus(err?.message || "Не удалось загрузить облако", "error");
                 });
             }
+            updateScreenMenuContext(target);
             updateTelegramBackButton();
             updateCloudUpButton();
         }
@@ -4113,6 +4751,7 @@
                 ensureSafeViewportMode();
                 syncBackNavigationMode();
                 setTopbarVisibility(false);
+                await loadNavSecondPreference();
                 const payload = await validateUser();
                 console.log("Auth ok", payload.user);
                 const runtime = await loadRuntimeData();
@@ -4142,6 +4781,24 @@
                 switchScreen(btn.dataset.screen);
             })
         );
+        settingsNavSecondSelectEl?.addEventListener("change", () => {
+            const nextValue = normalizeNavSecondItemKey(settingsNavSecondSelectEl.value);
+            saveNavSecondPreference(nextValue).catch((err) => {
+                console.error("save nav second preference error:", err);
+            });
+        });
+        screenMenuContextPillEl?.addEventListener("click", () => {
+            runScreenMenuContextAction().catch((err) => {
+                console.error("screen menu context action click error:", err);
+            });
+        });
+        screenMenuContextPillEl?.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            runScreenMenuContextAction().catch((err) => {
+                console.error("screen menu context action key error:", err);
+            });
+        });
 
         connectionProtocolButtons.forEach((btn) =>
             btn.addEventListener("click", () => {
@@ -4162,13 +4819,6 @@
             });
         });
 
-        cloudRefreshBtnEl?.addEventListener("click", () => {
-            ensureCloudLoaded(true).catch((err) => {
-                console.error("cloud refresh error:", err);
-                setCloudStatus(err.message || "Не удалось обновить список", "error");
-            });
-        });
-
         cloudNewFolderBtnEl?.addEventListener("click", async () => {
             await createCloudFolder();
         });
@@ -4180,6 +4830,23 @@
                 await uploadCloudFiles(files);
             } finally {
                 cloudUploadInputEl.value = "";
+            }
+        });
+
+        cloudPreviewCloseBtnEl?.addEventListener("click", () => {
+            closeCloudPreview();
+        });
+        cloudPreviewCardEl?.addEventListener("click", (event) => {
+            event.stopPropagation();
+        });
+        cloudPreviewOverlayEl?.addEventListener("click", (event) => {
+            if (event.target === cloudPreviewOverlayEl) {
+                closeCloudPreview();
+            }
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && cloudPreviewOverlayEl && !cloudPreviewOverlayEl.classList.contains("hidden")) {
+                closeCloudPreview();
             }
         });
 
@@ -4400,8 +5067,7 @@
         renderWorkSubExtendValue();
         updateCloudPageContext(cloudState.path);
         updateCloudUpButton();
-    </script>
+</script>
 </body>
 </html>
-
 
