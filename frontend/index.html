@@ -481,6 +481,9 @@
             margin-bottom: 0.45rem;
             pointer-events: none;
         }
+        .work-page-context.clickable {
+            pointer-events: auto;
+        }
         body.context-near-system-bar .work-page-context {
             position: fixed;
             top: calc(var(--safe-top) + 0.55rem);
@@ -493,6 +496,17 @@
         }
         body.context-near-system-bar .work-page-pill {
             max-width: 100%;
+        }
+        .work-page-context.clickable .work-page-pill {
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        .work-page-context.clickable .work-page-pill:active {
+            transform: translateY(1px);
+        }
+        .work-page-context.clickable .work-page-pill:focus-visible {
+            outline: 2px solid rgba(133, 194, 255, 0.9);
+            outline-offset: 2px;
         }
         .work-page-context.hidden {
             display: none;
@@ -965,12 +979,31 @@
             gap: 0.55rem;
         }
         .work-inbound-card {
+            position: relative;
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
             background: rgba(12, 19, 36, 0.86);
-            padding: 0.75rem;
+            padding: 0.75rem 3.1rem 0.72rem 0.75rem;
             display: grid;
             gap: 0.45rem;
+        }
+        .work-inbound-card.interactive {
+            cursor: pointer;
+            transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+        }
+        .work-inbound-card.interactive:active {
+            transform: translateY(1px);
+            border-color: rgba(132, 227, 255, 0.58);
+            box-shadow: 0 8px 18px rgba(5, 14, 32, 0.34);
+        }
+        .work-inbound-card.interactive:focus-visible {
+            outline: none;
+            border-color: rgba(132, 227, 255, 0.78);
+            box-shadow: 0 0 0 2px rgba(86, 184, 255, 0.22);
+        }
+        .work-inbound-card.interactive.active {
+            border-color: rgba(132, 227, 255, 0.68);
+            box-shadow: inset 0 0 0 1px rgba(148, 221, 255, 0.2);
         }
         .work-inbound-head {
             display: flex;
@@ -993,21 +1026,45 @@
         .work-inbound-badges {
             display: flex;
             align-items: center;
-            gap: 0.35rem;
-            flex-wrap: wrap;
+            gap: 0.26rem;
+            position: absolute;
+            top: 0.48rem;
+            right: 0.48rem;
+            z-index: 1;
         }
         .work-inbound-pill {
+            width: 1.22rem;
+            height: 1.22rem;
             border: 1px solid rgba(255, 255, 255, 0.14);
-            border-radius: 999px;
-            padding: 0.16rem 0.48rem;
-            font-size: 0.75rem;
+            border-radius: 7px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            font-size: 0.74rem;
+            line-height: 1;
             color: #e7f1ff;
             background: rgba(28, 41, 68, 0.86);
         }
-        .work-inbound-pill.off {
+        .work-inbound-pill.panel-on {
+            border-color: rgba(107, 233, 166, 0.58);
+            background: rgba(18, 72, 47, 0.42);
+            box-shadow: inset 0 0 0 1px rgba(129, 251, 186, 0.24);
+        }
+        .work-inbound-pill.panel-off {
             border-color: rgba(255, 126, 126, 0.35);
             background: rgba(86, 20, 20, 0.36);
-            color: #ffd3d3;
+            box-shadow: inset 0 0 0 1px rgba(255, 147, 147, 0.18);
+        }
+        .work-inbound-pill.visibility-on {
+            border-color: rgba(107, 233, 166, 0.58);
+            background: rgba(18, 72, 47, 0.42);
+            box-shadow: inset 0 0 0 1px rgba(129, 251, 186, 0.24);
+        }
+        .work-inbound-pill.visibility-off {
+            border-color: rgba(255, 214, 112, 0.58);
+            background: rgba(92, 64, 15, 0.42);
+            box-shadow: inset 0 0 0 1px rgba(255, 228, 156, 0.22);
         }
         .work-inbound-toggle-btn {
             border: 1px solid rgba(126, 189, 255, 0.42);
@@ -1022,6 +1079,13 @@
         }
         .work-inbound-toggle-btn:active {
             transform: translateY(1px);
+        }
+        .work-inbound-detail-actions {
+            margin-top: 0.55rem;
+        }
+        .work-inbound-detail-actions .work-inbound-toggle-btn {
+            width: 100%;
+            text-align: center;
         }
         .cloud-page {
             display: grid;
@@ -1239,6 +1303,40 @@
         }
         .cloud-preview-audio {
             width: 100%;
+        }
+        .vless-guide-body {
+            color: rgba(232, 243, 255, 0.9);
+            font-size: 0.86rem;
+            line-height: 1.42;
+            white-space: pre-line;
+            overflow-y: auto;
+        }
+        #vless-guide-card {
+            min-height: min(82vh, 680px);
+            grid-template-rows: auto 1fr auto;
+        }
+        .vless-guide-controls {
+            display: grid;
+            gap: 0.55rem;
+            margin-top: 0.15rem;
+        }
+        .vless-guide-controls .work-btn {
+            text-align: center;
+        }
+        .vless-guide-checkbox {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            color: rgba(225, 238, 255, 0.86);
+            font-size: 0.82rem;
+            line-height: 1.3;
+            user-select: none;
+        }
+        .vless-guide-checkbox input {
+            width: 1rem;
+            height: 1rem;
+            margin: 0;
+            accent-color: #56b8ff;
         }
         .cloud-node-open.previewable {
             cursor: pointer;
@@ -1647,14 +1745,13 @@
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
                                 <div class="work-page-title">Клиенты</div>
-                                <button id="work-refresh-users-btn" class="work-back-btn">Обновить</button>
                             </div>
                             <div id="work-client-cards" class="work-client-cards">
                                 <div class="work-empty">Загрузка списка клиентов...</div>
                             </div>
                             <div class="work-actions">
                                 <button type="button" class="work-action-link" data-work-nav="work-pending-page">
-                                    <span class="work-action-link-label">Pending до входа</span>
+                                    <span class="work-action-link-label">Создание клиентов до входа</span>
                                     <span class="work-action-link-chevron" aria-hidden="true">›</span>
                                 </button>
                             </div>
@@ -1663,10 +1760,33 @@
                         <section id="work-pending-page" class="work-page hidden">
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-clients-page">← Назад</button>
-                                <div class="work-page-title">Pending до первого входа</div>
+                                <div class="work-page-title">Создание клиентов до входа</div>
                             </div>
                             <div class="work-bind">
+                                <label class="work-sub-create-label" for="work-pending-telegram-id">1. Telegram ID</label>
                                 <input id="work-pending-telegram-id" type="text" inputmode="numeric" placeholder="Telegram ID">
+                            </div>
+                            <div class="work-page-title">2. Работа с подпиской</div>
+                            <div class="work-bind">
+                                <select id="work-pending-sub-status-select">
+                                    <option value="active">active</option>
+                                    <option value="lifetime">lifetime</option>
+                                    <option value="paused">paused</option>
+                                    <option value="expired">expired</option>
+                                    <option value="canceled">canceled</option>
+                                    <option value="inactive">inactive</option>
+                                </select>
+                                <input id="work-pending-sub-price-input" type="number" min="0" step="0.01" placeholder="Цена (₽)">
+                                <input id="work-pending-sub-limit-input" type="number" min="0" step="1" placeholder="Лимит подключений">
+                                <div id="work-pending-sub-create-wrap" class="work-sub-create-wrap">
+                                    <label class="work-sub-create-label" for="work-pending-sub-create-date">Дата окончания</label>
+                                    <input id="work-pending-sub-create-date" class="work-sub-create-input" type="date">
+                                </div>
+                                <button id="work-pending-sub-save-btn" class="work-btn">Сохранить подписку</button>
+                                <div id="work-pending-sub-save-status" class="work-note">Укажи Telegram ID и сохрани параметры подписки.</div>
+                            </div>
+                            <div class="work-page-title">3. Добавить подключения</div>
+                            <div class="work-bind">
                                 <select id="work-pending-inbound-select">
                                     <option value="">Выбери inbound</option>
                                 </select>
@@ -1685,12 +1805,26 @@
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
                                 <div class="work-page-title">Подключения</div>
-                                <button id="work-sync-inbounds-btn" class="work-back-btn">Синхр.</button>
                             </div>
-                            <div class="work-note">Управляй, какие inbound показывать пользователям во вкладке подключений.</div>
+                            <div class="work-note">Нажми на подключение, чтобы развернуть его на весь экран и управлять видимостью.</div>
                             <div id="work-inbounds-list" class="work-inbounds-list">
                                 <div class="work-empty">Загрузка подключений...</div>
                             </div>
+                        </section>
+
+                        <section id="work-inbound-detail-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-inbounds-page">← Назад</button>
+                                <div id="work-inbound-detail-title" class="work-page-title">Подключение</div>
+                            </div>
+                            <div id="work-inbound-detail-meta" class="work-inbound-meta">—</div>
+                            <div id="work-inbound-detail-badges" class="work-inbound-badges"></div>
+                            <div class="work-inbound-detail-actions">
+                                <button id="work-inbound-detail-toggle-btn" type="button" class="work-inbound-toggle-btn">
+                                    Скрыть у пользователей
+                                </button>
+                            </div>
+                            <div id="work-inbound-detail-note" class="work-note">Выбери подключение в списке.</div>
                         </section>
 
                         <section id="work-system-settings-page" class="work-page hidden">
@@ -1861,6 +1995,21 @@
                                 <div id="cloud-preview-note" class="cloud-status-note hidden"></div>
                             </div>
                         </div>
+                        <div id="vless-guide-overlay" class="cloud-preview-overlay hidden" aria-hidden="true">
+                            <div id="vless-guide-card" class="cloud-preview-card" role="dialog" aria-modal="true" aria-label="Краткий гайд по VLESS">
+                                <div class="cloud-preview-head">
+                                    <div class="cloud-preview-title">Гайд по подключению VLESS</div>
+                                </div>
+                                <div id="vless-guide-text" class="vless-guide-body"></div>
+                                <div class="vless-guide-controls">
+                                    <label class="vless-guide-checkbox" for="vless-guide-hide-checkbox">
+                                        <input id="vless-guide-hide-checkbox" type="checkbox">
+                                        <span>Не показывать больше</span>
+                                    </label>
+                                    <button id="vless-guide-hide-btn" type="button" class="work-btn">Скрыть</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div id="screen-profile" class="screen hidden">
                         <div class="card">
@@ -1990,6 +2139,9 @@
         const adminUserBindingsUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/bindings`;
         const adminUserOverviewUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/overview`;
         const adminUserSubscriptionUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/subscription`;
+        const adminUserOverviewByTelegramUrl = (telegramId) =>
+            `${window.location.origin}/api/admin/users/by-telegram/${encodeURIComponent(telegramId)}/overview`;
+        const adminUserSubscriptionByTelegramUrl = `${window.location.origin}/api/admin/users/by-telegram/subscription`;
         const adminSettingsUrl = `${window.location.origin}/api/admin/settings`;
         const adminSettingUrl = (settingKey) => `${adminSettingsUrl}/${encodeURIComponent(settingKey)}`;
         const cloudListUrl = `${window.location.origin}/api/cloud/list`;
@@ -2028,8 +2180,6 @@
         const workOwnerNameEl = document.getElementById("work-owner-name");
         const workOwnerRoleEl = document.getElementById("work-owner-role");
         const workRolePillEl = document.getElementById("work-role-pill");
-        const workRefreshUsersBtnEl = document.getElementById("work-refresh-users-btn");
-        const workSyncInboundsBtnEl = document.getElementById("work-sync-inbounds-btn");
         const workSettingsRefreshBtnEl = document.getElementById("work-settings-refresh-btn");
         const workSettingsSaveBtnEl = document.getElementById("work-settings-save-btn");
         const workSettingsSaveStatusEl = document.getElementById("work-settings-save-status");
@@ -2039,6 +2189,11 @@
         const workSettingCloudSendRetriesEl = document.getElementById("work-setting-cloud-send-retries");
         const workSettingCloudSendRetryDelayEl = document.getElementById("work-setting-cloud-send-retry-delay");
         const workInboundsListEl = document.getElementById("work-inbounds-list");
+        const workInboundDetailTitleEl = document.getElementById("work-inbound-detail-title");
+        const workInboundDetailMetaEl = document.getElementById("work-inbound-detail-meta");
+        const workInboundDetailBadgesEl = document.getElementById("work-inbound-detail-badges");
+        const workInboundDetailToggleBtnEl = document.getElementById("work-inbound-detail-toggle-btn");
+        const workInboundDetailNoteEl = document.getElementById("work-inbound-detail-note");
         const workClientCardsEl = document.getElementById("work-client-cards");
         const workClientPageTitleEl = document.getElementById("work-client-page-title");
         const workClientNameEl = document.getElementById("work-client-name");
@@ -2057,6 +2212,13 @@
         const workPendingClientSelectEl = document.getElementById("work-pending-client-select");
         const workPendingAddBtnEl = document.getElementById("work-pending-add-btn");
         const workPendingListEl = document.getElementById("work-pending-list");
+        const workPendingSubStatusSelectEl = document.getElementById("work-pending-sub-status-select");
+        const workPendingSubPriceInputEl = document.getElementById("work-pending-sub-price-input");
+        const workPendingSubLimitInputEl = document.getElementById("work-pending-sub-limit-input");
+        const workPendingSubCreateWrapEl = document.getElementById("work-pending-sub-create-wrap");
+        const workPendingSubCreateDateEl = document.getElementById("work-pending-sub-create-date");
+        const workPendingSubSaveBtnEl = document.getElementById("work-pending-sub-save-btn");
+        const workPendingSubSaveStatusEl = document.getElementById("work-pending-sub-save-status");
         const workSubStatusSelectEl = document.getElementById("work-sub-status-select");
         const workSubPriceInputEl = document.getElementById("work-sub-price-input");
         const workSubLimitInputEl = document.getElementById("work-sub-limit-input");
@@ -2083,6 +2245,11 @@
         const cloudPreviewCloseBtnEl = document.getElementById("cloud-preview-close-btn");
         const cloudPreviewMediaWrapEl = document.getElementById("cloud-preview-media-wrap");
         const cloudPreviewNoteEl = document.getElementById("cloud-preview-note");
+        const vlessGuideOverlayEl = document.getElementById("vless-guide-overlay");
+        const vlessGuideCardEl = document.getElementById("vless-guide-card");
+        const vlessGuideHideBtnEl = document.getElementById("vless-guide-hide-btn");
+        const vlessGuideHideCheckboxEl = document.getElementById("vless-guide-hide-checkbox");
+        const vlessGuideTextEl = document.getElementById("vless-guide-text");
         const systemSettingKeys = {
             cloudVisibility: "cloud.visibility",
             cloudChunkSizeMb: "cloud.upload.chunk_size_mb",
@@ -2097,9 +2264,11 @@
             bindings: [],
             pendingClients: [],
             pendingBindings: [],
+            pendingOverview: null,
             settings: {},
             selectedUserId: null,
             overview: null,
+            selectedInboundPanelId: null,
         };
         const FORCE_HIDE_TOPBAR = true;
         const FULLSCREEN_TOP_RESERVE_PX = 28;
@@ -2128,6 +2297,7 @@
             cloudEnabled: true,
         };
         const NAV_SECOND_ITEM_KEY = "nav_second_item";
+        const VLESS_GUIDE_HIDE_KEY = "vless_guide_hide";
         const navSecondButtonByKey = {
             connections: {
                 key: "connections",
@@ -2145,6 +2315,10 @@
         const navPreference = {
             secondItem: "connections",
         };
+        const vlessGuidePreference = {
+            dontShow: false,
+            loaded: false,
+        };
         let lastUserPayload = null;
         let csrfToken = "";
         let showFullTelegramId = false;
@@ -2152,6 +2326,8 @@
         let tgBackButtonBound = false;
         let screenMenuActionBusy = false;
         let screenMenuActionCurrent = "";
+        let workPageActionBusy = false;
+        let workPageActionCurrent = "";
         const workBackTargetByPage = new Map();
         workBackButtons.forEach((btn) => {
             const pageId = btn.closest(".work-page")?.id;
@@ -2161,7 +2337,7 @@
         const workContextTitleByPage = new Map([
             ["work-staff-page", "Персонал"],
             ["work-clients-page", "Клиенты"],
-            ["work-pending-page", "Pending до первого входа"],
+            ["work-pending-page", "Создание клиентов до входа"],
             ["work-inbounds-page", "Подключения"],
             ["work-system-settings-page", "Системные настройки"],
             ["work-client-page", "Клиент"],
@@ -2384,20 +2560,108 @@
             return workContextTitleByPage.get(pageId) || "";
         }
 
+        function resolveWorkContextAction(pageId) {
+            if (pageId === "work-clients-page") {
+                return "refresh-work-clients";
+            }
+            if (pageId === "work-inbounds-page") {
+                return "sync-work-inbounds";
+            }
+            if (!workState.selectedUserId) {
+                return "";
+            }
+            if (
+                pageId === "work-client-page"
+                || pageId === "work-client-connections-page"
+                || pageId === "work-client-subscription-page"
+            ) {
+                return "refresh-work-client";
+            }
+            return "";
+        }
+
         function updateWorkPageContext(pageId) {
             if (!workPageContextEl || !workPageContextPillEl) return;
             if (!pageId || pageId === "work-menu-page") {
+                workPageContextEl.dataset.action = "";
+                workPageContextEl.classList.remove("clickable");
+                workPageContextPillEl.tabIndex = -1;
+                workPageContextPillEl.removeAttribute("role");
                 workPageContextEl.classList.add("hidden");
                 return;
             }
             const title = resolveWorkContextTitle(pageId);
             if (!title) {
+                workPageContextEl.dataset.action = "";
+                workPageContextEl.classList.remove("clickable");
+                workPageContextPillEl.tabIndex = -1;
+                workPageContextPillEl.removeAttribute("role");
                 workPageContextEl.classList.add("hidden");
                 return;
             }
-            workPageContextPillEl.textContent = title;
-            workPageContextPillEl.title = title;
+            const action = resolveWorkContextAction(pageId);
+            const isBusyForAction = Boolean(action) && workPageActionBusy && action === workPageActionCurrent;
+            const displayTitle = isBusyForAction
+                ? `${title} ⟳`
+                : action
+                    ? `${title} 🔄`
+                    : title;
+
+            workPageContextEl.dataset.action = action || "";
+            workPageContextEl.classList.toggle("clickable", Boolean(action) && !workPageActionBusy);
+            workPageContextPillEl.tabIndex = Boolean(action) && !workPageActionBusy ? 0 : -1;
+            if (action) {
+                workPageContextPillEl.setAttribute("role", "button");
+            } else {
+                workPageContextPillEl.removeAttribute("role");
+            }
+            workPageContextPillEl.textContent = displayTitle;
+            workPageContextPillEl.title = displayTitle;
             workPageContextEl.classList.remove("hidden");
+        }
+
+        async function runWorkPageContextAction() {
+            const action = String(workPageContextEl?.dataset?.action || "").trim();
+            if (!action || workPageActionBusy) {
+                return;
+            }
+
+            workPageActionBusy = true;
+            workPageActionCurrent = action;
+            updateWorkPageContext(getActiveWorkPageId());
+
+            try {
+                if (action === "refresh-work-clients") {
+                    await loadWorkClientsData();
+                } else if (action === "sync-work-inbounds") {
+                    await postJson(adminSyncInboundsUrl);
+                    const inboundsResp = await fetchJson(adminInboundsUrl, false);
+                    workState.inbounds = Array.isArray(inboundsResp?.inbounds) ? inboundsResp.inbounds : [];
+                    renderWorkInboundsManager();
+                    renderWorkInboundSelectOptions();
+                    renderWorkPendingInboundSelectOptions();
+                } else if (action === "refresh-work-client") {
+                    const tasks = [
+                        loadSelectedUserBindings(),
+                        loadSelectedUserOverview(),
+                    ];
+                    if (workInboundSelectEl?.value) {
+                        tasks.push(loadInboundClients(workInboundSelectEl.value));
+                    }
+                    const pendingTgId = workPendingTelegramIdEl?.value?.trim();
+                    if (pendingTgId) {
+                        tasks.push(loadPendingBindings(pendingTgId));
+                        tasks.push(loadPendingSubscriptionOverview(pendingTgId));
+                    }
+                    await Promise.all(tasks);
+                }
+            } catch (err) {
+                console.error("work page context action error:", err);
+            } finally {
+                workPageActionBusy = false;
+                workPageActionCurrent = "";
+                updateWorkPageContext(getActiveWorkPageId());
+            }
         }
 
         function updateConnectionsPageContext(protocol) {
@@ -2568,6 +2832,64 @@
             }
         }
 
+        function normalizeVlessGuideHideValue(rawValue) {
+            const value = String(rawValue || "").trim().toLowerCase();
+            return value === "1" || value === "true" || value === "yes" || value === "on";
+        }
+
+        function applyVlessGuidePreference(dontShow) {
+            vlessGuidePreference.dontShow = Boolean(dontShow);
+            if (vlessGuideHideCheckboxEl) {
+                vlessGuideHideCheckboxEl.checked = vlessGuidePreference.dontShow;
+            }
+        }
+
+        async function loadVlessGuidePreference() {
+            if (vlessGuidePreference.loaded) {
+                applyVlessGuidePreference(vlessGuidePreference.dontShow);
+                return vlessGuidePreference.dontShow;
+            }
+
+            let storedValue = null;
+            try {
+                storedValue = window.localStorage?.getItem(VLESS_GUIDE_HIDE_KEY) || null;
+            } catch (_err) {
+                storedValue = null;
+            }
+
+            try {
+                const cloudValue = await cloudStorageGetItem(VLESS_GUIDE_HIDE_KEY);
+                if (typeof cloudValue === "string" && cloudValue.trim()) {
+                    storedValue = cloudValue;
+                }
+            } catch (err) {
+                console.warn("CloudStorage get vless_guide_hide failed:", err);
+            }
+
+            const resolvedValue = normalizeVlessGuideHideValue(storedValue);
+            vlessGuidePreference.loaded = true;
+            applyVlessGuidePreference(resolvedValue);
+            return resolvedValue;
+        }
+
+        async function saveVlessGuidePreference(dontShow) {
+            applyVlessGuidePreference(dontShow);
+            vlessGuidePreference.loaded = true;
+            const encoded = dontShow ? "1" : "0";
+
+            try {
+                window.localStorage?.setItem(VLESS_GUIDE_HIDE_KEY, encoded);
+            } catch (_err) {
+                // ignore localStorage failures
+            }
+
+            try {
+                await cloudStorageSetItem(VLESS_GUIDE_HIDE_KEY, encoded);
+            } catch (err) {
+                console.warn("CloudStorage set vless_guide_hide failed:", err);
+            }
+        }
+
         function applyCloudVisibility(me) {
             const enabled = me?.features?.cloud_enabled !== false;
             uiFeatures.cloudEnabled = enabled;
@@ -2605,6 +2927,14 @@
 
         function handleTelegramBack() {
             const activeScreenId = getActiveScreenId();
+            if (
+                activeScreenId === "screen-work"
+                && workInboundOverlayEl
+                && !workInboundOverlayEl.classList.contains("hidden")
+            ) {
+                closeWorkInboundOverlay();
+                return;
+            }
             if (
                 activeScreenId === "screen-cloud"
                 && cloudPreviewOverlayEl
@@ -2920,11 +3250,46 @@
             document.execCommand("copy");
             document.body.removeChild(ta);
         }
+        const VLESS_SETUP_GUIDE_SHORT = [
+            "1. Установи VPN-клиент с поддержкой VLESS (например, Amnezia VPN).",
+            "2. Нажми «Копировать VLESS» и вставь ссылку в приложение.",
+            "3. Подключись к серверу и проверь доступ к нужным сервисам.",
+            "",
+            "Совет: включи раздельное туннелирование и оставь VPN только для нужных приложений.",
+        ].join("\n");
+
+        function ensureVlessGuideOverlayMounted() {
+            if (!vlessGuideOverlayEl) return;
+            if (vlessGuideOverlayEl.parentElement !== document.body) {
+                document.body.appendChild(vlessGuideOverlayEl);
+            }
+        }
+
+        async function openVlessGuide() {
+            if (!vlessGuideOverlayEl || !vlessGuideTextEl) return;
+            if (!vlessGuidePreference.loaded) {
+                await loadVlessGuidePreference();
+            }
+            if (vlessGuidePreference.dontShow) {
+                return;
+            }
+            ensureVlessGuideOverlayMounted();
+            applyVlessGuidePreference(vlessGuidePreference.dontShow);
+            vlessGuideTextEl.textContent = VLESS_SETUP_GUIDE_SHORT;
+            vlessGuideOverlayEl.classList.remove("hidden");
+            vlessGuideOverlayEl.setAttribute("aria-hidden", "false");
+        }
+
+        function closeVlessGuide() {
+            if (!vlessGuideOverlayEl) return;
+            vlessGuideOverlayEl.classList.add("hidden");
+            vlessGuideOverlayEl.setAttribute("aria-hidden", "true");
+        }
 
         function connectionCopyItems(protocol, row) {
             if (protocol === "vless") {
                 return row?.vless_url
-                    ? [{ label: "Копировать VLESS", value: row.vless_url, action: "copy" }]
+                    ? [{ label: "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c VLESS", value: row.vless_url, action: "copy", showGuide: true }]
                     : [];
             }
             if (protocol === "mixed") {
@@ -3015,6 +3380,9 @@
                                 copyBtn.textContent = "Открыто";
                             } else {
                                 await copyToClipboard(entry.value);
+                                if (entry.showGuide) {
+                                    await openVlessGuide();
+                                }
                                 copyBtn.textContent = "Скопировано";
                             }
                         } catch (_err) {
@@ -3919,6 +4287,127 @@
             }
         }
 
+        function isValidTelegramId(rawValue) {
+            return /^\d+$/.test(String(rawValue || "").trim());
+        }
+
+        function setPendingSubscriptionStatus(message, tone = "") {
+            if (!workPendingSubSaveStatusEl) return;
+            workPendingSubSaveStatusEl.classList.remove("success", "error");
+            if (!message) {
+                workPendingSubSaveStatusEl.textContent = "";
+                workPendingSubSaveStatusEl.classList.add("hidden");
+                return;
+            }
+            if (tone === "success" || tone === "error") {
+                workPendingSubSaveStatusEl.classList.add(tone);
+            }
+            workPendingSubSaveStatusEl.textContent = message;
+            workPendingSubSaveStatusEl.classList.remove("hidden");
+        }
+
+        function upsertWorkUserFromOverview(overview) {
+            const user = overview?.user || null;
+            if (!user?.id) return;
+            const normalized = {
+                id: user.id,
+                telegram_id: user.telegram_id,
+                username: user.username,
+                name: user.name,
+                role: user.role,
+            };
+            const idx = workState.users.findIndex((row) => String(row?.id) === String(user.id));
+            if (idx >= 0) {
+                workState.users[idx] = { ...workState.users[idx], ...normalized };
+            } else {
+                workState.users.push(normalized);
+                workState.users.sort((a, b) => Number(a?.id || 0) - Number(b?.id || 0));
+            }
+            renderWorkClientCards();
+        }
+
+        function renderPendingSubscriptionControls(sub, options = {}) {
+            const preserveDate = Boolean(options?.preserveDate);
+            const selectedStatus = normalizeSubscriptionStatus(workPendingSubStatusSelectEl?.value || "active");
+            const lifetimeSelected = selectedStatus === "lifetime";
+
+            workPendingSubCreateWrapEl?.classList.toggle("hidden", lifetimeSelected);
+            if (workPendingSubSaveBtnEl) {
+                if (lifetimeSelected) {
+                    workPendingSubSaveBtnEl.textContent = sub ? "Сохранить бессрочную подписку" : "Создать бессрочную подписку";
+                } else {
+                    workPendingSubSaveBtnEl.textContent = sub ? "Сохранить подписку" : "Создать подписку";
+                }
+            }
+
+            if (!workPendingSubCreateDateEl) {
+                return;
+            }
+            if (lifetimeSelected) {
+                workPendingSubCreateDateEl.value = "";
+                return;
+            }
+            if (preserveDate) {
+                if (!workPendingSubCreateDateEl.value) {
+                    workPendingSubCreateDateEl.value = defaultSubscriptionDateValue(30);
+                }
+                return;
+            }
+            if (sub?.access_until) {
+                const accessUntil = new Date(sub.access_until);
+                if (!Number.isNaN(accessUntil.getTime())) {
+                    workPendingSubCreateDateEl.value = toInputDateValue(accessUntil);
+                    return;
+                }
+            }
+            workPendingSubCreateDateEl.value = defaultSubscriptionDateValue(30);
+        }
+
+        function renderPendingSubscriptionOverview(overview) {
+            workState.pendingOverview = overview || null;
+            const sub = overview?.subscription || null;
+            const conn = overview?.connections || null;
+
+            if (workPendingSubStatusSelectEl) {
+                workPendingSubStatusSelectEl.value = sub?.status || "active";
+            }
+            if (workPendingSubPriceInputEl) {
+                workPendingSubPriceInputEl.value = sub?.price_amount ?? "";
+            }
+            if (workPendingSubLimitInputEl) {
+                workPendingSubLimitInputEl.value =
+                    conn?.limit === null || conn?.limit === undefined ? "" : String(conn.limit);
+            }
+            renderPendingSubscriptionControls(sub);
+        }
+
+        async function loadPendingSubscriptionOverview(telegramIdRaw) {
+            const telegramId = String(telegramIdRaw || "").trim();
+            if (!telegramId) {
+                renderPendingSubscriptionOverview(null);
+                setPendingSubscriptionStatus("Укажи Telegram ID и сохрани параметры подписки.");
+                return { ok: true, exists: false, overview: null };
+            }
+            if (!isValidTelegramId(telegramId)) {
+                renderPendingSubscriptionOverview(null);
+                setPendingSubscriptionStatus("Telegram ID должен содержать только цифры.", "error");
+                return { ok: false, exists: false, overview: null };
+            }
+
+            const resp = await fetchJson(adminUserOverviewByTelegramUrl(telegramId), false);
+            renderPendingSubscriptionOverview(resp?.overview || null);
+            if (resp?.exists) {
+                upsertWorkUserFromOverview(resp?.overview || null);
+                const userId = resp?.overview?.user?.id;
+                setPendingSubscriptionStatus(
+                    userId ? `Пользователь #${userId} найден. Можно обновить подписку.` : "Пользователь найден."
+                );
+            } else {
+                setPendingSubscriptionStatus("Пользователь будет создан автоматически при сохранении подписки.");
+            }
+            return resp;
+        }
+
         function renderWorkSubExtendValue() {
             if (!workSubExtendRangeEl || !workSubExtendValueEl) return;
             const min = Number(workSubExtendRangeEl.min || 0);
@@ -3966,6 +4455,117 @@
             });
         }
 
+        function createWorkInboundStatusBadge(kind, enabled) {
+            const isOn = Boolean(enabled);
+            const badge = document.createElement("span");
+            if (kind === "panel") {
+                badge.className = `work-inbound-pill ${isOn ? "panel-on" : "panel-off"}`;
+                badge.textContent = "🖥️";
+                badge.title = isOn ? "Панель: on" : "Панель: off";
+            } else {
+                badge.className = `work-inbound-pill ${isOn ? "visibility-on" : "visibility-off"}`;
+                badge.textContent = "👁️";
+                badge.title = isOn ? "В приложении: видно" : "В приложении: скрыто";
+            }
+            badge.setAttribute("aria-label", badge.title);
+            return badge;
+        }
+
+        function ensureWorkInboundOverlayMounted() {
+            if (!workInboundOverlayEl) return;
+            if (workInboundOverlayEl.parentElement !== document.body) {
+                document.body.appendChild(workInboundOverlayEl);
+            }
+        }
+
+        function closeWorkInboundOverlay() {
+            if (!workInboundOverlayEl) return;
+            workState.expandedInboundPanelId = null;
+            workInboundOverlayEl.classList.add("hidden");
+            workInboundOverlayEl.setAttribute("aria-hidden", "true");
+            renderWorkInboundsManager();
+        }
+
+        function renderWorkInboundOverlay(panelIdRaw) {
+            const panelId = Number(panelIdRaw || 0);
+            if (!panelId) {
+                closeWorkInboundOverlay();
+                return;
+            }
+
+            const inbound = workState.inbounds.find((row) => String(row?.panel_inbound_id) === String(panelId));
+            if (!inbound) {
+                closeWorkInboundOverlay();
+                return;
+            }
+            workState.expandedInboundPanelId = panelId;
+
+            const panelEnabled = Boolean(inbound?.enable);
+            const visibleForUsers = Boolean(inbound?.show_in_app);
+            const titleText = String(inbound?.remark || `Inbound ${panelId}`).trim() || `Inbound ${panelId}`;
+            const protocol = String(inbound?.protocol || "unknown").toLowerCase();
+
+            if (workInboundOverlayTitleEl) {
+                workInboundOverlayTitleEl.textContent = titleText;
+                workInboundOverlayTitleEl.title = titleText;
+            }
+            if (workInboundOverlayMetaEl) {
+                workInboundOverlayMetaEl.textContent = `#${panelId} • ${protocol} • порт: ${inbound?.port ?? "—"}`;
+            }
+            if (workInboundOverlayBadgesEl) {
+                workInboundOverlayBadgesEl.innerHTML = "";
+                workInboundOverlayBadgesEl.appendChild(createWorkInboundStatusBadge("panel", panelEnabled));
+                workInboundOverlayBadgesEl.appendChild(createWorkInboundStatusBadge("visibility", visibleForUsers));
+            }
+            if (workInboundOverlayToggleBtnEl) {
+                workInboundOverlayToggleBtnEl.textContent = visibleForUsers
+                    ? "Скрыть у пользователей"
+                    : "Показывать пользователям";
+                workInboundOverlayToggleBtnEl.dataset.panelInboundId = String(panelId);
+                workInboundOverlayToggleBtnEl.dataset.nextVisible = visibleForUsers ? "false" : "true";
+            }
+        }
+
+        function openWorkInboundOverlay(panelIdRaw) {
+            if (!workInboundOverlayEl) return;
+            ensureWorkInboundOverlayMounted();
+            renderWorkInboundOverlay(panelIdRaw);
+            if (!workState.expandedInboundPanelId) return;
+            workInboundOverlayEl.classList.remove("hidden");
+            workInboundOverlayEl.setAttribute("aria-hidden", "false");
+            renderWorkInboundsManager();
+        }
+
+        async function toggleWorkInboundVisibility(panelIdRaw, nextVisibleRaw) {
+            const panelId = Number(panelIdRaw || 0);
+            if (!panelId) return;
+            const nextVisible = String(nextVisibleRaw) === "true";
+
+            await runWorkAction("Toggle Inbound Visibility", async () => {
+                const result = await postJson(adminInboundVisibilityUrl(panelId), {
+                    show_in_app: nextVisible,
+                });
+                const updated = result?.inbound || null;
+                if (updated) {
+                    workState.inbounds = workState.inbounds.map((row) =>
+                        String(row?.panel_inbound_id) === String(updated.panel_inbound_id)
+                            ? { ...row, ...updated }
+                            : row
+                    );
+                } else {
+                    await loadWorkClientsData();
+                }
+
+                renderWorkInboundsManager();
+                renderWorkInboundSelectOptions();
+                renderWorkPendingInboundSelectOptions();
+                if (workState.expandedInboundPanelId) {
+                    renderWorkInboundOverlay(workState.expandedInboundPanelId);
+                }
+                return result;
+            });
+        }
+
         function renderWorkInboundsManager() {
             if (!workInboundsListEl) return;
             workInboundsListEl.innerHTML = "";
@@ -3985,7 +4585,11 @@
                 const visibleForUsers = Boolean(inbound?.show_in_app);
 
                 const card = document.createElement("div");
-                card.className = "work-inbound-card";
+                const isExpanded = String(workState.expandedInboundPanelId) === String(panelId);
+                card.className = `work-inbound-card interactive${isExpanded ? " active" : ""}`;
+                card.tabIndex = 0;
+                card.setAttribute("role", "button");
+                card.setAttribute("aria-label", `Развернуть подключение ${panelId}`);
 
                 const head = document.createElement("div");
                 head.className = "work-inbound-head";
@@ -3997,52 +4601,36 @@
                 const badges = document.createElement("div");
                 badges.className = "work-inbound-badges";
 
-                const panelBadge = document.createElement("span");
-                panelBadge.className = `work-inbound-pill${panelEnabled ? "" : " off"}`;
-                panelBadge.textContent = panelEnabled ? "Панель: on" : "Панель: off";
-
-                const visibilityBadge = document.createElement("span");
-                visibilityBadge.className = `work-inbound-pill${visibleForUsers ? "" : " off"}`;
-                visibilityBadge.textContent = visibleForUsers ? "В приложении: видно" : "В приложении: скрыто";
+                const panelBadge = createWorkInboundStatusBadge("panel", panelEnabled);
+                const visibilityBadge = createWorkInboundStatusBadge("visibility", visibleForUsers);
+                const expandHint = document.createElement("div");
+                expandHint.className = "work-inbound-expand-hint";
+                expandHint.textContent = "⤢";
+                expandHint.title = "Развернуть";
 
                 badges.appendChild(panelBadge);
                 badges.appendChild(visibilityBadge);
                 head.appendChild(title);
                 head.appendChild(badges);
+                head.appendChild(expandHint);
 
                 const meta = document.createElement("div");
                 meta.className = "work-inbound-meta";
                 const protocol = String(inbound?.protocol || "unknown").toLowerCase();
                 meta.textContent = `#${panelId} • ${protocol} • порт: ${inbound?.port ?? "—"}`;
 
-                const toggleBtn = document.createElement("button");
-                toggleBtn.type = "button";
-                toggleBtn.className = "work-inbound-toggle-btn";
-                toggleBtn.textContent = visibleForUsers ? "Скрыть у пользователей" : "Показывать пользователям";
-                toggleBtn.addEventListener("click", async () => {
-                    await runWorkAction("Toggle Inbound Visibility", async () => {
-                        const result = await postJson(adminInboundVisibilityUrl(panelId), {
-                            show_in_app: !visibleForUsers,
-                        });
-                        const updated = result?.inbound || null;
-                        if (updated) {
-                            workState.inbounds = workState.inbounds.map((row) =>
-                                String(row?.panel_inbound_id) === String(updated.panel_inbound_id)
-                                    ? { ...row, ...updated }
-                                    : row
-                            );
-                            renderWorkInboundsManager();
-                            renderWorkInboundSelectOptions();
-                        } else {
-                            await loadWorkClientsData();
-                        }
-                        return result;
-                    });
+                const openOverlay = () => {
+                    openWorkInboundOverlay(panelId);
+                };
+                card.addEventListener("click", openOverlay);
+                card.addEventListener("keydown", (event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    openOverlay();
                 });
 
                 card.appendChild(head);
                 card.appendChild(meta);
-                card.appendChild(toggleBtn);
                 workInboundsListEl.appendChild(card);
             });
         }
@@ -4451,10 +5039,12 @@
             }
             const pendingTgId = workPendingTelegramIdEl?.value?.trim();
             if (pendingTgId) {
-                await loadPendingBindings(pendingTgId);
+                await Promise.all([loadPendingBindings(pendingTgId), loadPendingSubscriptionOverview(pendingTgId)]);
             } else {
                 workState.pendingBindings = [];
                 renderPendingBindings([]);
+                renderPendingSubscriptionOverview(null);
+                setPendingSubscriptionStatus("Укажи Telegram ID и сохрани параметры подписки.");
             }
             return { users: workState.users.length, inbounds: workState.inbounds.length };
         }
@@ -4503,6 +5093,7 @@
                 loadSelectedUserBindings(),
                 loadSelectedUserOverview(),
                 pendingTgId ? loadPendingBindings(pendingTgId) : Promise.resolve(),
+                pendingTgId ? loadPendingSubscriptionOverview(pendingTgId) : Promise.resolve(),
             ]);
         }
 
@@ -4574,6 +5165,9 @@
 
         function switchWorkPage(target) {
             const next = target || "work-menu-page";
+            if (next !== "work-inbounds-page") {
+                closeWorkInboundOverlay();
+            }
             workPages.forEach((page) => page.classList.toggle("hidden", page.id !== next));
             const hideWorkHeaders = next !== "work-menu-page";
             setTopbarVisibility(hideWorkHeaders);
@@ -4609,6 +5203,9 @@
             }
             if (target !== "screen-cloud") {
                 closeCloudPreview();
+            }
+            if (target !== "screen-work") {
+                closeWorkInboundOverlay();
             }
             if (target === "screen-cloud") {
                 if (previousScreen !== "screen-cloud") {
@@ -4769,6 +5366,7 @@
                 syncBackNavigationMode();
                 setTopbarVisibility(false);
                 await loadNavSecondPreference();
+                await loadVlessGuidePreference();
                 const payload = await validateUser();
                 console.log("Auth ok", payload.user);
                 const runtime = await loadRuntimeData();
@@ -4816,6 +5414,18 @@
                 console.error("screen menu context action key error:", err);
             });
         });
+        workPageContextPillEl?.addEventListener("click", () => {
+            runWorkPageContextAction().catch((err) => {
+                console.error("work page context action click error:", err);
+            });
+        });
+        workPageContextPillEl?.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            runWorkPageContextAction().catch((err) => {
+                console.error("work page context action key error:", err);
+            });
+        });
 
         connectionProtocolButtons.forEach((btn) =>
             btn.addEventListener("click", () => {
@@ -4853,6 +5463,40 @@
         cloudPreviewCloseBtnEl?.addEventListener("click", () => {
             closeCloudPreview();
         });
+        workInboundOverlayCloseBtnEl?.addEventListener("click", () => {
+            closeWorkInboundOverlay();
+        });
+        workInboundOverlayToggleBtnEl?.addEventListener("click", async () => {
+            const panelId = workInboundOverlayToggleBtnEl.dataset.panelInboundId;
+            const nextVisible = workInboundOverlayToggleBtnEl.dataset.nextVisible;
+            await toggleWorkInboundVisibility(panelId, nextVisible);
+        });
+        workInboundOverlayCardEl?.addEventListener("click", (event) => {
+            event.stopPropagation();
+        });
+        workInboundOverlayEl?.addEventListener("click", (event) => {
+            if (event.target === workInboundOverlayEl) {
+                closeWorkInboundOverlay();
+            }
+        });
+        vlessGuideHideBtnEl?.addEventListener("click", () => {
+            closeVlessGuide();
+        });
+        vlessGuideHideCheckboxEl?.addEventListener("change", async () => {
+            try {
+                await saveVlessGuidePreference(Boolean(vlessGuideHideCheckboxEl.checked));
+            } catch (err) {
+                console.error("save vless guide preference error:", err);
+            }
+        });
+        vlessGuideCardEl?.addEventListener("click", (event) => {
+            event.stopPropagation();
+        });
+        vlessGuideOverlayEl?.addEventListener("click", (event) => {
+            if (event.target === vlessGuideOverlayEl) {
+                closeVlessGuide();
+            }
+        });
         cloudPreviewCardEl?.addEventListener("click", (event) => {
             event.stopPropagation();
         });
@@ -4862,8 +5506,17 @@
             }
         });
         document.addEventListener("keydown", (event) => {
-            if (event.key === "Escape" && cloudPreviewOverlayEl && !cloudPreviewOverlayEl.classList.contains("hidden")) {
+            if (event.key !== "Escape") return;
+            if (workInboundOverlayEl && !workInboundOverlayEl.classList.contains("hidden")) {
+                closeWorkInboundOverlay();
+                return;
+            }
+            if (cloudPreviewOverlayEl && !cloudPreviewOverlayEl.classList.contains("hidden")) {
                 closeCloudPreview();
+                return;
+            }
+            if (vlessGuideOverlayEl && !vlessGuideOverlayEl.classList.contains("hidden")) {
+                closeVlessGuide();
             }
         });
 
@@ -4882,19 +5535,6 @@
         profileIdToggleEl?.addEventListener("click", () => {
             showFullTelegramId = !showFullTelegramId;
             renderTelegramId();
-        });
-
-        workRefreshUsersBtnEl?.addEventListener("click", async () => {
-            await runWorkAction("Load Clients List", async () => {
-                return loadWorkClientsData();
-            });
-        });
-
-        workSyncInboundsBtnEl?.addEventListener("click", async () => {
-            await runWorkAction("Sync Inbounds", async () => {
-                await postJson(adminSyncInboundsUrl);
-                return loadWorkClientsData();
-            });
         });
 
         workSettingsRefreshBtnEl?.addEventListener("click", async () => {
@@ -4951,10 +5591,69 @@
 
         workPendingTelegramIdEl?.addEventListener("change", async () => {
             try {
-                await loadPendingBindings(workPendingTelegramIdEl.value);
+                await Promise.all([
+                    loadPendingBindings(workPendingTelegramIdEl.value),
+                    loadPendingSubscriptionOverview(workPendingTelegramIdEl.value),
+                ]);
             } catch (err) {
-                console.error("load pending bindings error:", err);
+                console.error("load pending data error:", err);
             }
+        });
+
+        workPendingSubStatusSelectEl?.addEventListener("change", () => {
+            renderPendingSubscriptionControls(workState.pendingOverview?.subscription || null, { preserveDate: true });
+        });
+
+        workPendingSubSaveBtnEl?.addEventListener("click", async () => {
+            await runWorkAction("Save Pending Subscription", async () => {
+                const telegramId = String(workPendingTelegramIdEl?.value || "").trim();
+                if (!isValidTelegramId(telegramId)) {
+                    setPendingSubscriptionStatus("Укажи корректный Telegram ID.", "error");
+                    throw new Error("Enter valid Telegram ID");
+                }
+
+                const hasSubscription = Boolean(workState.pendingOverview?.subscription);
+                const selectedStatus = normalizeSubscriptionStatus(workPendingSubStatusSelectEl?.value || "active");
+                const payload = {
+                    telegram_id: telegramId,
+                    status: selectedStatus || "active",
+                    price_amount: workPendingSubPriceInputEl?.value?.trim() || null,
+                    connections_limit: workPendingSubLimitInputEl?.value?.trim() || null,
+                };
+
+                if (selectedStatus === "lifetime") {
+                    payload.access_until = null;
+                } else {
+                    const rawDate = String(workPendingSubCreateDateEl?.value || "").trim();
+                    try {
+                        if (rawDate) {
+                            payload.access_until = validateSubscriptionDateValue(rawDate);
+                        } else if (!hasSubscription) {
+                            payload.access_until = validateSubscriptionDateValue(rawDate);
+                        }
+                    } catch (err) {
+                        setPendingSubscriptionStatus(err?.message || "Невалидная дата подписки.", "error");
+                        throw err;
+                    }
+                }
+
+                let result;
+                try {
+                    result = await postJson(adminUserSubscriptionByTelegramUrl, payload);
+                } catch (err) {
+                    setPendingSubscriptionStatus(err?.message || "Не удалось сохранить подписку.", "error");
+                    throw err;
+                }
+                renderPendingSubscriptionOverview(result?.overview || null);
+                upsertWorkUserFromOverview(result?.overview || null);
+                setPendingSubscriptionStatus(
+                    result?.created_user
+                        ? "Подписка сохранена. Пользователь создан."
+                        : "Подписка сохранена.",
+                    "success"
+                );
+                return result;
+            });
         });
 
         workBindBtnEl?.addEventListener("click", async () => {
@@ -4990,7 +5689,7 @@
         workPendingAddBtnEl?.addEventListener("click", async () => {
             await runWorkAction("Add Pending Binding", async () => {
                 const telegramId = String(workPendingTelegramIdEl?.value || "").trim();
-                if (!telegramId || !/^\d+$/.test(telegramId)) {
+                if (!isValidTelegramId(telegramId)) {
                     throw new Error("Enter valid Telegram ID");
                 }
 
@@ -5087,4 +5786,5 @@
 </script>
 </body>
 </html>
+
 

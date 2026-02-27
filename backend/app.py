@@ -5,12 +5,14 @@ import mimetypes
 import os
 import secrets
 import socket
+import base64
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import quote, urlencode, urlparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse
 
 import psutil
+import requests
 from flask import Flask, Response, jsonify, make_response, render_template, request, stream_with_context
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -386,12 +388,31 @@ def create_app():
         expires_at = utcnow() + timedelta(days=session_ttl_days)
         token_hash = _token_hash(raw_token)
         csrf_hash = _csrf_hash(raw_csrf_token)
+        try:
+            parsed_init_data = dict(parse_qsl(init_data, keep_blank_values=True)) if init_data else {}
+        except ValueError:
+            parsed_init_data = {}
+        auth_date = None
+        raw_auth_date = parsed_init_data.get("auth_date")
+        if raw_auth_date is not None:
+            try:
+                auth_date = int(raw_auth_date)
+            except (ValueError, TypeError):
+                auth_date = None
+        init_data_sha256 = hashlib.sha256(init_data.encode("utf-8")).hexdigest() if init_data else ""
+        session_meta = {
+            "csrf_hash": csrf_hash,
+            "telegram_id": str(user.telegram_id or ""),
+            "username": str(user.username or ""),
+            "auth_date": auth_date,
+            "init_data_sha256": init_data_sha256,
+        }
 
         db.query(AuthSession).filter(AuthSession.expires_at < utcnow()).delete()
         db.add(
             AuthSession(
                 user_id=user.id,
-                init_data={"raw": init_data[:4096], "csrf_hash": csrf_hash},
+                init_data=session_meta,
                 session_token=token_hash,
                 expires_at=expires_at,
             )
@@ -583,6 +604,155 @@ def create_app():
                 }
             )
         return out
+
+    def _decode_subscription_payload(raw_text: str) -> str:
+        text = (raw_text or "").strip()
+        if not text:
+            return ""
+        if "://" in text:
+            return text
+
+        compact = "".join(text.split())
+        if not compact:
+            return ""
+        pad = len(compact) % 4
+        if pad:
+            compact += "=" * (4 - pad)
+
+        for decoder in (base64.b64decode, base64.urlsafe_b64decode):
+            try:
+                decoded = decoder(compact.encode("utf-8"))
+            except Exception:
+                continue
+            as_text = decoded.decode("utf-8", errors="ignore").strip()
+            if "://" in as_text:
+                return as_text
+        return text
+
+    def _load_subscription_links(subscription_url: str, *, quiet: bool = False) -> list[str]:
+        url = str(subscription_url or "").strip()
+        if not url:
+            return []
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            return []
+
+        try:
+            response = requests.get(url, timeout=8)
+            response.raise_for_status()
+            payload = _decode_subscription_payload(response.text or "")
+        except Exception as exc:
+            if not quiet:
+                app.logger.warning("subscription fetch failed for %s: %s", url, exc)
+            return []
+
+        links: list[str] = []
+        for line in payload.splitlines():
+            item = line.strip()
+            if not item or "://" not in item:
+                continue
+            links.append(item)
+        return links
+
+    def _vless_identifier_from_url(link: str) -> str:
+        value = str(link or "").strip()
+        if not value.lower().startswith("vless://"):
+            return ""
+        rest = value[len("vless://") :]
+        userinfo = rest.split("@", 1)[0] if "@" in rest else ""
+        return unquote(userinfo).strip().lower()
+
+    def _pick_vless_from_subscription(links: list[str], identifier: str | None) -> str | None:
+        if not links:
+            return None
+        wanted = str(identifier or "").strip().lower()
+        vless_links = [item for item in links if str(item).strip().lower().startswith("vless://")]
+        if not vless_links:
+            return None
+        if wanted:
+            for link in vless_links:
+                if _vless_identifier_from_url(link) == wanted:
+                    return link
+        return vless_links[0]
+
+    def _normalize_vless_client_name(label: str | None, identifier: str | None) -> str:
+        value = str(label or "").strip()
+        if not value:
+            value = str(identifier or "").strip()
+        if not value:
+            return "client"
+
+        low = value.lower()
+        for suffix in ("-main", "_main", " main"):
+            if low.endswith(suffix):
+                value = value[: len(value) - len(suffix)].strip(" -_")
+                break
+
+        return value or "client"
+
+    def _apply_vless_display_name(link: str | None, label: str | None, identifier: str | None) -> str | None:
+        value = str(link or "").strip()
+        if not value:
+            return None
+        if not value.lower().startswith("vless://"):
+            return value
+
+        client_name = _normalize_vless_client_name(label, identifier)
+        display_name = f"Lumica - {client_name}"
+        base = value.split("#", 1)[0]
+        return f"{base}#{quote(display_name, safe='')}"
+
+    def _build_subscription_urls(sub_id: str | None, explicit_url: str | None = None) -> list[str]:
+        sid = str(sub_id or "").strip()
+        sid_quoted = quote(sid) if sid else ""
+        urls: list[str] = []
+
+        def _append_url(raw: str | None):
+            value = str(raw or "").strip()
+            if not value:
+                return
+            parsed_value = urlparse(value)
+            if parsed_value.scheme not in {"http", "https"}:
+                return
+            if value not in urls:
+                urls.append(value)
+
+        _append_url(explicit_url)
+
+        public_base = os.getenv("PANEL_PUBLIC_BASE_URL", "").strip().rstrip("/")
+        subscription_base = os.getenv("PANEL_SUBSCRIPTION_BASE_URL", "").strip().rstrip("/")
+        tpl = os.getenv("PANEL_SUBSCRIPTION_URL_TEMPLATE", "").strip()
+        if tpl:
+            for base_url in (subscription_base, public_base, ""):
+                try:
+                    _append_url(tpl.format(sub_id=sid, base_url=base_url))
+                except Exception as exc:
+                    app.logger.warning("invalid PANEL_SUBSCRIPTION_URL_TEMPLATE: %s", exc)
+                    break
+
+        if sid:
+            for base_url in (subscription_base, public_base):
+                if not base_url:
+                    continue
+                _append_url(f"{base_url}/sub/{sid_quoted}")
+                _append_url(f"{base_url}/subcrp/{sid_quoted}")
+
+            panel_base = os.getenv("PANEL_BASE_URL", "").strip()
+            parsed_base = urlparse(panel_base)
+            if parsed_base.scheme in {"http", "https"} and parsed_base.netloc:
+                root = f"{parsed_base.scheme}://{parsed_base.netloc}"
+                _append_url(f"{root}/sub/{sid_quoted}")
+                _append_url(f"{root}/subcrp/{sid_quoted}")
+
+            public_host = os.getenv("PUBLIC_VPN_HOST", "").strip()
+            sub_port = os.getenv("PANEL_SUBSCRIPTION_PORT", "").strip()
+            if public_host and sub_port:
+                _append_url(f"http://{public_host}:{sub_port}/sub/{sid_quoted}")
+                _append_url(f"http://{public_host}:{sub_port}/subcrp/{sid_quoted}")
+                _append_url(f"https://{public_host}:{sub_port}/sub/{sid_quoted}")
+                _append_url(f"https://{public_host}:{sub_port}/subcrp/{sid_quoted}")
+
+        return urls
 
     def _normalize_account_protocol(raw_protocol: str | None) -> str:
         value = (raw_protocol or "").strip().lower()
@@ -1659,6 +1829,91 @@ def create_app():
                 return jsonify({"ok": False, "error": "User not found"}), 404
             return jsonify({"ok": True, "overview": _serialize_admin_user_overview(db, user)})
 
+    def _get_or_create_user_by_telegram_id(db, telegram_id: str) -> tuple[User, bool]:
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if user:
+            return user, False
+
+        user = User(
+            telegram_id=telegram_id,
+            role=role_bindings.get(telegram_id, "user"),
+        )
+        db.add(user)
+        db.flush()
+        return user, True
+
+    def _apply_admin_subscription_payload(db, user: User, body: dict):
+        touches_subscription = any(
+            key in body for key in ("extend_months", "status", "price_amount", "access_until")
+        )
+        sub = _latest_subscription(db, user.id)
+        if touches_subscription and not sub:
+            sub = Subscription(user_id=user.id, status="active")
+            db.add(sub)
+            db.flush()
+
+        if sub and "extend_months" in body and str(body.get("extend_months")).strip() != "":
+            try:
+                months = int(body.get("extend_months"))
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": "extend_months must be an integer"}), 400
+            if months <= 0:
+                return jsonify({"ok": False, "error": "extend_months must be > 0"}), 400
+
+            now = utcnow()
+            current_until = _as_utc(sub.access_until)
+            base = current_until if current_until and current_until > now else now
+            sub.access_until = base + timedelta(days=30 * months)
+            sub.status = "active"
+
+        if sub and "status" in body and body.get("status") not in (None, ""):
+            status = str(body.get("status")).strip().lower()
+            allowed_statuses = {"active", "lifetime", "expired", "paused", "canceled", "inactive"}
+            if status not in allowed_statuses:
+                return jsonify({"ok": False, "error": "invalid subscription status"}), 400
+            sub.status = status
+
+        if sub and "price_amount" in body:
+            raw_price = body.get("price_amount")
+            if raw_price in (None, ""):
+                sub.price_amount = None
+            else:
+                try:
+                    sub.price_amount = Decimal(str(raw_price))
+                except (InvalidOperation, ValueError):
+                    return jsonify({"ok": False, "error": "price_amount must be a number"}), 400
+
+        if sub and "access_until" in body:
+            raw_access_until = body.get("access_until")
+            if raw_access_until in (None, ""):
+                sub.access_until = None
+            else:
+                try:
+                    parsed = datetime.fromisoformat(str(raw_access_until).replace("Z", "+00:00"))
+                except ValueError:
+                    return jsonify({"ok": False, "error": "access_until must be ISO datetime"}), 400
+                sub.access_until = parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+        if sub and (sub.status or "").strip().lower() == "lifetime":
+            sub.access_until = None
+
+        if "connections_limit" in body:
+            raw_limit = body.get("connections_limit")
+            profile = user.profile_data if isinstance(user.profile_data, dict) else {}
+            if raw_limit in (None, ""):
+                profile.pop("connections_limit", None)
+            else:
+                try:
+                    limit = int(raw_limit)
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "connections_limit must be an integer"}), 400
+                if limit < 0:
+                    return jsonify({"ok": False, "error": "connections_limit must be >= 0"}), 400
+                profile["connections_limit"] = limit
+            user.profile_data = profile
+
+        return None
+
     @app.post("/api/admin/users/<int:user_id>/subscription")
     def admin_user_subscription_update(user_id: int):
         _, err = _auth_context(require_role="admin")
@@ -1672,78 +1927,57 @@ def create_app():
             if not user:
                 return jsonify({"ok": False, "error": "User not found"}), 404
 
-            touches_subscription = any(
-                key in body for key in ("extend_months", "status", "price_amount", "access_until")
-            )
-            sub = _latest_subscription(db, user.id)
-            if touches_subscription and not sub:
-                sub = Subscription(user_id=user.id, status="active")
-                db.add(sub)
-                db.flush()
-
-            if sub and "extend_months" in body and str(body.get("extend_months")).strip() != "":
-                try:
-                    months = int(body.get("extend_months"))
-                except (TypeError, ValueError):
-                    return jsonify({"ok": False, "error": "extend_months must be an integer"}), 400
-                if months <= 0:
-                    return jsonify({"ok": False, "error": "extend_months must be > 0"}), 400
-
-                now = utcnow()
-                current_until = _as_utc(sub.access_until)
-                base = current_until if current_until and current_until > now else now
-                sub.access_until = base + timedelta(days=30 * months)
-                sub.status = "active"
-
-            if sub and "status" in body and body.get("status") not in (None, ""):
-                status = str(body.get("status")).strip().lower()
-                allowed_statuses = {"active", "lifetime", "expired", "paused", "canceled", "inactive"}
-                if status not in allowed_statuses:
-                    return jsonify({"ok": False, "error": "invalid subscription status"}), 400
-                sub.status = status
-
-            if sub and "price_amount" in body:
-                raw_price = body.get("price_amount")
-                if raw_price in (None, ""):
-                    sub.price_amount = None
-                else:
-                    try:
-                        sub.price_amount = Decimal(str(raw_price))
-                    except (InvalidOperation, ValueError):
-                        return jsonify({"ok": False, "error": "price_amount must be a number"}), 400
-
-            if sub and "access_until" in body:
-                raw_access_until = body.get("access_until")
-                if raw_access_until in (None, ""):
-                    sub.access_until = None
-                else:
-                    try:
-                        parsed = datetime.fromisoformat(str(raw_access_until).replace("Z", "+00:00"))
-                    except ValueError:
-                        return jsonify({"ok": False, "error": "access_until must be ISO datetime"}), 400
-                    sub.access_until = parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-
-            if sub and (sub.status or "").strip().lower() == "lifetime":
-                sub.access_until = None
-
-            if "connections_limit" in body:
-                raw_limit = body.get("connections_limit")
-                profile = user.profile_data if isinstance(user.profile_data, dict) else {}
-                if raw_limit in (None, ""):
-                    profile.pop("connections_limit", None)
-                else:
-                    try:
-                        limit = int(raw_limit)
-                    except (TypeError, ValueError):
-                        return jsonify({"ok": False, "error": "connections_limit must be an integer"}), 400
-                    if limit < 0:
-                        return jsonify({"ok": False, "error": "connections_limit must be >= 0"}), 400
-                    profile["connections_limit"] = limit
-                user.profile_data = profile
+            payload_err = _apply_admin_subscription_payload(db, user, body)
+            if payload_err:
+                return payload_err
 
             db.commit()
             db.refresh(user)
             return jsonify({"ok": True, "overview": _serialize_admin_user_overview(db, user)})
+
+    @app.get("/api/admin/users/by-telegram/<telegram_id>/overview")
+    def admin_user_overview_by_telegram(telegram_id: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+
+        telegram_id = str(telegram_id or "").strip()
+        if not telegram_id.isdigit():
+            return jsonify({"ok": False, "error": "telegram_id must be numeric"}), 400
+
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.telegram_id == telegram_id).first()
+            if not user:
+                return jsonify({"ok": True, "exists": False, "overview": None})
+            return jsonify({"ok": True, "exists": True, "overview": _serialize_admin_user_overview(db, user)})
+
+    @app.post("/api/admin/users/by-telegram/subscription")
+    def admin_user_subscription_update_by_telegram():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+
+        body = request.get_json(silent=True) or {}
+        telegram_id = str(body.get("telegram_id") or "").strip()
+        if not telegram_id or not telegram_id.isdigit():
+            return jsonify({"ok": False, "error": "telegram_id must be numeric"}), 400
+
+        with SessionLocal() as db:
+            user, created_user = _get_or_create_user_by_telegram_id(db, telegram_id)
+            payload_err = _apply_admin_subscription_payload(db, user, body)
+            if payload_err:
+                return payload_err
+
+            db.commit()
+            db.refresh(user)
+            return jsonify(
+                {
+                    "ok": True,
+                    "created_user": created_user,
+                    "user_id": user.id,
+                    "overview": _serialize_admin_user_overview(db, user),
+                }
+            )
 
     @app.get("/api/admin/inbounds/<int:panel_inbound_id>/clients")
     def admin_inbound_clients(panel_inbound_id: int):
@@ -2116,6 +2350,7 @@ def create_app():
             return err
 
         host = os.getenv("PUBLIC_VPN_HOST") or request.host.split(":")[0]
+        subscription_cache: dict[str, list[str]] = {}
 
         with SessionLocal() as db:
             sub = _active_subscription(db, auth["user_id"])
@@ -2131,13 +2366,25 @@ def create_app():
                 port = int(inbound.port)
                 meta = account.meta_json or {}
                 subscription_url = meta.get("sub_url")
-                if not subscription_url and meta.get("sub_id"):
-                    tpl = os.getenv("PANEL_SUBSCRIPTION_URL_TEMPLATE", "")
-                    public_base = os.getenv("PANEL_PUBLIC_BASE_URL", "").rstrip("/")
-                    if tpl:
-                        subscription_url = tpl.format(sub_id=meta.get("sub_id"), base_url=public_base)
+                subscription_urls = _build_subscription_urls(meta.get("sub_id"), subscription_url)
 
                 vless_url = meta.get("vless_url")
+                if not vless_url and subscription_urls:
+                    for candidate_url in subscription_urls:
+                        cached_links = subscription_cache.get(candidate_url)
+                        if cached_links is None:
+                            cached_links = _load_subscription_links(candidate_url, quiet=True)
+                            subscription_cache[candidate_url] = cached_links
+                        if not cached_links:
+                            continue
+                        picked = _pick_vless_from_subscription(cached_links, account.identifier)
+                        if not picked:
+                            continue
+                        vless_url = picked
+                        subscription_url = candidate_url
+                        break
+                    if not vless_url and subscription_urls:
+                        subscription_url = subscription_urls[0]
                 if not vless_url and account.identifier:
                     query_params = {
                         "type": meta.get("type", "tcp"),
@@ -2153,6 +2400,8 @@ def create_app():
                     q = urlencode({k: v for k, v in query_params.items() if v})
                     label = quote(account.label or "lumica")
                     vless_url = f"vless://{account.identifier}@{host}:{port}?{q}#{label}"
+                if vless_url:
+                    vless_url = _apply_vless_display_name(vless_url, account.label, account.identifier)
 
                 connections.append(
                     {
