@@ -2339,6 +2339,7 @@
             ["work-clients-page", "Клиенты"],
             ["work-pending-page", "Создание клиентов до входа"],
             ["work-inbounds-page", "Подключения"],
+            ["work-inbound-detail-page", "Подключение"],
             ["work-system-settings-page", "Системные настройки"],
             ["work-client-page", "Клиент"],
             ["work-client-connections-page", "Подключения"],
@@ -2557,6 +2558,10 @@
                 const dynamicTitle = String(workClientPageTitleEl?.textContent || "").trim();
                 return dynamicTitle || "Клиент";
             }
+            if (pageId === "work-inbound-detail-page") {
+                const dynamicTitle = String(workInboundDetailTitleEl?.textContent || "").trim();
+                return dynamicTitle || "Подключение";
+            }
             return workContextTitleByPage.get(pageId) || "";
         }
 
@@ -2566,6 +2571,9 @@
             }
             if (pageId === "work-inbounds-page") {
                 return "sync-work-inbounds";
+            }
+            if (pageId === "work-inbound-detail-page") {
+                return "";
             }
             if (!workState.selectedUserId) {
                 return "";
