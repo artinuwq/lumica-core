@@ -1,5 +1,6 @@
 import os
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,10 +13,14 @@ from scripts.env_loader import ENV_FILE, load_dotenv  # noqa: E402
 load_dotenv(ENV_FILE)
 
 from backend.app import create_app  # noqa: E402
+from scripts.scheduler_jobs import run_scheduler_forever  # noqa: E402
 
 
 def main() -> None:
     app = create_app()
+    scheduler_thread = threading.Thread(target=run_scheduler_forever, daemon=True)
+    scheduler_thread.start()
+
     host = os.getenv("FLASK_HOST", "0.0.0.0")
     port = int(os.getenv("FLASK_PORT", "8000"))
     server = os.getenv("WEB_SERVER", "waitress").strip().lower()

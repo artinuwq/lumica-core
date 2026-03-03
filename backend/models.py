@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -107,6 +107,7 @@ class VpnAccount(Base, TimestampMixin):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     protocol = Column(String, nullable=False)
     panel_inbound_id = Column(Integer, nullable=True)
+    panel_inbound_ref_id = Column(Integer, ForeignKey("panel_inbounds.id", ondelete="SET NULL"), nullable=True)
     identifier = Column(String, nullable=True)
     label = Column(String, nullable=True)
     secret = Column(String, nullable=True)
@@ -124,6 +125,7 @@ class PendingBinding(Base, TimestampMixin):
     telegram_id = Column(String, nullable=False)
     protocol = Column(String, nullable=False)
     panel_inbound_id = Column(Integer, nullable=False)
+    panel_inbound_ref_id = Column(Integer, ForeignKey("panel_inbounds.id", ondelete="SET NULL"), nullable=True)
     identifier = Column(String, nullable=False)
     label = Column(String, nullable=True)
     secret = Column(String, nullable=True)
@@ -156,6 +158,95 @@ class Inbound(Base):
     show_in_app = Column(Integer, nullable=False, default=1, server_default="1")
     stream_settings = Column(JSON, nullable=True)
     settings = Column(JSON, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class PanelSecret(Base, TimestampMixin):
+    __tablename__ = "panel_secrets"
+
+    id = Column(String(36), primary_key=True)
+    provider = Column(String(32), nullable=False)
+    auth_type = Column(String(32), nullable=False)
+    ciphertext = Column(Text, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class Panel(Base, TimestampMixin):
+    __tablename__ = "panels"
+
+    id = Column(String(36), primary_key=True)
+    name = Column(String(120), nullable=False)
+    provider = Column(String(32), nullable=False)
+    base_url = Column(String(512), nullable=False)
+    auth_type = Column(String(32), nullable=False)
+    auth_secret_ref = Column(String(36), ForeignKey("panel_secrets.id", ondelete="CASCADE"), nullable=False)
+    is_active = Column(Integer, nullable=False, default=1, server_default="1")
+    is_default = Column(Integer, nullable=False, default=0, server_default="0")
+    region = Column(String(16), nullable=True)
+    health_status = Column(String(16), nullable=False, default="unknown", server_default="unknown")
+    last_ok_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(String(500), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class PanelInbound(Base, TimestampMixin):
+    __tablename__ = "panel_inbounds"
+    __table_args__ = (
+        UniqueConstraint("panel_id", "external_inbound_id", name="uq_panel_inbound_external"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    panel_id = Column(String(36), ForeignKey("panels.id", ondelete="CASCADE"), nullable=False)
+    external_inbound_id = Column(String(64), nullable=False)
+    protocol = Column(String(32), nullable=True)
+    port = Column(Integer, nullable=True)
+    remark = Column(String, nullable=True)
+    listen = Column(String, nullable=True)
+    enabled = Column(Integer, nullable=False, default=1, server_default="1")
+    show_in_app = Column(Integer, nullable=False, default=1, server_default="1")
+    stream_settings = Column(JSON, nullable=True)
+    settings = Column(JSON, nullable=True)
+    last_sync_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class InboundGroup(Base, TimestampMixin):
+    __tablename__ = "inbound_groups"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(32), nullable=False, unique=True)
+    title = Column(String(64), nullable=False)
+    visible = Column(Integer, nullable=False, default=1, server_default="1")
+    sort = Column(Integer, nullable=False, default=100, server_default="100")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class InboundGroupMember(Base, TimestampMixin):
+    __tablename__ = "inbound_group_members"
+    __table_args__ = (
+        UniqueConstraint("group_id", "panel_inbound_id", name="uq_group_member"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("inbound_groups.id", ondelete="CASCADE"), nullable=False)
+    panel_inbound_id = Column(Integer, ForeignKey("panel_inbounds.id", ondelete="CASCADE"), nullable=False)
+    label = Column(String(120), nullable=True)
+    priority = Column(Integer, nullable=False, default=100, server_default="100")
+    is_active = Column(Integer, nullable=False, default=1, server_default="1")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class UserConnection(Base, TimestampMixin):
+    __tablename__ = "user_connections"
+    __table_args__ = (
+        UniqueConstraint("user_id", "group_id", name="uq_user_group_connection"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    group_id = Column(Integer, ForeignKey("inbound_groups.id", ondelete="CASCADE"), nullable=False)
+    selected_member_id = Column(Integer, ForeignKey("inbound_group_members.id", ondelete="SET NULL"), nullable=True)
+    selection_strategy = Column(String(32), nullable=False, default="manual", server_default="manual")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 

@@ -1032,6 +1032,15 @@
             right: 0.48rem;
             z-index: 1;
         }
+        .work-inbound-badges.work-inbound-badges-detail {
+            position: static;
+            top: auto;
+            right: auto;
+            z-index: auto;
+            justify-content: flex-start;
+            margin-top: 0.2rem;
+            gap: 0.4rem;
+        }
         .work-inbound-pill {
             width: 1.22rem;
             height: 1.22rem;
@@ -1045,6 +1054,16 @@
             line-height: 1;
             color: #e7f1ff;
             background: rgba(28, 41, 68, 0.86);
+        }
+        .work-inbound-pill.text {
+            width: auto;
+            height: auto;
+            min-height: 1.32rem;
+            border-radius: 8px;
+            padding: 0.14rem 0.48rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
         }
         .work-inbound-pill.panel-on {
             border-color: rgba(107, 233, 166, 0.58);
@@ -1086,6 +1105,35 @@
         .work-inbound-detail-actions .work-inbound-toggle-btn {
             width: 100%;
             text-align: center;
+        }
+        .work-inbound-detail-section-title {
+            margin-top: 0.8rem;
+            margin-bottom: 0.12rem;
+            font-size: 0.92rem;
+        }
+        .work-inbound-client-row {
+            display: grid;
+            gap: 0.18rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 0.52rem 0.58rem;
+            background: rgba(16, 25, 46, 0.84);
+        }
+        .work-inbound-client-title {
+            color: #eef6ff;
+            font-size: 0.84rem;
+            line-height: 1.3;
+            font-weight: 700;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .work-inbound-client-meta {
+            color: rgba(219, 234, 255, 0.72);
+            font-size: 0.78rem;
+            line-height: 1.3;
+            word-break: break-word;
         }
         .cloud-page {
             display: grid;
@@ -1728,6 +1776,7 @@
                                     <div class="work-menu-buttons">
                                         <button type="button" class="work-menu-btn" data-work-nav="work-inbounds-page">Подключения</button>
                                         <button type="button" class="work-menu-btn" data-work-nav="work-system-settings-page">Системные настройки</button>
+                                        <button type="button" class="work-menu-btn" data-work-nav="work-panels-page">Панели</button>
                                     </div>
                                 </section>
                             </div>
@@ -1818,13 +1867,22 @@
                                 <div id="work-inbound-detail-title" class="work-page-title">Подключение</div>
                             </div>
                             <div id="work-inbound-detail-meta" class="work-inbound-meta">—</div>
-                            <div id="work-inbound-detail-badges" class="work-inbound-badges"></div>
+                            <div id="work-inbound-detail-badges" class="work-inbound-badges work-inbound-badges-detail"></div>
                             <div class="work-inbound-detail-actions">
                                 <button id="work-inbound-detail-toggle-btn" type="button" class="work-inbound-toggle-btn">
                                     Скрыть у пользователей
                                 </button>
                             </div>
                             <div id="work-inbound-detail-note" class="work-note">Выбери подключение в списке.</div>
+                            <div class="work-page-title work-inbound-detail-section-title">Клиенты подключения</div>
+                            <div class="work-bind">
+                                <input id="work-inbound-detail-new-client-label" type="text" maxlength="64" placeholder="Название клиента">
+                                <button id="work-inbound-detail-add-client-btn" type="button" class="work-btn">Добавить клиента</button>
+                                <div id="work-inbound-detail-add-status" class="work-note hidden"></div>
+                            </div>
+                            <div id="work-inbound-detail-clients-list" class="work-links-list">
+                                <div class="work-empty">Клиенты еще не загружены.</div>
+                            </div>
                         </section>
 
                         <section id="work-system-settings-page" class="work-page hidden">
@@ -1855,6 +1913,31 @@
 
                                 <button id="work-settings-save-btn" class="work-btn">Сохранить настройки</button>
                                 <div id="work-settings-save-status" class="work-note hidden"></div>
+                            </div>
+                        </section>
+
+                        <section id="work-panels-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
+                                <div class="work-page-title">Панели</div>
+                            </div>
+                            <div class="work-note">Добавь панель, проверь подключение и активируй.</div>
+                            <div class="work-bind">
+                                <input id="work-panel-name" type="text" placeholder="Название (DE-1 Frankfurt)">
+                                <select id="work-panel-provider">
+                                    <option value="3xui">3xui</option>
+                                    <option value="marzban">marzban</option>
+                                </select>
+                                <input id="work-panel-base-url" type="url" placeholder="https://host:port/panel/api">
+                                <input id="work-panel-region" type="text" maxlength="16" placeholder="region (de, ru)">
+                                <input id="work-panel-username" type="text" placeholder="login">
+                                <input id="work-panel-password" type="password" placeholder="password">
+                                <button id="work-panel-test-btn" class="work-btn" type="button">Проверить подключение</button>
+                                <button id="work-panel-save-btn" class="work-btn" type="button">Сохранить панель</button>
+                                <div id="work-panel-status" class="work-note hidden"></div>
+                            </div>
+                            <div id="work-panels-list" class="work-links-list">
+                                <div class="work-empty">Панели еще не загружены.</div>
                             </div>
                         </section>
 
@@ -2127,6 +2210,7 @@
         const vpnConfigUrl = `${window.location.origin}/api/vpn/config`;
         const vpnHttpUrl = `${window.location.origin}/api/vpn/http`;
         const vpnMixedUrl = `${window.location.origin}/api/vpn/mixed`;
+        const vpnSelectServerUrl = `${window.location.origin}/api/vpn/select-server`;
         const adminUsersUrl = `${window.location.origin}/api/admin/users`;
         const adminInboundsUrl = `${window.location.origin}/api/admin/inbounds`;
         const adminSyncInboundsUrl = `${window.location.origin}/api/admin/sync-inbounds`;
@@ -2136,6 +2220,7 @@
         const adminCancelPendingBindingUrl = (pendingId) =>
             `${window.location.origin}/api/admin/pending-bindings/${pendingId}/cancel`;
         const adminInboundVisibilityUrl = (panelInboundId) => `${window.location.origin}/api/admin/inbounds/${panelInboundId}/visibility`;
+        const adminInboundClientsUrl = (panelInboundId) => `${window.location.origin}/api/admin/inbounds/${panelInboundId}/clients`;
         const adminUserBindingsUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/bindings`;
         const adminUserOverviewUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/overview`;
         const adminUserSubscriptionUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/subscription`;
@@ -2144,6 +2229,10 @@
         const adminUserSubscriptionByTelegramUrl = `${window.location.origin}/api/admin/users/by-telegram/subscription`;
         const adminSettingsUrl = `${window.location.origin}/api/admin/settings`;
         const adminSettingUrl = (settingKey) => `${adminSettingsUrl}/${encodeURIComponent(settingKey)}`;
+        const adminPanelsUrl = `${window.location.origin}/api/admin/panels`;
+        const adminPanelsTestUrl = `${window.location.origin}/api/admin/panels/test-connection`;
+        const adminPanelUpdateUrl = (panelId) => `${adminPanelsUrl}/${encodeURIComponent(panelId)}`;
+        const adminPanelActionUrl = (panelId, action) => `${adminPanelsUrl}/${encodeURIComponent(panelId)}/${action}`;
         const cloudListUrl = `${window.location.origin}/api/cloud/list`;
         const cloudMkdirUrl = `${window.location.origin}/api/cloud/mkdir`;
         const cloudUploadUrl = `${window.location.origin}/api/cloud/upload`;
@@ -2188,12 +2277,26 @@
         const workSettingCloudSendTimeoutEl = document.getElementById("work-setting-cloud-send-timeout");
         const workSettingCloudSendRetriesEl = document.getElementById("work-setting-cloud-send-retries");
         const workSettingCloudSendRetryDelayEl = document.getElementById("work-setting-cloud-send-retry-delay");
+        const workPanelsListEl = document.getElementById("work-panels-list");
+        const workPanelNameEl = document.getElementById("work-panel-name");
+        const workPanelProviderEl = document.getElementById("work-panel-provider");
+        const workPanelBaseUrlEl = document.getElementById("work-panel-base-url");
+        const workPanelRegionEl = document.getElementById("work-panel-region");
+        const workPanelUsernameEl = document.getElementById("work-panel-username");
+        const workPanelPasswordEl = document.getElementById("work-panel-password");
+        const workPanelTestBtnEl = document.getElementById("work-panel-test-btn");
+        const workPanelSaveBtnEl = document.getElementById("work-panel-save-btn");
+        const workPanelStatusEl = document.getElementById("work-panel-status");
         const workInboundsListEl = document.getElementById("work-inbounds-list");
         const workInboundDetailTitleEl = document.getElementById("work-inbound-detail-title");
         const workInboundDetailMetaEl = document.getElementById("work-inbound-detail-meta");
         const workInboundDetailBadgesEl = document.getElementById("work-inbound-detail-badges");
         const workInboundDetailToggleBtnEl = document.getElementById("work-inbound-detail-toggle-btn");
         const workInboundDetailNoteEl = document.getElementById("work-inbound-detail-note");
+        const workInboundDetailClientsListEl = document.getElementById("work-inbound-detail-clients-list");
+        const workInboundDetailNewClientLabelEl = document.getElementById("work-inbound-detail-new-client-label");
+        const workInboundDetailAddClientBtnEl = document.getElementById("work-inbound-detail-add-client-btn");
+        const workInboundDetailAddStatusEl = document.getElementById("work-inbound-detail-add-status");
         const workClientCardsEl = document.getElementById("work-client-cards");
         const workClientPageTitleEl = document.getElementById("work-client-page-title");
         const workClientNameEl = document.getElementById("work-client-name");
@@ -2266,6 +2369,7 @@
             pendingBindings: [],
             pendingOverview: null,
             settings: {},
+            panels: [],
             selectedUserId: null,
             overview: null,
             selectedInboundPanelId: null,
@@ -2341,6 +2445,7 @@
             ["work-inbounds-page", "Подключения"],
             ["work-inbound-detail-page", "Подключение"],
             ["work-system-settings-page", "Системные настройки"],
+            ["work-panels-page", "Панели"],
             ["work-client-page", "Клиент"],
             ["work-client-connections-page", "Подключения"],
             ["work-client-subscription-page", "Подписка"],
@@ -2572,6 +2677,9 @@
             if (pageId === "work-inbounds-page") {
                 return "sync-work-inbounds";
             }
+            if (pageId === "work-panels-page") {
+                return "refresh-work-panels";
+            }
             if (pageId === "work-inbound-detail-page") {
                 return "";
             }
@@ -2648,6 +2756,8 @@
                     renderWorkInboundsManager();
                     renderWorkInboundSelectOptions();
                     renderWorkPendingInboundSelectOptions();
+                } else if (action === "refresh-work-panels") {
+                    await loadWorkPanels();
                 } else if (action === "refresh-work-client") {
                     const tasks = [
                         loadSelectedUserBindings(),
@@ -2935,14 +3045,6 @@
 
         function handleTelegramBack() {
             const activeScreenId = getActiveScreenId();
-            if (
-                activeScreenId === "screen-work"
-                && workInboundOverlayEl
-                && !workInboundOverlayEl.classList.contains("hidden")
-            ) {
-                closeWorkInboundOverlay();
-                return;
-            }
             if (
                 activeScreenId === "screen-cloud"
                 && cloudPreviewOverlayEl
@@ -3372,6 +3474,19 @@
                     item.appendChild(meta);
                 }
 
+                const serverMeta = document.createElement("div");
+                serverMeta.className = "connection-item-meta";
+                const panelName = String(row?.panel_name || "").trim();
+                const region = String(row?.region || "").trim();
+                const memberId = row?.member_id;
+                const selectedMark = row?.selected ? " • selected" : "";
+                const serverParts = [];
+                if (panelName) serverParts.push(panelName);
+                if (region) serverParts.push(region.toUpperCase());
+                if (memberId !== null && memberId !== undefined) serverParts.push(`server#${memberId}`);
+                serverMeta.textContent = serverParts.length ? `Сервер: ${serverParts.join(" • ")}${selectedMark}` : `Сервер: —${selectedMark}`;
+                item.appendChild(serverMeta);
+
                 const copyRow = document.createElement("div");
                 copyRow.className = "connection-copy-row";
                 const copies = connectionCopyItems(protocol, row);
@@ -3402,6 +3517,30 @@
                     });
                     copyRow.appendChild(copyBtn);
                 });
+
+                if (row?.member_id !== null && row?.member_id !== undefined && !row?.selected) {
+                    const selectBtn = document.createElement("button");
+                    selectBtn.type = "button";
+                    selectBtn.className = "connection-copy-btn";
+                    selectBtn.textContent = "Выбрать сервер";
+                    selectBtn.addEventListener("click", async () => {
+                        const original = selectBtn.textContent;
+                        try {
+                            const groupKey = protocol === "vless" ? "vless" : "socks5";
+                            await postJson(vpnSelectServerUrl, { group_key: groupKey, member_id: Number(row.member_id) });
+                            const runtime = await loadRuntimeData();
+                            renderDashboard(runtime);
+                            renderConnectionsDetail(protocol);
+                            selectBtn.textContent = "Выбрано";
+                        } catch (_err) {
+                            selectBtn.textContent = "Ошибка";
+                        }
+                        setTimeout(() => {
+                            selectBtn.textContent = original;
+                        }, 1200);
+                    });
+                    copyRow.appendChild(selectBtn);
+                }
 
                 item.appendChild(itemTitle);
                 item.appendChild(copyRow);
@@ -4170,7 +4309,10 @@
         function inboundOptionLabel(inbound) {
             const panelState = inbound?.enable ? "panel:on" : "panel:off";
             const appState = inbound?.show_in_app ? "app:visible" : "app:hidden";
-            return `${inbound.panel_inbound_id} • ${inbound.protocol || "unknown"} • ${inbound.remark || "no-remark"} • ${panelState} • ${appState}`;
+            const panelName = String(inbound?.panel_name || "").trim();
+            const region = String(inbound?.region || "").trim();
+            const panelPrefix = panelName ? `${panelName}${region ? ` (${region})` : ""} • ` : "";
+            return `${panelPrefix}${inbound.panel_inbound_id} • ${inbound.protocol || "unknown"} • ${inbound.remark || "no-remark"} • ${panelState} • ${appState}`;
         }
 
         function renderWorkInboundSelectOptions() {
@@ -4463,85 +4605,198 @@
             });
         }
 
-        function createWorkInboundStatusBadge(kind, enabled) {
+        function createWorkInboundStatusBadge(kind, enabled, mode = "icon") {
             const isOn = Boolean(enabled);
             const badge = document.createElement("span");
+            const isTextMode = mode === "text";
             if (kind === "panel") {
-                badge.className = `work-inbound-pill ${isOn ? "panel-on" : "panel-off"}`;
-                badge.textContent = "🖥️";
+                badge.className = `work-inbound-pill ${isOn ? "panel-on" : "panel-off"}${isTextMode ? " text" : ""}`;
+                badge.textContent = isTextMode ? (isOn ? "Панель: on" : "Панель: off") : "🖥️";
                 badge.title = isOn ? "Панель: on" : "Панель: off";
             } else {
-                badge.className = `work-inbound-pill ${isOn ? "visibility-on" : "visibility-off"}`;
-                badge.textContent = "👁️";
+                badge.className = `work-inbound-pill ${isOn ? "visibility-on" : "visibility-off"}${isTextMode ? " text" : ""}`;
+                badge.textContent = isTextMode ? (isOn ? "В приложении: видно" : "В приложении: скрыто") : "👁️";
                 badge.title = isOn ? "В приложении: видно" : "В приложении: скрыто";
             }
             badge.setAttribute("aria-label", badge.title);
             return badge;
         }
 
-        function ensureWorkInboundOverlayMounted() {
-            if (!workInboundOverlayEl) return;
-            if (workInboundOverlayEl.parentElement !== document.body) {
-                document.body.appendChild(workInboundOverlayEl);
+        function setInboundDetailAddStatus(message, tone = "") {
+            if (!workInboundDetailAddStatusEl) return;
+            workInboundDetailAddStatusEl.classList.remove("success", "error");
+            if (!message) {
+                workInboundDetailAddStatusEl.textContent = "";
+                workInboundDetailAddStatusEl.classList.add("hidden");
+                return;
             }
+            if (tone === "success" || tone === "error") {
+                workInboundDetailAddStatusEl.classList.add(tone);
+            }
+            workInboundDetailAddStatusEl.textContent = message;
+            workInboundDetailAddStatusEl.classList.remove("hidden");
         }
 
-        function closeWorkInboundOverlay() {
-            if (!workInboundOverlayEl) return;
-            workState.expandedInboundPanelId = null;
-            workInboundOverlayEl.classList.add("hidden");
-            workInboundOverlayEl.setAttribute("aria-hidden", "true");
-            renderWorkInboundsManager();
+        function renderWorkInboundDetailClients(clients, emptyMessage = "Клиенты не найдены.") {
+            if (!workInboundDetailClientsListEl) return;
+            workInboundDetailClientsListEl.innerHTML = "";
+
+            const rows = Array.isArray(clients) ? clients : [];
+            if (!rows.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = emptyMessage;
+                workInboundDetailClientsListEl.appendChild(empty);
+                return;
+            }
+
+            rows.forEach((client, index) => {
+                const item = document.createElement("div");
+                item.className = "work-inbound-client-row";
+
+                const title = document.createElement("div");
+                title.className = "work-inbound-client-title";
+                const clientLabel = String(client?.label || "").trim() || String(client?.identifier || "").trim() || `Client ${index + 1}`;
+                title.textContent = `${index + 1}. ${clientLabel}`;
+                title.title = clientLabel;
+
+                const meta = document.createElement("div");
+                meta.className = "work-inbound-client-meta";
+                const parts = [];
+                if (client?.identifier) {
+                    parts.push(`id: ${client.identifier}`);
+                }
+                if (client?.sub_id) {
+                    parts.push(`sub: ${client.sub_id}`);
+                }
+                meta.textContent = parts.length ? parts.join(" • ") : "Без доп. данных";
+
+                item.appendChild(title);
+                item.appendChild(meta);
+                workInboundDetailClientsListEl.appendChild(item);
+            });
         }
 
-        function renderWorkInboundOverlay(panelIdRaw) {
+        async function loadWorkInboundDetailClients(panelIdRaw) {
             const panelId = Number(panelIdRaw || 0);
             if (!panelId) {
-                closeWorkInboundOverlay();
+                renderWorkInboundDetailClients([], "Выбери подключение в списке.");
+                return [];
+            }
+
+            const resp = await fetchJson(adminInboundClientsUrl(panelId), false);
+            const clients = Array.isArray(resp?.clients) ? resp.clients : [];
+            renderWorkInboundDetailClients(clients);
+            return clients;
+        }
+
+        function clearWorkInboundDetail(note = "Выбери подключение в списке.") {
+            workState.selectedInboundPanelId = null;
+
+            if (workInboundDetailTitleEl) {
+                workInboundDetailTitleEl.textContent = "Подключение";
+                workInboundDetailTitleEl.title = "Подключение";
+            }
+            if (workInboundDetailMetaEl) {
+                workInboundDetailMetaEl.textContent = "—";
+            }
+            if (workInboundDetailBadgesEl) {
+                workInboundDetailBadgesEl.innerHTML = "";
+            }
+            if (workInboundDetailToggleBtnEl) {
+                workInboundDetailToggleBtnEl.textContent = "Скрыть у пользователей";
+                workInboundDetailToggleBtnEl.disabled = true;
+                workInboundDetailToggleBtnEl.removeAttribute("data-panel-inbound-id");
+                workInboundDetailToggleBtnEl.removeAttribute("data-next-visible");
+            }
+            if (workInboundDetailNoteEl) {
+                workInboundDetailNoteEl.textContent = note;
+            }
+            if (workInboundDetailNewClientLabelEl) {
+                workInboundDetailNewClientLabelEl.value = "";
+            }
+            setInboundDetailAddStatus("");
+            renderWorkInboundDetailClients([], "Клиенты еще не загружены.");
+        }
+
+        function renderWorkInboundDetail(panelIdRaw) {
+            const panelId = Number(panelIdRaw || 0);
+            if (!panelId) {
+                clearWorkInboundDetail();
                 return;
             }
 
             const inbound = workState.inbounds.find((row) => String(row?.panel_inbound_id) === String(panelId));
             if (!inbound) {
-                closeWorkInboundOverlay();
+                clearWorkInboundDetail(`Подключение #${panelId} не найдено.`);
                 return;
             }
-            workState.expandedInboundPanelId = panelId;
+            workState.selectedInboundPanelId = panelId;
 
             const panelEnabled = Boolean(inbound?.enable);
             const visibleForUsers = Boolean(inbound?.show_in_app);
             const titleText = String(inbound?.remark || `Inbound ${panelId}`).trim() || `Inbound ${panelId}`;
             const protocol = String(inbound?.protocol || "unknown").toLowerCase();
 
-            if (workInboundOverlayTitleEl) {
-                workInboundOverlayTitleEl.textContent = titleText;
-                workInboundOverlayTitleEl.title = titleText;
+            if (workInboundDetailTitleEl) {
+                workInboundDetailTitleEl.textContent = titleText;
+                workInboundDetailTitleEl.title = titleText;
             }
-            if (workInboundOverlayMetaEl) {
-                workInboundOverlayMetaEl.textContent = `#${panelId} • ${protocol} • порт: ${inbound?.port ?? "—"}`;
+            if (workInboundDetailMetaEl) {
+                workInboundDetailMetaEl.textContent = `#${panelId} • ${protocol} • порт: ${inbound?.port ?? "—"}`;
             }
-            if (workInboundOverlayBadgesEl) {
-                workInboundOverlayBadgesEl.innerHTML = "";
-                workInboundOverlayBadgesEl.appendChild(createWorkInboundStatusBadge("panel", panelEnabled));
-                workInboundOverlayBadgesEl.appendChild(createWorkInboundStatusBadge("visibility", visibleForUsers));
+            if (workInboundDetailBadgesEl) {
+                workInboundDetailBadgesEl.innerHTML = "";
+                workInboundDetailBadgesEl.appendChild(createWorkInboundStatusBadge("panel", panelEnabled, "text"));
+                workInboundDetailBadgesEl.appendChild(createWorkInboundStatusBadge("visibility", visibleForUsers, "text"));
             }
-            if (workInboundOverlayToggleBtnEl) {
-                workInboundOverlayToggleBtnEl.textContent = visibleForUsers
+            if (workInboundDetailToggleBtnEl) {
+                workInboundDetailToggleBtnEl.textContent = visibleForUsers
                     ? "Скрыть у пользователей"
                     : "Показывать пользователям";
-                workInboundOverlayToggleBtnEl.dataset.panelInboundId = String(panelId);
-                workInboundOverlayToggleBtnEl.dataset.nextVisible = visibleForUsers ? "false" : "true";
+                workInboundDetailToggleBtnEl.dataset.panelInboundId = String(panelId);
+                workInboundDetailToggleBtnEl.dataset.nextVisible = visibleForUsers ? "false" : "true";
+                workInboundDetailToggleBtnEl.disabled = false;
             }
+            if (workInboundDetailNoteEl) {
+                workInboundDetailNoteEl.textContent = "Управляй видимостью и клиентами этого подключения.";
+            }
+            setInboundDetailAddStatus("");
         }
 
-        function openWorkInboundOverlay(panelIdRaw) {
-            if (!workInboundOverlayEl) return;
-            ensureWorkInboundOverlayMounted();
-            renderWorkInboundOverlay(panelIdRaw);
-            if (!workState.expandedInboundPanelId) return;
-            workInboundOverlayEl.classList.remove("hidden");
-            workInboundOverlayEl.setAttribute("aria-hidden", "false");
-            renderWorkInboundsManager();
+        async function openWorkInboundDetail(panelIdRaw) {
+            const panelId = Number(panelIdRaw || 0);
+            if (!panelId) return;
+            renderWorkInboundDetail(panelId);
+            if (!workState.selectedInboundPanelId) return;
+            switchWorkPage("work-inbound-detail-page");
+            renderWorkInboundDetailClients([], "Загрузка клиентов...");
+            await loadWorkInboundDetailClients(panelId);
+        }
+
+        async function createWorkInboundClient() {
+            const panelId = Number(workState.selectedInboundPanelId || 0);
+            if (!panelId) {
+                throw new Error("Сначала открой подключение");
+            }
+            const label = String(workInboundDetailNewClientLabelEl?.value || "").trim();
+            if (!label) {
+                throw new Error("Введи название клиента");
+            }
+
+            setInboundDetailAddStatus("Создаем клиента...");
+            const result = await postJson(adminInboundClientsUrl(panelId), { label });
+            if (Array.isArray(result?.clients)) {
+                renderWorkInboundDetailClients(result.clients);
+            } else {
+                await loadWorkInboundDetailClients(panelId);
+            }
+            if (workInboundDetailNewClientLabelEl) {
+                workInboundDetailNewClientLabelEl.value = "";
+            }
+            const warning = String(result?.warning || "").trim();
+            setInboundDetailAddStatus(warning ? `Клиент добавлен. ${warning}` : "Клиент добавлен.", "success");
+            return result;
         }
 
         async function toggleWorkInboundVisibility(panelIdRaw, nextVisibleRaw) {
@@ -4567,8 +4822,8 @@
                 renderWorkInboundsManager();
                 renderWorkInboundSelectOptions();
                 renderWorkPendingInboundSelectOptions();
-                if (workState.expandedInboundPanelId) {
-                    renderWorkInboundOverlay(workState.expandedInboundPanelId);
+                if (String(workState.selectedInboundPanelId) === String(panelId)) {
+                    renderWorkInboundDetail(panelId);
                 }
                 return result;
             });
@@ -4593,8 +4848,7 @@
                 const visibleForUsers = Boolean(inbound?.show_in_app);
 
                 const card = document.createElement("div");
-                const isExpanded = String(workState.expandedInboundPanelId) === String(panelId);
-                card.className = `work-inbound-card interactive${isExpanded ? " active" : ""}`;
+                card.className = "work-inbound-card interactive";
                 card.tabIndex = 0;
                 card.setAttribute("role", "button");
                 card.setAttribute("aria-label", `Развернуть подключение ${panelId}`);
@@ -4627,14 +4881,17 @@
                 const protocol = String(inbound?.protocol || "unknown").toLowerCase();
                 meta.textContent = `#${panelId} • ${protocol} • порт: ${inbound?.port ?? "—"}`;
 
-                const openOverlay = () => {
-                    openWorkInboundOverlay(panelId);
+                const openDetail = () => {
+                    openWorkInboundDetail(panelId).catch((err) => {
+                        console.error("open inbound detail error:", err);
+                        setInboundDetailAddStatus(err?.message || "Не удалось открыть подключение", "error");
+                    });
                 };
-                card.addEventListener("click", openOverlay);
+                card.addEventListener("click", openDetail);
                 card.addEventListener("keydown", (event) => {
                     if (event.key !== "Enter" && event.key !== " ") return;
                     event.preventDefault();
-                    openOverlay();
+                    openDetail();
                 });
 
                 card.appendChild(head);
@@ -4761,6 +5018,163 @@
             await loadWorkSystemSettings();
             applyCloudVisibility({ features: { cloud_enabled: cloudVisible } });
             return payloads;
+        }
+
+        function setWorkPanelStatus(message, tone = "") {
+            if (!workPanelStatusEl) return;
+            workPanelStatusEl.classList.remove("success", "error");
+            if (!message) {
+                workPanelStatusEl.textContent = "";
+                workPanelStatusEl.classList.add("hidden");
+                return;
+            }
+            if (tone === "success" || tone === "error") {
+                workPanelStatusEl.classList.add(tone);
+            }
+            workPanelStatusEl.textContent = message;
+            workPanelStatusEl.classList.remove("hidden");
+        }
+
+        function collectWorkPanelPayload() {
+            return {
+                name: String(workPanelNameEl?.value || "").trim(),
+                provider: String(workPanelProviderEl?.value || "3xui").trim(),
+                base_url: String(workPanelBaseUrlEl?.value || "").trim(),
+                region: String(workPanelRegionEl?.value || "").trim() || null,
+                auth_type: "login_password",
+                username: String(workPanelUsernameEl?.value || "").trim(),
+                password: String(workPanelPasswordEl?.value || "").trim(),
+            };
+        }
+
+        async function toggleWorkPanelActive(panel) {
+            const nextActive = !Boolean(panel?.is_active);
+            await postJson(adminPanelActionUrl(panel.id, "activate"), { is_active: nextActive });
+            await loadWorkPanels();
+        }
+
+        async function setWorkPanelDefault(panel) {
+            await postJson(adminPanelActionUrl(panel.id, "set-default"), {});
+            await loadWorkPanels();
+        }
+
+        async function syncWorkPanel(panel) {
+            await postJson(adminPanelActionUrl(panel.id, "sync-inbounds"), {});
+            await loadWorkPanels();
+        }
+
+        function renderWorkPanelsList(panels) {
+            if (!workPanelsListEl) return;
+            workPanelsListEl.innerHTML = "";
+            const rows = Array.isArray(panels) ? panels : [];
+            if (!rows.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Панели еще не добавлены.";
+                workPanelsListEl.appendChild(empty);
+                return;
+            }
+
+            rows.forEach((panel) => {
+                const card = document.createElement("div");
+                card.className = "work-inbound-card";
+
+                const head = document.createElement("div");
+                head.className = "work-inbound-head";
+
+                const title = document.createElement("div");
+                title.className = "work-inbound-title";
+                const region = String(panel?.region || "").trim();
+                title.textContent = `${panel?.name || "Panel"}${region ? ` (${region})` : ""}`;
+
+                const badges = document.createElement("div");
+                badges.className = "work-inbound-badges";
+                const health = String(panel?.health_status || "unknown").toLowerCase();
+                const healthBadge = document.createElement("span");
+                healthBadge.className = `work-inbound-pill ${health === "green" ? "visibility-on" : health === "yellow" ? "panel-off" : "visibility-off"} text`;
+                healthBadge.textContent = `health: ${health}`;
+                badges.appendChild(healthBadge);
+
+                if (panel?.is_default) {
+                    const defaultBadge = document.createElement("span");
+                    defaultBadge.className = "work-inbound-pill panel-on text";
+                    defaultBadge.textContent = "default";
+                    badges.appendChild(defaultBadge);
+                }
+
+                head.appendChild(title);
+                head.appendChild(badges);
+                card.appendChild(head);
+
+                const meta = document.createElement("div");
+                meta.className = "work-inbound-meta";
+                meta.textContent = `${panel?.provider || "provider"} • ${panel?.base_url || "—"}`;
+                card.appendChild(meta);
+
+                const actions = document.createElement("div");
+                actions.className = "connection-copy-row";
+                const btnActive = document.createElement("button");
+                btnActive.type = "button";
+                btnActive.className = "connection-copy-btn";
+                btnActive.textContent = panel?.is_active ? "Деактивировать" : "Активировать";
+                btnActive.addEventListener("click", async () => {
+                    await toggleWorkPanelActive(panel);
+                });
+
+                const btnDefault = document.createElement("button");
+                btnDefault.type = "button";
+                btnDefault.className = "connection-copy-btn";
+                btnDefault.textContent = panel?.is_default ? "Default" : "Сделать default";
+                btnDefault.disabled = Boolean(panel?.is_default);
+                btnDefault.addEventListener("click", async () => {
+                    await setWorkPanelDefault(panel);
+                });
+
+                const btnSync = document.createElement("button");
+                btnSync.type = "button";
+                btnSync.className = "connection-copy-btn";
+                btnSync.textContent = "Sync";
+                btnSync.addEventListener("click", async () => {
+                    await syncWorkPanel(panel);
+                });
+
+                actions.appendChild(btnActive);
+                actions.appendChild(btnDefault);
+                actions.appendChild(btnSync);
+                card.appendChild(actions);
+
+                workPanelsListEl.appendChild(card);
+            });
+        }
+
+        async function loadWorkPanels() {
+            const resp = await fetchJson(adminPanelsUrl, false);
+            const rows = Array.isArray(resp?.panels) ? resp.panels : [];
+            workState.panels = rows;
+            renderWorkPanelsList(rows);
+            return rows;
+        }
+
+        async function testWorkPanelConnection() {
+            const payload = collectWorkPanelPayload();
+            if (!payload.base_url) {
+                throw new Error("Укажи URL панели");
+            }
+            const result = await postJson(adminPanelsTestUrl, payload);
+            return result;
+        }
+
+        async function saveWorkPanel() {
+            const payload = collectWorkPanelPayload();
+            if (!payload.name) {
+                throw new Error("Укажи имя панели");
+            }
+            if (!payload.base_url) {
+                throw new Error("Укажи URL панели");
+            }
+            const result = await postJson(adminPanelsUrl, payload);
+            await loadWorkPanels();
+            return result;
         }
 
         function renderExistingBindings(bindings) {
@@ -5111,7 +5525,7 @@
                 fillSelect(workClientSelectEl, [], () => "", () => "", "Выбери клиента из inbound");
                 return;
             }
-            const resp = await fetchJson(`${window.location.origin}/api/admin/inbounds/${panelInboundId}/clients`, false);
+            const resp = await fetchJson(adminInboundClientsUrl(panelInboundId), false);
             workState.clients = Array.isArray(resp?.clients) ? resp.clients : [];
             fillSelect(
                 workClientSelectEl,
@@ -5160,7 +5574,7 @@
                 fillSelect(workPendingClientSelectEl, [], () => "", () => "", "Select client from inbound");
                 return;
             }
-            const resp = await fetchJson(`${window.location.origin}/api/admin/inbounds/${panelInboundId}/clients`, false);
+            const resp = await fetchJson(adminInboundClientsUrl(panelInboundId), false);
             workState.pendingClients = Array.isArray(resp?.clients) ? resp.clients : [];
             fillSelect(
                 workPendingClientSelectEl,
@@ -5173,8 +5587,13 @@
 
         function switchWorkPage(target) {
             const next = target || "work-menu-page";
-            if (next !== "work-inbounds-page") {
-                closeWorkInboundOverlay();
+            const current = getActiveWorkPageId();
+            if (current === "work-inbound-detail-page" && next !== "work-inbound-detail-page") {
+                workState.selectedInboundPanelId = null;
+                setInboundDetailAddStatus("");
+            }
+            if (next === "work-inbound-detail-page" && !workState.selectedInboundPanelId) {
+                clearWorkInboundDetail();
             }
             workPages.forEach((page) => page.classList.toggle("hidden", page.id !== next));
             const hideWorkHeaders = next !== "work-menu-page";
@@ -5187,6 +5606,12 @@
                 loadWorkSystemSettings().catch((err) => {
                     console.error("load system settings error:", err);
                     setWorkSettingsStatus(err?.message || "Не удалось загрузить настройки", "error");
+                });
+            }
+            if (next === "work-panels-page") {
+                loadWorkPanels().catch((err) => {
+                    console.error("load panels error:", err);
+                    setWorkPanelStatus(err?.message || "Не удалось загрузить панели", "error");
                 });
             }
         }
@@ -5213,7 +5638,8 @@
                 closeCloudPreview();
             }
             if (target !== "screen-work") {
-                closeWorkInboundOverlay();
+                workState.selectedInboundPanelId = null;
+                setInboundDetailAddStatus("");
             }
             if (target === "screen-cloud") {
                 if (previousScreen !== "screen-cloud") {
@@ -5471,21 +5897,25 @@
         cloudPreviewCloseBtnEl?.addEventListener("click", () => {
             closeCloudPreview();
         });
-        workInboundOverlayCloseBtnEl?.addEventListener("click", () => {
-            closeWorkInboundOverlay();
-        });
-        workInboundOverlayToggleBtnEl?.addEventListener("click", async () => {
-            const panelId = workInboundOverlayToggleBtnEl.dataset.panelInboundId;
-            const nextVisible = workInboundOverlayToggleBtnEl.dataset.nextVisible;
+        workInboundDetailToggleBtnEl?.addEventListener("click", async () => {
+            const panelId = workInboundDetailToggleBtnEl.dataset.panelInboundId;
+            const nextVisible = workInboundDetailToggleBtnEl.dataset.nextVisible;
             await toggleWorkInboundVisibility(panelId, nextVisible);
         });
-        workInboundOverlayCardEl?.addEventListener("click", (event) => {
-            event.stopPropagation();
+        workInboundDetailAddClientBtnEl?.addEventListener("click", async () => {
+            await runWorkAction("Add Inbound Client", async () => {
+                try {
+                    await createWorkInboundClient();
+                } catch (err) {
+                    setInboundDetailAddStatus(err?.message || "Не удалось добавить клиента", "error");
+                    throw err;
+                }
+            });
         });
-        workInboundOverlayEl?.addEventListener("click", (event) => {
-            if (event.target === workInboundOverlayEl) {
-                closeWorkInboundOverlay();
-            }
+        workInboundDetailNewClientLabelEl?.addEventListener("keydown", async (event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            workInboundDetailAddClientBtnEl?.click();
         });
         vlessGuideHideBtnEl?.addEventListener("click", () => {
             closeVlessGuide();
@@ -5515,8 +5945,8 @@
         });
         document.addEventListener("keydown", (event) => {
             if (event.key !== "Escape") return;
-            if (workInboundOverlayEl && !workInboundOverlayEl.classList.contains("hidden")) {
-                closeWorkInboundOverlay();
+            if (getActiveScreenId() === "screen-work" && getActiveWorkPageId() === "work-inbound-detail-page") {
+                switchWorkPage("work-inbounds-page");
                 return;
             }
             if (cloudPreviewOverlayEl && !cloudPreviewOverlayEl.classList.contains("hidden")) {
@@ -5562,6 +5992,29 @@
             } catch (err) {
                 console.error("save system settings error:", err);
                 setWorkSettingsStatus(err?.message || "Не удалось сохранить настройки", "error");
+            }
+        });
+
+        workPanelTestBtnEl?.addEventListener("click", async () => {
+            try {
+                setWorkPanelStatus("Проверяем подключение...");
+                const result = await testWorkPanelConnection();
+                const inboundsCount = Number(result?.result?.inbounds_count || 0);
+                setWorkPanelStatus(`Подключение успешно. inbound: ${inboundsCount}`, "success");
+            } catch (err) {
+                console.error("test panel connection error:", err);
+                setWorkPanelStatus(err?.message || "Не удалось проверить подключение", "error");
+            }
+        });
+
+        workPanelSaveBtnEl?.addEventListener("click", async () => {
+            try {
+                setWorkPanelStatus("Сохраняем панель...");
+                await saveWorkPanel();
+                setWorkPanelStatus("Панель сохранена", "success");
+            } catch (err) {
+                console.error("save panel error:", err);
+                setWorkPanelStatus(err?.message || "Не удалось сохранить панель", "error");
             }
         });
 
@@ -5794,5 +6247,3 @@
 </script>
 </body>
 </html>
-
-

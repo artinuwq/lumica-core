@@ -15,7 +15,7 @@ def build_keyboard():
 
 async def handle_start(message: types.Message) -> None:
     await message.answer(
-        "Добро пожаловать! Откройте mini app для управления сервисом.",
+        "Добро пожаловать в экосистему Lumica Services! \n Вы можете открыть Mini app по кнопке ниже.",
         reply_markup=build_keyboard(),
     )
 

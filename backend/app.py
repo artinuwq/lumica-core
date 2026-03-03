@@ -6,9 +6,11 @@ import os
 import secrets
 import socket
 import base64
+from types import SimpleNamespace
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse
 
 import psutil
@@ -32,11 +34,20 @@ from .models import (
     CloudFile,
     CloudNode,
     Inbound,
+    InboundGroup,
+    InboundGroupMember,
+    Panel,
+    PanelInbound,
+    PanelSecret,
     PendingBinding,
     Subscription,
     User,
+    UserConnection,
     VpnAccount,
 )
+from .panels import PanelRegistry, extract_clients_from_panel_inbound, protocol_to_group_key
+from .panels.registry import encrypt_payload
+from .panels.service import ensure_default_groups, sync_group_members_from_inbounds
 from .settings_manager import (
     CLOUD_VISIBILITY_KEY,
     SettingsManager,
@@ -101,6 +112,14 @@ def _ensure_schema_compatibility() -> None:
         inbound_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(inbounds)").fetchall()}
         if "show_in_app" not in inbound_cols:
             conn.execute(text("ALTER TABLE inbounds ADD COLUMN show_in_app INTEGER NOT NULL DEFAULT 1"))
+
+        vpn_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(vpn_accounts)").fetchall()}
+        if "panel_inbound_ref_id" not in vpn_cols:
+            conn.execute(text("ALTER TABLE vpn_accounts ADD COLUMN panel_inbound_ref_id INTEGER"))
+
+        pending_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(pending_bindings)").fetchall()}
+        if "panel_inbound_ref_id" not in pending_cols:
+            conn.execute(text("ALTER TABLE pending_bindings ADD COLUMN panel_inbound_ref_id INTEGER"))
 
 
 def _normalize_role(role: str | None) -> str:
@@ -201,6 +220,173 @@ def _serialize_app_setting(row: AppSetting) -> dict:
     }
 
 
+def _normalize_panel_provider(raw_value: str | None) -> str:
+    value = str(raw_value or "").strip().lower()
+    if value in {"3xui", "xui", "3x-ui"}:
+        return "3xui"
+    if value == "marzban":
+        return "marzban"
+    return "3xui"
+
+
+def _bootstrap_multi_panel_state(db) -> None:
+    manager = SettingsManager(db)
+    schema_version = manager.get_value("schema.multi_panel.version", default=0)
+
+    # Ensure at least one panel entry exists, based on current env single-panel setup.
+    default_panel = db.query(Panel).filter(Panel.is_default == 1).order_by(Panel.created_at.asc()).first()
+    if not default_panel:
+        default_panel = db.query(Panel).order_by(Panel.created_at.asc()).first()
+    if not default_panel:
+        provider = _normalize_panel_provider(os.getenv("PANEL_PROVIDER", "3xui"))
+        auth_type = os.getenv("PANEL_AUTH_TYPE", "login_password").strip().lower() or "login_password"
+        secret_payload = {
+            "username": os.getenv("PANEL_USER", "").strip(),
+            "password": os.getenv("PANEL_PASS", "").strip(),
+            "token": os.getenv("PANEL_TOKEN", "").strip(),
+        }
+        secret = PanelSecret(
+            id=str(uuid4()),
+            provider=provider,
+            auth_type=auth_type,
+            ciphertext=encrypt_payload(secret_payload),
+        )
+        db.add(secret)
+        db.flush()
+
+        default_panel = Panel(
+            id=str(uuid4()),
+            name=os.getenv("PANEL_DEFAULT_NAME", "Default Panel").strip() or "Default Panel",
+            provider=provider,
+            base_url=(os.getenv("PANEL_BASE_URL", "http://127.0.0.1:2053/panel/api").strip() or "http://127.0.0.1:2053/panel/api"),
+            auth_type=auth_type,
+            auth_secret_ref=secret.id,
+            is_active=1,
+            is_default=1,
+            region=(os.getenv("PANEL_DEFAULT_REGION", "").strip() or None),
+            health_status="unknown",
+        )
+        db.add(default_panel)
+        db.flush()
+    elif not default_panel.is_default:
+        default_panel.is_default = 1
+
+    # Legacy inbounds backfill to canonical panel_inbounds.
+    legacy_inbounds = db.query(Inbound).all()
+    legacy_map: dict[int, int] = {}
+    for old in legacy_inbounds:
+        external_id = str(old.panel_inbound_id)
+        row = (
+            db.query(PanelInbound)
+            .filter(
+                PanelInbound.panel_id == default_panel.id,
+                PanelInbound.external_inbound_id == external_id,
+            )
+            .first()
+        )
+        if not row:
+            row = PanelInbound(
+                panel_id=default_panel.id,
+                external_inbound_id=external_id,
+                show_in_app=1,
+            )
+            db.add(row)
+            db.flush()
+
+        row.protocol = old.protocol
+        row.port = old.port
+        row.remark = old.remark
+        row.listen = old.listen
+        row.enabled = 1 if old.enable else 0
+        row.show_in_app = 1 if getattr(old, "show_in_app", 1) else 0
+        row.stream_settings = old.stream_settings if isinstance(old.stream_settings, dict) else {}
+        row.settings = old.settings if isinstance(old.settings, dict) else {}
+        row.last_sync_at = utcnow()
+        legacy_map[int(old.panel_inbound_id)] = int(row.id)
+
+    # Backfill refs in vpn_accounts.
+    accounts = (
+        db.query(VpnAccount)
+        .filter(VpnAccount.panel_inbound_ref_id.is_(None), VpnAccount.panel_inbound_id.isnot(None))
+        .all()
+    )
+    for account in accounts:
+        ref_id = legacy_map.get(int(account.panel_inbound_id))
+        if ref_id:
+            account.panel_inbound_ref_id = int(ref_id)
+
+    # Backfill refs in pending_bindings.
+    pending_rows = (
+        db.query(PendingBinding)
+        .filter(PendingBinding.panel_inbound_ref_id.is_(None), PendingBinding.panel_inbound_id.isnot(None))
+        .all()
+    )
+    for row in pending_rows:
+        ref_id = legacy_map.get(int(row.panel_inbound_id))
+        if ref_id:
+            row.panel_inbound_ref_id = int(ref_id)
+
+    groups = ensure_default_groups(db)
+    sync_group_members_from_inbounds(db)
+
+    # Seed user_connections from active bindings.
+    group_by_key = {item.key: item.id for item in groups.values()}
+    existing_user_connections = {
+        (row.user_id, row.group_id): row
+        for row in db.query(UserConnection).all()
+    }
+    active_accounts = (
+        db.query(VpnAccount)
+        .filter(VpnAccount.status == "active")
+        .order_by(VpnAccount.user_id.asc(), VpnAccount.id.desc())
+        .all()
+    )
+
+    for account in active_accounts:
+        group_key = protocol_to_group_key(account.protocol)
+        if not group_key:
+            continue
+        group_id = group_by_key.get(group_key)
+        if not group_id:
+            continue
+        pair = (account.user_id, group_id)
+        if pair in existing_user_connections:
+            continue
+
+        inbound_ref_id = account.panel_inbound_ref_id
+        if not inbound_ref_id and account.panel_inbound_id is not None:
+            inbound_ref_id = legacy_map.get(int(account.panel_inbound_id))
+        selected_member_id = None
+        if inbound_ref_id:
+            member = (
+                db.query(InboundGroupMember)
+                .filter(
+                    InboundGroupMember.group_id == group_id,
+                    InboundGroupMember.panel_inbound_id == int(inbound_ref_id),
+                )
+                .first()
+            )
+            if member:
+                selected_member_id = member.id
+
+        row = UserConnection(
+            user_id=account.user_id,
+            group_id=group_id,
+            selected_member_id=selected_member_id,
+            selection_strategy="manual",
+        )
+        db.add(row)
+        db.flush()
+        existing_user_connections[pair] = row
+
+    if str(schema_version) != "1":
+        manager.set_setting(
+            "schema.multi_panel.version",
+            1,
+            description="Multi-panel schema/data bootstrap version",
+        )
+
+
 def create_app():
     app = Flask(
         __name__,
@@ -213,10 +399,14 @@ def create_app():
 
     Base.metadata.create_all(bind=engine)
     _ensure_schema_compatibility()
+    with SessionLocal() as db:
+        _bootstrap_multi_panel_state(db)
+        db.commit()
 
     session_cookie_name = os.getenv("SESSION_COOKIE_NAME", "session")
     session_ttl_days = int(os.getenv("SESSION_TTL_DAYS", "7"))
     role_bindings = _load_role_bindings()
+    panel_registry = PanelRegistry()
     csrf_exempt_paths = {"/api/tg/auth"}
     csrf_protected_methods = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -447,6 +637,91 @@ def create_app():
             return host, parsed.port
         return host, 443 if parsed.scheme == "https" else 80
 
+    def _default_panel(db) -> Panel | None:
+        return panel_registry.get_default_panel(db)
+
+    def _panel_by_inbound_ref(db, inbound_ref_id: int | None) -> tuple[PanelInbound | None, Panel | None]:
+        if not inbound_ref_id:
+            return None, None
+        inbound_row = db.query(PanelInbound).filter(PanelInbound.id == int(inbound_ref_id)).first()
+        if not inbound_row:
+            return None, None
+        panel = db.query(Panel).filter(Panel.id == inbound_row.panel_id).first()
+        return inbound_row, panel
+
+    def _panel_inbound_by_legacy_id(db, panel_inbound_id: int | None) -> tuple[PanelInbound | None, Panel | None]:
+        if panel_inbound_id is None:
+            return None, None
+        default = _default_panel(db)
+        if not default:
+            return None, None
+        row = (
+            db.query(PanelInbound)
+            .filter(
+                PanelInbound.panel_id == default.id,
+                PanelInbound.external_inbound_id == str(panel_inbound_id),
+            )
+            .first()
+        )
+        return row, default
+
+    def _resolve_panel_inbound_ref_id(
+        db,
+        *,
+        panel_inbound_id: int | None = None,
+        panel_id: str | None = None,
+        external_inbound_id: str | None = None,
+    ) -> int | None:
+        if panel_id and external_inbound_id:
+            row = (
+                db.query(PanelInbound.id)
+                .filter(
+                    PanelInbound.panel_id == panel_id,
+                    PanelInbound.external_inbound_id == str(external_inbound_id),
+                )
+                .first()
+            )
+            return int(row.id) if row else None
+        if panel_inbound_id is None:
+            return None
+        row, _panel = _panel_inbound_by_legacy_id(db, panel_inbound_id)
+        return int(row.id) if row else None
+
+    def _panel_inbound_snapshot(inbound_row: PanelInbound) -> SimpleNamespace:
+        panel_inbound_id = None
+        try:
+            panel_inbound_id = int(inbound_row.external_inbound_id)
+        except (TypeError, ValueError):
+            panel_inbound_id = None
+        return SimpleNamespace(
+            id=inbound_row.id,
+            panel_inbound_id=panel_inbound_id,
+            external_inbound_id=inbound_row.external_inbound_id,
+            protocol=inbound_row.protocol,
+            port=inbound_row.port,
+            remark=inbound_row.remark,
+            listen=inbound_row.listen,
+            enable=inbound_row.enabled,
+            show_in_app=inbound_row.show_in_app,
+            stream_settings=inbound_row.stream_settings if isinstance(inbound_row.stream_settings, dict) else {},
+            settings=inbound_row.settings if isinstance(inbound_row.settings, dict) else {},
+            panel_id=inbound_row.panel_id,
+        )
+
+    def _resolve_account_inbound(db, account: VpnAccount):
+        inbound_row = None
+        panel = None
+        if account.panel_inbound_ref_id:
+            inbound_row, panel = _panel_by_inbound_ref(db, account.panel_inbound_ref_id)
+        if not inbound_row and account.panel_inbound_id is not None:
+            inbound_row, panel = _panel_inbound_by_legacy_id(db, account.panel_inbound_id)
+        if inbound_row:
+            return _panel_inbound_snapshot(inbound_row), inbound_row, panel
+        if account.panel_inbound_id is None:
+            return None, None, None
+        legacy = db.query(Inbound).filter(Inbound.panel_inbound_id == account.panel_inbound_id).first()
+        return legacy, None, None
+
     def _protocol_variants(protocol: str) -> set[str]:
         value = (protocol or "").strip().lower()
         if value == "https_mixed":
@@ -459,6 +734,21 @@ def create_app():
 
     def _inbound_for_protocol(db, protocol: str) -> Inbound | None:
         variants = _protocol_variants(protocol)
+        panel_row = (
+            db.query(PanelInbound)
+            .join(Panel, Panel.id == PanelInbound.panel_id)
+            .filter(
+                PanelInbound.protocol.in_(variants),
+                PanelInbound.enabled == 1,
+                PanelInbound.port.isnot(None),
+                Panel.is_active == 1,
+            )
+            .order_by(PanelInbound.updated_at.desc(), PanelInbound.id.desc())
+            .first()
+        )
+        if panel_row:
+            return _panel_inbound_snapshot(panel_row)
+
         return (
             db.query(Inbound)
             .filter(
@@ -498,10 +788,12 @@ def create_app():
         )
         out: list[tuple[VpnAccount, Inbound]] = []
         for account in accounts:
-            if account.panel_inbound_id is None:
+            inbound, inbound_row, _panel = _resolve_account_inbound(db, account)
+            if not inbound:
                 continue
-            inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == account.panel_inbound_id).first()
-            if not inbound or not inbound.port:
+            if inbound_row and not account.panel_inbound_ref_id:
+                account.panel_inbound_ref_id = inbound_row.id
+            if not inbound.port:
                 continue
             inbound_protocol = (inbound.protocol or "").strip().lower()
             if inbound_protocol not in variants:
@@ -513,6 +805,21 @@ def create_app():
 
     def _protocol_visible_in_app(db, protocol: str) -> bool:
         variants = _protocol_variants(protocol)
+        panel_row = (
+            db.query(PanelInbound.id)
+            .join(Panel, Panel.id == PanelInbound.panel_id)
+            .filter(
+                PanelInbound.protocol.in_(variants),
+                PanelInbound.enabled == 1,
+                PanelInbound.show_in_app == 1,
+                PanelInbound.port.isnot(None),
+                Panel.is_active == 1,
+            )
+            .order_by(PanelInbound.updated_at.desc(), PanelInbound.id.desc())
+            .first()
+        )
+        if panel_row:
+            return True
         row = (
             db.query(Inbound.id)
             .filter(
@@ -534,11 +841,15 @@ def create_app():
                 "port": None,
                 "error": "Inbound not synced. Run /api/admin/sync-inbounds.",
             }
+        panel_inbound_id = getattr(inbound, "panel_inbound_id", None)
+        if panel_inbound_id is None:
+            panel_inbound_id = getattr(inbound, "external_inbound_id", None)
         return {
             "ok": check_port("127.0.0.1", int(inbound.port)),
             "configured": True,
             "port": int(inbound.port),
-            "panel_inbound_id": inbound.panel_inbound_id,
+            "panel_inbound_id": panel_inbound_id,
+            "panel_id": getattr(inbound, "panel_id", None),
         }
 
     def _extract_clients_from_inbound(inbound: Inbound | None) -> list[dict]:
@@ -604,6 +915,69 @@ def create_app():
                 }
             )
         return out
+
+    def _sync_single_inbound_from_panel(db, panel_item: dict, panel: Panel | None = None):
+        panel_id_raw = panel_item.get("id")
+        if panel_id_raw is None:
+            raise ValueError("panel inbound item has no id")
+        external_inbound_id = str(panel_id_raw)
+
+        target_panel = panel or _default_panel(db)
+        if not target_panel:
+            raise RuntimeError("No panel configured")
+
+        panel_inbound = (
+            db.query(PanelInbound)
+            .filter(
+                PanelInbound.panel_id == target_panel.id,
+                PanelInbound.external_inbound_id == external_inbound_id,
+            )
+            .first()
+        )
+        if not panel_inbound:
+            panel_inbound = PanelInbound(
+                panel_id=target_panel.id,
+                external_inbound_id=external_inbound_id,
+                show_in_app=1,
+            )
+            db.add(panel_inbound)
+            db.flush()
+
+        panel_inbound.protocol = panel_item.get("protocol")
+        panel_inbound.port = panel_item.get("port")
+        panel_inbound.remark = panel_item.get("remark")
+        panel_inbound.listen = panel_item.get("listen")
+        panel_inbound.enabled = 1 if panel_item.get("enable", True) else 0
+        panel_inbound.stream_settings = _safe_json(panel_item.get("streamSettings"))
+        panel_inbound.settings = _safe_json(panel_item.get("settings"))
+        panel_inbound.last_sync_at = utcnow()
+
+        # Keep legacy inbounds in sync for default panel compatibility.
+        if target_panel.is_default:
+            try:
+                legacy_panel_inbound_id = int(external_inbound_id)
+            except (TypeError, ValueError):
+                legacy_panel_inbound_id = None
+            if legacy_panel_inbound_id is not None:
+                legacy = db.query(Inbound).filter(Inbound.panel_inbound_id == legacy_panel_inbound_id).first()
+                if not legacy:
+                    legacy = Inbound(panel_inbound_id=legacy_panel_inbound_id)
+                    legacy.show_in_app = 1
+                    db.add(legacy)
+                legacy.protocol = panel_inbound.protocol
+                legacy.port = panel_inbound.port
+                legacy.remark = panel_inbound.remark
+                legacy.listen = panel_inbound.listen
+                legacy.enable = panel_inbound.enabled
+                legacy.stream_settings = panel_inbound.stream_settings
+                legacy.settings = panel_inbound.settings
+                legacy.show_in_app = panel_inbound.show_in_app
+
+        return panel_inbound
+
+    def _generate_panel_sub_id(length: int = 16) -> str:
+        alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+        return "".join(secrets.choice(alphabet) for _ in range(max(8, length)))
 
     def _decode_subscription_payload(raw_text: str) -> str:
         text = (raw_text or "").strip()
@@ -768,7 +1142,8 @@ def create_app():
         db,
         *,
         user_id: int,
-        panel_inbound_id: int,
+        panel_inbound_id: int | None,
+        panel_inbound_ref_id: int | None = None,
         protocol: str,
         identifier: str,
         label: str | None = None,
@@ -779,17 +1154,22 @@ def create_app():
         if normalized_protocol not in {"vless", "mixed"}:
             raise ValueError("protocol must be vless or mixed")
 
-        account = (
+        query = (
             db.query(VpnAccount)
             .filter(
                 VpnAccount.user_id == int(user_id),
                 VpnAccount.protocol == normalized_protocol,
-                VpnAccount.panel_inbound_id == int(panel_inbound_id),
                 VpnAccount.identifier == identifier,
             )
-            .order_by(VpnAccount.id.desc())
-            .first()
         )
+        if panel_inbound_ref_id:
+            query = query.filter(VpnAccount.panel_inbound_ref_id == int(panel_inbound_ref_id))
+        else:
+            if panel_inbound_id is None:
+                query = query.filter(VpnAccount.panel_inbound_id.is_(None))
+            else:
+                query = query.filter(VpnAccount.panel_inbound_id == int(panel_inbound_id))
+        account = query.order_by(VpnAccount.id.desc()).first()
         if not account:
             account = VpnAccount(user_id=int(user_id), protocol=normalized_protocol)
             db.add(account)
@@ -798,7 +1178,8 @@ def create_app():
         if sub_id:
             meta["sub_id"] = str(sub_id)
 
-        account.panel_inbound_id = int(panel_inbound_id)
+        account.panel_inbound_id = int(panel_inbound_id) if panel_inbound_id is not None else None
+        account.panel_inbound_ref_id = int(panel_inbound_ref_id) if panel_inbound_ref_id else None
         account.identifier = identifier
         account.label = label or identifier
         account.secret = secret if normalized_protocol == "mixed" else None
@@ -807,16 +1188,30 @@ def create_app():
         return account
 
     def _serialize_pending_binding(db, row: PendingBinding) -> dict:
+        panel_inbound = None
+        panel = None
+        if row.panel_inbound_ref_id:
+            panel_inbound, panel = _panel_by_inbound_ref(db, row.panel_inbound_ref_id)
+        if not panel_inbound and row.panel_inbound_id is not None:
+            panel_inbound, panel = _panel_inbound_by_legacy_id(db, row.panel_inbound_id)
         inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == row.panel_inbound_id).first()
+        panel_inbound_id_value = row.panel_inbound_id
+        if panel_inbound and panel_inbound_id_value is None:
+            try:
+                panel_inbound_id_value = int(panel_inbound.external_inbound_id)
+            except (TypeError, ValueError):
+                panel_inbound_id_value = None
         meta = row.meta_json if isinstance(row.meta_json, dict) else {}
         return {
             "id": row.id,
             "telegram_id": row.telegram_id,
             "status": row.status,
             "protocol": row.protocol,
-            "panel_inbound_id": row.panel_inbound_id,
-            "inbound_remark": inbound.remark if inbound else None,
-            "inbound_port": inbound.port if inbound else None,
+            "panel_inbound_id": panel_inbound_id_value,
+            "panel_inbound_ref_id": row.panel_inbound_ref_id,
+            "panel_id": panel.id if panel else None,
+            "inbound_remark": panel_inbound.remark if panel_inbound else (inbound.remark if inbound else None),
+            "inbound_port": panel_inbound.port if panel_inbound else (inbound.port if inbound else None),
             "identifier": row.identifier,
             "label": row.label,
             "sub_id": meta.get("sub_id"),
@@ -843,8 +1238,14 @@ def create_app():
 
         applied = 0
         for row in pending_rows:
+            panel_inbound = None
+            if row.panel_inbound_ref_id:
+                panel_inbound, _panel = _panel_by_inbound_ref(db, row.panel_inbound_ref_id)
+            if not panel_inbound and row.panel_inbound_id is not None:
+                panel_inbound, _panel = _panel_inbound_by_legacy_id(db, row.panel_inbound_id)
+
             inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == row.panel_inbound_id).first()
-            if not inbound:
+            if not panel_inbound and not inbound:
                 # Keep as pending so it can be retried after inbound sync/fix.
                 continue
 
@@ -852,11 +1253,19 @@ def create_app():
             if isinstance(row.meta_json, dict):
                 sub_id = row.meta_json.get("sub_id")
 
+            legacy_panel_inbound_id: int | None = row.panel_inbound_id
+            if legacy_panel_inbound_id is None and panel_inbound:
+                try:
+                    legacy_panel_inbound_id = int(panel_inbound.external_inbound_id)
+                except (TypeError, ValueError):
+                    legacy_panel_inbound_id = None
+
             try:
                 _upsert_vpn_account(
                     db,
                     user_id=user.id,
-                    panel_inbound_id=row.panel_inbound_id,
+                    panel_inbound_id=legacy_panel_inbound_id,
+                    panel_inbound_ref_id=(panel_inbound.id if panel_inbound else row.panel_inbound_ref_id),
                     protocol=row.protocol,
                     identifier=row.identifier,
                     label=row.label,
@@ -873,6 +1282,174 @@ def create_app():
             applied += 1
 
         return applied
+
+    def _normalize_selection_strategy(raw_value: str | None) -> str:
+        value = str(raw_value or "").strip().lower()
+        allowed = {"manual", "region_first", "least_loaded", "priority_order"}
+        return value if value in allowed else "priority_order"
+
+    def _load_default_selection_strategy(db) -> str:
+        value = SettingsManager(db).get_value("vpn.selection.default_strategy", default="priority_order")
+        return _normalize_selection_strategy(str(value or "priority_order"))
+
+    def _group_by_key(db, group_key: str) -> InboundGroup | None:
+        return db.query(InboundGroup).filter(InboundGroup.key == group_key).first()
+
+    def _ensure_user_connection(db, user_id: int, group_key: str) -> UserConnection | None:
+        group = _group_by_key(db, group_key)
+        if not group:
+            return None
+        row = (
+            db.query(UserConnection)
+            .filter(UserConnection.user_id == int(user_id), UserConnection.group_id == int(group.id))
+            .first()
+        )
+        if row:
+            return row
+        row = UserConnection(
+            user_id=int(user_id),
+            group_id=int(group.id),
+            selected_member_id=None,
+            selection_strategy=_load_default_selection_strategy(db),
+        )
+        db.add(row)
+        db.flush()
+        return row
+
+    def _resolve_account_member(db, account: VpnAccount, group_key: str):
+        group = _group_by_key(db, group_key)
+        if not group:
+            return None, None, None
+        inbound_snapshot, panel_inbound, panel = _resolve_account_inbound(db, account)
+        if not inbound_snapshot:
+            return None, None, None
+        if not panel_inbound and account.panel_inbound_ref_id:
+            panel_inbound = db.query(PanelInbound).filter(PanelInbound.id == account.panel_inbound_ref_id).first()
+        if not panel_inbound and account.panel_inbound_id is not None:
+            panel_inbound, panel = _panel_inbound_by_legacy_id(db, account.panel_inbound_id)
+        if not panel_inbound:
+            return inbound_snapshot, None, panel
+
+        member = (
+            db.query(InboundGroupMember)
+            .filter(
+                InboundGroupMember.group_id == group.id,
+                InboundGroupMember.panel_inbound_id == panel_inbound.id,
+            )
+            .first()
+        )
+        if not member:
+            member = InboundGroupMember(
+                group_id=group.id,
+                panel_inbound_id=panel_inbound.id,
+                label=panel_inbound.remark,
+                priority=100,
+                is_active=1,
+            )
+            db.add(member)
+            db.flush()
+        if not panel:
+            panel = db.query(Panel).filter(Panel.id == panel_inbound.panel_id).first()
+        return inbound_snapshot, member, panel
+
+    def _account_candidates_for_protocol(db, user_id: int, protocol: str) -> list[dict]:
+        rows = _visible_accounts_for_protocol(db, user_id, protocol)
+        group_key = protocol_to_group_key(protocol)
+        out: list[dict] = []
+        for account, inbound in rows:
+            member = None
+            panel = None
+            inbound_snapshot = inbound
+            if group_key:
+                resolved_inbound, resolved_member, resolved_panel = _resolve_account_member(db, account, group_key)
+                if resolved_inbound:
+                    inbound_snapshot = resolved_inbound
+                member = resolved_member
+                panel = resolved_panel
+
+            out.append(
+                {
+                    "account": account,
+                    "inbound": inbound_snapshot,
+                    "member_id": member.id if member else None,
+                    "priority": member.priority if member else 999999,
+                    "region": panel.region if panel else None,
+                    "panel_id": panel.id if panel else None,
+                    "panel_name": panel.name if panel else None,
+                }
+            )
+        return out
+
+    def _pick_candidate_by_strategy(db, candidates: list[dict], strategy: str, user: User | None = None) -> dict | None:
+        if not candidates:
+            return None
+        normalized = _normalize_selection_strategy(strategy)
+
+        if normalized == "least_loaded":
+            load_by_ref: dict[int, int] = {}
+            ref_ids = [int(item["account"].panel_inbound_ref_id) for item in candidates if item["account"].panel_inbound_ref_id]
+            if ref_ids:
+                rows = (
+                    db.query(VpnAccount.panel_inbound_ref_id, text("COUNT(*)"))
+                    .filter(VpnAccount.panel_inbound_ref_id.in_(ref_ids), VpnAccount.status == "active")
+                    .group_by(VpnAccount.panel_inbound_ref_id)
+                    .all()
+                )
+                load_by_ref = {int(ref_id): int(cnt) for ref_id, cnt in rows if ref_id is not None}
+
+            return sorted(
+                candidates,
+                key=lambda item: (
+                    load_by_ref.get(int(item["account"].panel_inbound_ref_id or 0), 0),
+                    int(item.get("priority") or 999999),
+                    int(item["account"].id),
+                ),
+            )[0]
+
+        if normalized == "region_first":
+            user_region = None
+            profile = user.profile_data if user and isinstance(user.profile_data, dict) else {}
+            if profile:
+                user_region = str(profile.get("region") or "").strip().lower() or None
+            return sorted(
+                candidates,
+                key=lambda item: (
+                    0 if user_region and str(item.get("region") or "").strip().lower() == user_region else 1,
+                    int(item.get("priority") or 999999),
+                    int(item["account"].id),
+                ),
+            )[0]
+
+        # manual and priority_order share deterministic fallback ordering.
+        return sorted(
+            candidates,
+            key=lambda item: (int(item.get("priority") or 999999), int(item["account"].id)),
+        )[0]
+
+    def _resolve_selected_candidate(db, user_id: int, protocol: str) -> tuple[list[dict], dict | None, str, int | None]:
+        group_key = protocol_to_group_key(protocol)
+        candidates = _account_candidates_for_protocol(db, user_id, protocol)
+        if not group_key:
+            return candidates, (candidates[0] if candidates else None), "priority_order", None
+
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        user_conn = _ensure_user_connection(db, user_id, group_key)
+        strategy = _normalize_selection_strategy(user_conn.selection_strategy if user_conn else _load_default_selection_strategy(db))
+        selected = None
+        if user_conn and user_conn.selected_member_id:
+            selected = next((item for item in candidates if item.get("member_id") == user_conn.selected_member_id), None)
+        if not selected:
+            selected = _pick_candidate_by_strategy(db, candidates, strategy, user=user)
+
+        selected_member_id = selected.get("member_id") if selected else None
+        if user_conn:
+            # Keep persisted selection stable if manual selection was not explicitly set.
+            if user_conn.selected_member_id is None and selected_member_id is not None:
+                user_conn.selected_member_id = selected_member_id
+
+        if selected:
+            candidates = [selected, *[item for item in candidates if item is not selected]]
+        return candidates, selected, strategy, selected_member_id
 
     CLOUD_NODE_TYPE_FOLDER = "folder"
     CLOUD_NODE_TYPE_FILE = "file"
@@ -1471,6 +2048,61 @@ def create_app():
             "uptime_s": int(psutil.boot_time() and (datetime.utcnow().timestamp() - psutil.boot_time())),
         }
 
+    def _panels_status_payload(db, *, refresh: bool = False) -> tuple[list[dict], dict]:
+        now = utcnow()
+        rows = db.query(Panel).order_by(Panel.is_default.desc(), Panel.created_at.asc()).all()
+        out: list[dict] = []
+        healthy = 0
+        degraded = 0
+        down = 0
+
+        for panel in rows:
+            if refresh:
+                panel_registry.health_check(db, panel)
+
+            last_ok = _as_utc(panel.last_ok_at)
+            age_sec = (now - last_ok).total_seconds() if last_ok else None
+            color = (panel.health_status or "unknown").strip().lower()
+            if age_sec is not None:
+                if age_sec < 600:
+                    color = "green"
+                elif age_sec < 1800 and color != "red":
+                    color = "yellow"
+                elif age_sec >= 1800:
+                    color = "red"
+            if color not in {"green", "yellow", "red"}:
+                color = "unknown"
+
+            if color == "green":
+                healthy += 1
+            elif color == "yellow":
+                degraded += 1
+            elif color == "red":
+                down += 1
+
+            out.append(
+                {
+                    "id": panel.id,
+                    "name": panel.name,
+                    "provider": panel.provider,
+                    "base_url": panel.base_url,
+                    "region": panel.region,
+                    "is_active": bool(panel.is_active),
+                    "is_default": bool(panel.is_default),
+                    "health_status": color,
+                    "last_ok_at": panel.last_ok_at.isoformat() if panel.last_ok_at else None,
+                    "error_message": panel.error_message,
+                }
+            )
+
+        summary = {
+            "healthy_count": healthy,
+            "degraded_count": degraded,
+            "down_count": down,
+            "total_count": len(out),
+        }
+        return out, summary
+
     @app.get("/api/status")
     def status_public():
         panel_host, panel_port = _panel_host_port()
@@ -1481,6 +2113,7 @@ def create_app():
             vless_visible = _protocol_visible_in_app(db, "vless")
             http_visible = _protocol_visible_in_app(db, "http")
             mixed_visible = _protocol_visible_in_app(db, "mixed")
+            panels_payload, panel_summary = _panels_status_payload(db, refresh=False)
 
         vless_status = _service_status(vless_inbound)
         http_status = _service_status(http_inbound)
@@ -1507,6 +2140,8 @@ def create_app():
                     "mixed": mixed_status,
                     "https_mixed": https_mixed_status,
                 },
+                "panels": panels_payload,
+                "panels_summary": panel_summary,
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
@@ -1525,6 +2160,8 @@ def create_app():
             vless_visible = _protocol_visible_in_app(db, "vless")
             http_visible = _protocol_visible_in_app(db, "http")
             mixed_visible = _protocol_visible_in_app(db, "mixed")
+            panels_payload, panel_summary = _panels_status_payload(db, refresh=True)
+            db.commit()
 
         vless_status = _service_status(vless_inbound)
         http_status = _service_status(http_inbound)
@@ -1552,6 +2189,8 @@ def create_app():
                     "mixed": mixed_status,
                     "https_mixed": https_mixed_status,
                 },
+                "panels": panels_payload,
+                "panels_summary": panel_summary,
                 "system": system_stats(),
                 "timestamp": datetime.utcnow().isoformat(),
             }
@@ -1563,37 +2202,69 @@ def create_app():
         if err:
             return err
 
-        try:
-            items = XUIClient().get_inbounds()
-        except Exception as exc:
-            app.logger.exception("sync inbounds failed")
-            return jsonify({"ok": False, "error": str(exc)}), 500
-
-        upserted = 0
         with SessionLocal() as db:
-            for item in items:
-                panel_id = item.get("id")
-                if panel_id is None:
-                    continue
+            panels = panel_registry.get_active_panels(db)
+            if not panels:
+                return jsonify({"ok": False, "error": "No active panels configured"}), 400
 
-                inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == panel_id).first()
-                if not inbound:
-                    inbound = Inbound(panel_inbound_id=panel_id)
-                    inbound.show_in_app = 1
-                    db.add(inbound)
+            upserted = 0
+            stale_disabled = 0
+            results: list[dict] = []
+            for panel in panels:
+                try:
+                    provider = panel_registry.get_provider(panel.provider)
+                    auth_payload = panel_registry.get_auth_payload(db, panel)
+                    items = provider.list_inbounds(panel, auth_payload)
 
-                inbound.protocol = item.get("protocol")
-                inbound.port = item.get("port")
-                inbound.remark = item.get("remark")
-                inbound.listen = item.get("listen")
-                inbound.enable = 1 if item.get("enable", True) else 0
-                inbound.stream_settings = _safe_json(item.get("streamSettings"))
-                inbound.settings = _safe_json(item.get("settings"))
-                upserted += 1
+                    seen: set[str] = set()
+                    for item in items:
+                        row = _sync_single_inbound_from_panel(db, item, panel=panel)
+                        upserted += 1
+                        seen.add(row.external_inbound_id)
 
+                    stale_rows = (
+                        db.query(PanelInbound)
+                        .filter(PanelInbound.panel_id == panel.id)
+                        .all()
+                    )
+                    local_stale = 0
+                    for stale in stale_rows:
+                        if stale.external_inbound_id in seen:
+                            continue
+                        stale.enabled = 0
+                        stale.last_sync_at = utcnow()
+                        local_stale += 1
+                    stale_disabled += local_stale
+
+                    panel.health_status = "green"
+                    panel.last_ok_at = utcnow()
+                    panel.error_message = None
+                    results.append(
+                        {
+                            "panel_id": panel.id,
+                            "name": panel.name,
+                            "ok": True,
+                            "upserted": len(seen),
+                            "stale_disabled": local_stale,
+                        }
+                    )
+                except Exception as exc:
+                    panel_registry.invalidate_panel(panel.id)
+                    panel.health_status = "red"
+                    panel.error_message = str(exc)[:500]
+                    results.append({"panel_id": panel.id, "name": panel.name, "ok": False, "error": str(exc)})
+
+            sync_group_members_from_inbounds(db)
             db.commit()
 
-        return jsonify({"ok": True, "count": upserted})
+        return jsonify(
+            {
+                "ok": True,
+                "count": upserted,
+                "stale_disabled": stale_disabled,
+                "panels": results,
+            }
+        )
 
     @app.get("/api/admin/inbounds")
     def list_inbounds():
@@ -1602,7 +2273,42 @@ def create_app():
             return err
 
         with SessionLocal() as db:
-            rows = db.query(Inbound).order_by(Inbound.panel_inbound_id.asc()).all()
+            rows = (
+                db.query(PanelInbound, Panel)
+                .join(Panel, Panel.id == PanelInbound.panel_id)
+                .order_by(Panel.name.asc(), PanelInbound.id.asc())
+                .all()
+            )
+            if rows:
+                inbounds: list[dict] = []
+                for inbound, panel in rows:
+                    panel_inbound_id = None
+                    try:
+                        panel_inbound_id = int(inbound.external_inbound_id)
+                    except (TypeError, ValueError):
+                        panel_inbound_id = None
+                    inbounds.append(
+                        {
+                            "id": inbound.id,
+                            "panel_inbound_ref_id": inbound.id,
+                            "panel_id": panel.id,
+                            "panel_name": panel.name,
+                            "region": panel.region,
+                            "external_inbound_id": inbound.external_inbound_id,
+                            "panel_inbound_id": panel_inbound_id,
+                            "protocol": inbound.protocol,
+                            "port": inbound.port,
+                            "remark": inbound.remark,
+                            "listen": inbound.listen,
+                            "enable": bool(inbound.enabled),
+                            "show_in_app": bool(inbound.show_in_app),
+                            "updated_at": inbound.updated_at.isoformat() if inbound.updated_at else None,
+                            "last_sync_at": inbound.last_sync_at.isoformat() if inbound.last_sync_at else None,
+                        }
+                    )
+                return jsonify({"ok": True, "inbounds": inbounds})
+
+            legacy_rows = db.query(Inbound).order_by(Inbound.panel_inbound_id.asc()).all()
             return jsonify(
                 {
                     "ok": True,
@@ -1618,7 +2324,7 @@ def create_app():
                             "show_in_app": bool(getattr(r, "show_in_app", 1)),
                             "updated_at": r.updated_at.isoformat() if r.updated_at else None,
                         }
-                        for r in rows
+                        for r in legacy_rows
                     ],
                 }
             )
@@ -1708,23 +2414,34 @@ def create_app():
             return jsonify({"ok": False, "error": "show_in_app is required"}), 400
 
         with SessionLocal() as db:
+            inbound_ref = _resolve_panel_inbound_ref_id(db, panel_inbound_id=panel_inbound_id)
+            panel_inbound = db.query(PanelInbound).filter(PanelInbound.id == inbound_ref).first() if inbound_ref else None
             inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == panel_inbound_id).first()
-            if not inbound:
+            if not panel_inbound and not inbound:
                 return jsonify({"ok": False, "error": "Inbound not found"}), 404
 
-            inbound.show_in_app = 1 if body.get("show_in_app") else 0
+            next_visibility = 1 if body.get("show_in_app") else 0
+            if panel_inbound:
+                panel_inbound.show_in_app = next_visibility
+            if inbound:
+                inbound.show_in_app = next_visibility
             db.commit()
 
+            protocol = panel_inbound.protocol if panel_inbound else inbound.protocol
+            remark = panel_inbound.remark if panel_inbound else inbound.remark
+            port = panel_inbound.port if panel_inbound else inbound.port
+            enabled = bool(panel_inbound.enabled) if panel_inbound else bool(inbound.enable)
             return jsonify(
                 {
                     "ok": True,
                     "inbound": {
-                        "panel_inbound_id": inbound.panel_inbound_id,
-                        "protocol": inbound.protocol,
-                        "remark": inbound.remark,
-                        "port": inbound.port,
-                        "enable": bool(inbound.enable),
-                        "show_in_app": bool(inbound.show_in_app),
+                        "panel_inbound_id": panel_inbound_id,
+                        "panel_inbound_ref_id": panel_inbound.id if panel_inbound else None,
+                        "protocol": protocol,
+                        "remark": remark,
+                        "port": port,
+                        "enable": enabled,
+                        "show_in_app": bool(next_visibility),
                     },
                 }
             )
@@ -1777,6 +2494,17 @@ def create_app():
                 rows = db.query(Inbound).filter(Inbound.panel_inbound_id.in_(inbound_ids)).all()
                 inbounds_by_panel_id = {row.panel_inbound_id: row for row in rows}
 
+            inbound_ref_ids = {a.panel_inbound_ref_id for a in accounts if a.panel_inbound_ref_id is not None}
+            panel_inbounds_by_ref: dict[int, PanelInbound] = {}
+            panels_by_id: dict[str, Panel] = {}
+            if inbound_ref_ids:
+                rows = db.query(PanelInbound).filter(PanelInbound.id.in_(inbound_ref_ids)).all()
+                panel_inbounds_by_ref = {row.id: row for row in rows}
+                panel_ids = {row.panel_id for row in rows}
+                if panel_ids:
+                    panel_rows = db.query(Panel).filter(Panel.id.in_(panel_ids)).all()
+                    panels_by_id = {row.id: row for row in panel_rows}
+
             return jsonify(
                 {
                     "ok": True,
@@ -1791,15 +2519,53 @@ def create_app():
                         {
                             "id": a.id,
                             "protocol": a.protocol,
-                            "panel_inbound_id": a.panel_inbound_id,
-                            "inbound_remark": (
-                                inbounds_by_panel_id[a.panel_inbound_id].remark
-                                if a.panel_inbound_id in inbounds_by_panel_id
+                            "panel_inbound_id": (
+                                a.panel_inbound_id
+                                if a.panel_inbound_id is not None
+                                else (
+                                    int(panel_inbounds_by_ref[a.panel_inbound_ref_id].external_inbound_id)
+                                    if (
+                                        a.panel_inbound_ref_id in panel_inbounds_by_ref
+                                        and str(panel_inbounds_by_ref[a.panel_inbound_ref_id].external_inbound_id).isdigit()
+                                    )
+                                    else None
+                                )
+                            ),
+                            "panel_inbound_ref_id": a.panel_inbound_ref_id,
+                            "panel_id": (
+                                panel_inbounds_by_ref[a.panel_inbound_ref_id].panel_id
+                                if a.panel_inbound_ref_id in panel_inbounds_by_ref
                                 else None
                             ),
+                            "panel_name": (
+                                panels_by_id[panel_inbounds_by_ref[a.panel_inbound_ref_id].panel_id].name
+                                if (
+                                    a.panel_inbound_ref_id in panel_inbounds_by_ref
+                                    and panel_inbounds_by_ref[a.panel_inbound_ref_id].panel_id in panels_by_id
+                                )
+                                else None
+                            ),
+                            "inbound_remark": (
+                                panel_inbounds_by_ref[a.panel_inbound_ref_id].remark
+                                if a.panel_inbound_ref_id in panel_inbounds_by_ref
+                                else (
+                                    inbounds_by_panel_id[a.panel_inbound_id].remark
+                                    if a.panel_inbound_id in inbounds_by_panel_id
+                                    else None
+                                )
+                            ),
                             "inbound_port": (
-                                inbounds_by_panel_id[a.panel_inbound_id].port
-                                if a.panel_inbound_id in inbounds_by_panel_id
+                                panel_inbounds_by_ref[a.panel_inbound_ref_id].port
+                                if a.panel_inbound_ref_id in panel_inbounds_by_ref
+                                else (
+                                    inbounds_by_panel_id[a.panel_inbound_id].port
+                                    if a.panel_inbound_id in inbounds_by_panel_id
+                                    else None
+                                )
+                            ),
+                            "external_inbound_id": (
+                                panel_inbounds_by_ref[a.panel_inbound_ref_id].external_inbound_id
+                                if a.panel_inbound_ref_id in panel_inbounds_by_ref
                                 else None
                             ),
                             "identifier": a.identifier,
@@ -1986,16 +2752,165 @@ def create_app():
             return err
 
         with SessionLocal() as db:
+            inbound_ref = _resolve_panel_inbound_ref_id(db, panel_inbound_id=panel_inbound_id)
+            panel_inbound = db.query(PanelInbound).filter(PanelInbound.id == inbound_ref).first() if inbound_ref else None
             inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == panel_inbound_id).first()
-            if not inbound:
+            if not panel_inbound and not inbound:
                 return jsonify({"ok": False, "error": "Inbound not found"}), 404
-            clients = _extract_clients_from_inbound(inbound)
+            clients = extract_clients_from_panel_inbound(panel_inbound) if panel_inbound else _extract_clients_from_inbound(inbound)
+            protocol = panel_inbound.protocol if panel_inbound else inbound.protocol
             return jsonify(
                 {
                     "ok": True,
                     "panel_inbound_id": panel_inbound_id,
-                    "protocol": inbound.protocol,
+                    "panel_inbound_ref_id": panel_inbound.id if panel_inbound else None,
+                    "protocol": protocol,
                     "clients": clients,
+                }
+            )
+
+    @app.post("/api/admin/inbounds/<int:panel_inbound_id>/clients")
+    def admin_inbound_clients_create(panel_inbound_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+
+        body = request.get_json(silent=True) or {}
+        label = str(body.get("label") or body.get("email") or "").strip()
+        if not label:
+            return jsonify({"ok": False, "error": "label is required"}), 400
+        label = label[:64]
+
+        def _as_non_negative_int(value, default=0):
+            if value in (None, ""):
+                return default
+            try:
+                out = int(value)
+            except (TypeError, ValueError):
+                raise ValueError("must be an integer")
+            if out < 0:
+                raise ValueError("must be >= 0")
+            return out
+
+        try:
+            limit_ip = _as_non_negative_int(body.get("limit_ip"), default=0)
+            total_gb = _as_non_negative_int(body.get("total_gb"), default=0)
+            expiry_days = _as_non_negative_int(body.get("expiry_days"), default=0)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+        flow = str(body.get("flow") or "xtls-rprx-vision").strip() or "xtls-rprx-vision"
+        client_id = str(uuid4())
+        sub_id = str(body.get("sub_id") or _generate_panel_sub_id()).strip()[:32] or _generate_panel_sub_id()
+        expiry_time_ms = 0
+        if expiry_days > 0:
+            expiry_time_ms = int((utcnow() + timedelta(days=expiry_days)).timestamp() * 1000)
+        total_bytes = int(total_gb) * 1024 * 1024 * 1024
+
+        with SessionLocal() as db:
+            inbound_ref = _resolve_panel_inbound_ref_id(db, panel_inbound_id=panel_inbound_id)
+            panel_inbound = db.query(PanelInbound).filter(PanelInbound.id == inbound_ref).first() if inbound_ref else None
+            inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == panel_inbound_id).first()
+            if not panel_inbound and not inbound:
+                return jsonify({"ok": False, "error": "Inbound not found"}), 404
+
+            effective_protocol = str((panel_inbound.protocol if panel_inbound else inbound.protocol) or "").strip().lower()
+            if effective_protocol != "vless":
+                return jsonify({"ok": False, "error": "Adding new clients is currently supported only for VLESS inbounds"}), 400
+
+            existing = extract_clients_from_panel_inbound(panel_inbound) if panel_inbound else _extract_clients_from_inbound(inbound)
+            existing_labels = {str(item.get("label") or "").strip().lower() for item in existing}
+            if label.lower() in existing_labels:
+                return jsonify({"ok": False, "error": "Client with this label already exists"}), 409
+
+            client_payload = {
+                "id": client_id,
+                "email": label,
+                "flow": flow,
+                "limitIp": limit_ip,
+                "totalGB": total_bytes,
+                "expiryTime": expiry_time_ms,
+                "enable": True,
+                "tgId": 0,
+                "subId": sub_id,
+                "reset": 0,
+            }
+
+            panel_result = None
+            refresh_warning = None
+            if panel_inbound:
+                panel = db.query(Panel).filter(Panel.id == panel_inbound.panel_id).first()
+                if not panel:
+                    return jsonify({"ok": False, "error": "Panel not found for inbound"}), 404
+                try:
+                    provider = panel_registry.get_provider(panel.provider)
+                    auth_payload = panel_registry.get_auth_payload(db, panel)
+                    panel_result = provider.create_client(panel, panel_inbound, client_payload, auth_payload)
+                except Exception as exc:
+                    app.logger.exception("add inbound client failed")
+                    return jsonify({"ok": False, "error": str(exc)}), 502
+
+                try:
+                    provider = panel_registry.get_provider(panel.provider)
+                    auth_payload = panel_registry.get_auth_payload(db, panel)
+                    panel_items = provider.list_inbounds(panel, auth_payload)
+                    panel_item = next(
+                        (item for item in panel_items if str(item.get("id")) == str(panel_inbound.external_inbound_id)),
+                        None,
+                    )
+                    if panel_item:
+                        panel_inbound = _sync_single_inbound_from_panel(db, panel_item, panel=panel)
+                        db.commit()
+                    else:
+                        refresh_warning = "Client created in panel, but inbound was not found during refresh."
+                except Exception as exc:
+                    refresh_warning = f"Client created in panel, but local refresh failed: {exc}"
+                    app.logger.warning("refresh inbound after add-client failed: %s", exc)
+            else:
+                try:
+                    panel_result = XUIClient().add_client(panel_inbound_id, client_payload)
+                except Exception as exc:
+                    app.logger.exception("add inbound client failed")
+                    return jsonify({"ok": False, "error": str(exc)}), 502
+
+                try:
+                    panel_items = XUIClient().get_inbounds()
+                    panel_item = next((item for item in panel_items if str(item.get("id")) == str(panel_inbound_id)), None)
+                    if panel_item:
+                        _sync_single_inbound_from_panel(db, panel_item)
+                        db.commit()
+                        inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == panel_inbound_id).first() or inbound
+                    else:
+                        refresh_warning = "Client created in panel, but inbound was not found during refresh."
+                except Exception as exc:
+                    refresh_warning = f"Client created in panel, but local refresh failed: {exc}"
+                    app.logger.warning("refresh inbound after add-client failed: %s", exc)
+
+            clients = (
+                extract_clients_from_panel_inbound(panel_inbound)
+                if panel_inbound
+                else _extract_clients_from_inbound(inbound)
+            )
+            created = next((item for item in clients if str(item.get("identifier")) == client_id), None)
+            if not created:
+                created = {
+                    "identifier": client_id,
+                    "label": label,
+                    "sub_id": sub_id,
+                    "protocol": effective_protocol,
+                }
+                clients = [created, *clients]
+
+            return jsonify(
+                {
+                    "ok": True,
+                    "panel_inbound_id": panel_inbound_id,
+                    "panel_inbound_ref_id": panel_inbound.id if panel_inbound else inbound_ref,
+                    "protocol": effective_protocol,
+                    "created_client": created,
+                    "clients": clients,
+                    "panel_result": panel_result,
+                    "warning": refresh_warning,
                 }
             )
 
@@ -2008,14 +2923,15 @@ def create_app():
         body = request.get_json(silent=True) or {}
         user_id = body.get("user_id")
         panel_inbound_id = body.get("panel_inbound_id")
+        panel_inbound_ref_id_raw = body.get("panel_inbound_ref_id")
         identifier = (body.get("client_identifier") or "").strip()
         protocol = _normalize_account_protocol(body.get("protocol"))
         label = body.get("label")
         secret = body.get("secret")
         sub_id = body.get("sub_id")
 
-        if not user_id or not panel_inbound_id or not identifier:
-            return jsonify({"ok": False, "error": "user_id, panel_inbound_id, client_identifier are required"}), 400
+        if not user_id or (not panel_inbound_id and not panel_inbound_ref_id_raw) or not identifier:
+            return jsonify({"ok": False, "error": "user_id, panel_inbound_id|panel_inbound_ref_id, client_identifier are required"}), 400
         if protocol not in {"vless", "mixed"}:
             return jsonify({"ok": False, "error": "protocol must be vless or mixed"}), 400
 
@@ -2024,14 +2940,33 @@ def create_app():
             if not user:
                 return jsonify({"ok": False, "error": "User not found"}), 404
 
-            inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == int(panel_inbound_id)).first()
-            if not inbound:
+            panel_inbound_ref_id = None
+            panel_inbound = None
+            if panel_inbound_ref_id_raw not in (None, ""):
+                try:
+                    panel_inbound_ref_id = int(panel_inbound_ref_id_raw)
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "panel_inbound_ref_id must be an integer"}), 400
+                panel_inbound = db.query(PanelInbound).filter(PanelInbound.id == panel_inbound_ref_id).first()
+                if not panel_inbound:
+                    return jsonify({"ok": False, "error": "Panel inbound not found"}), 404
+                if panel_inbound_id in (None, ""):
+                    try:
+                        panel_inbound_id = int(panel_inbound.external_inbound_id)
+                    except (TypeError, ValueError):
+                        panel_inbound_id = None
+            else:
+                panel_inbound_ref_id = _resolve_panel_inbound_ref_id(db, panel_inbound_id=int(panel_inbound_id))
+                panel_inbound = db.query(PanelInbound).filter(PanelInbound.id == panel_inbound_ref_id).first() if panel_inbound_ref_id else None
+            inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == int(panel_inbound_id)).first() if panel_inbound_id not in (None, "") else None
+            if not panel_inbound and not inbound:
                 return jsonify({"ok": False, "error": "Inbound not found"}), 404
 
             account = _upsert_vpn_account(
                 db,
                 user_id=user.id,
-                panel_inbound_id=int(panel_inbound_id),
+                panel_inbound_id=(int(panel_inbound_id) if panel_inbound_id not in (None, "") else None),
+                panel_inbound_ref_id=panel_inbound_ref_id,
                 protocol=protocol,
                 identifier=identifier,
                 label=label,
@@ -2048,6 +2983,7 @@ def create_app():
                         "user_id": account.user_id,
                         "protocol": account.protocol,
                         "panel_inbound_id": account.panel_inbound_id,
+                        "panel_inbound_ref_id": account.panel_inbound_ref_id,
                         "identifier": account.identifier,
                         "label": account.label,
                         "status": account.status,
@@ -2112,8 +3048,10 @@ def create_app():
             return jsonify({"ok": False, "error": "panel_inbound_id must be an integer"}), 400
 
         with SessionLocal() as db:
+            panel_inbound_ref_id = _resolve_panel_inbound_ref_id(db, panel_inbound_id=panel_inbound_id)
+            panel_inbound = db.query(PanelInbound).filter(PanelInbound.id == panel_inbound_ref_id).first() if panel_inbound_ref_id else None
             inbound = db.query(Inbound).filter(Inbound.panel_inbound_id == panel_inbound_id).first()
-            if not inbound:
+            if not panel_inbound and not inbound:
                 return jsonify({"ok": False, "error": "Inbound not found"}), 404
 
             existing = (
@@ -2135,6 +3073,8 @@ def create_app():
                 existing.label = label or existing.label or identifier
                 existing.secret = secret if protocol == "mixed" else None
                 existing.meta_json = meta
+                if panel_inbound_ref_id:
+                    existing.panel_inbound_ref_id = panel_inbound_ref_id
                 db.commit()
                 return jsonify(
                     {
@@ -2148,6 +3088,7 @@ def create_app():
                 telegram_id=telegram_id,
                 protocol=protocol,
                 panel_inbound_id=panel_inbound_id,
+                panel_inbound_ref_id=panel_inbound_ref_id,
                 identifier=identifier,
                 label=label or identifier,
                 secret=secret if protocol == "mixed" else None,
@@ -2357,12 +3298,15 @@ def create_app():
             if not sub:
                 return jsonify({"ok": False, "error": "Active subscription required"}), 403
 
-            rows = _visible_accounts_for_protocol(db, auth["user_id"], "vless")
-            if not rows:
+            candidates, selected, strategy, selected_member_id = _resolve_selected_candidate(db, auth["user_id"], "vless")
+            if not candidates:
                 return jsonify({"ok": False, "error": "Visible VLESS account not found"}), 404
 
             connections: list[dict] = []
-            for account, inbound in rows:
+            servers: list[dict] = []
+            for item in candidates:
+                account = item["account"]
+                inbound = item["inbound"]
                 port = int(inbound.port)
                 meta = account.meta_json or {}
                 subscription_url = meta.get("sub_url")
@@ -2403,13 +3347,26 @@ def create_app():
                 if vless_url:
                     vless_url = _apply_vless_display_name(vless_url, account.label, account.identifier)
 
+                panel_inbound_id = account.panel_inbound_id
+                if panel_inbound_id is None:
+                    try:
+                        panel_inbound_id = int(getattr(inbound, "external_inbound_id", ""))
+                    except (TypeError, ValueError):
+                        panel_inbound_id = None
+
                 connections.append(
                     {
                         "account_id": account.id,
                         "label": account.label or account.identifier or f"vless-{account.id}",
                         "identifier": account.identifier,
-                        "panel_inbound_id": account.panel_inbound_id,
+                        "panel_inbound_id": panel_inbound_id,
+                        "panel_inbound_ref_id": account.panel_inbound_ref_id,
                         "inbound_remark": inbound.remark,
+                        "panel_id": item.get("panel_id"),
+                        "panel_name": item.get("panel_name"),
+                        "region": item.get("region"),
+                        "member_id": item.get("member_id"),
+                        "selected": bool(selected and selected.get("account").id == account.id),
                         "host": host,
                         "port": port,
                         "sub_id": meta.get("sub_id"),
@@ -2417,19 +3374,34 @@ def create_app():
                         "vless_url": vless_url,
                     }
                 )
+                servers.append(
+                    {
+                        "member_id": item.get("member_id"),
+                        "label": account.label or account.identifier or f"vless-{account.id}",
+                        "panel_id": item.get("panel_id"),
+                        "panel_name": item.get("panel_name"),
+                        "region": item.get("region"),
+                        "selected": bool(selected and selected.get("account").id == account.id),
+                    }
+                )
 
             first = connections[0]
+            db.commit()
 
             return jsonify(
                 {
                     "ok": True,
                     "protocol": "vless",
+                    "group_key": "vless",
+                    "selected_member_id": selected_member_id,
+                    "applied_strategy": strategy,
                     "host": first.get("host"),
                     "port": first.get("port"),
                     "identifier": first.get("identifier"),
                     "sub_id": first.get("sub_id"),
                     "subscription_url": first.get("subscription_url"),
                     "vless_url": first.get("vless_url"),
+                    "servers": servers,
                     "connections": connections,
                     "total": len(connections),
                 }
@@ -2448,12 +3420,15 @@ def create_app():
             if not sub:
                 return jsonify({"ok": False, "error": "Active subscription required"}), 403
 
-            rows = _visible_accounts_for_protocol(db, auth["user_id"], "mixed")
-            if not rows:
+            candidates, selected, strategy, selected_member_id = _resolve_selected_candidate(db, auth["user_id"], "mixed")
+            if not candidates:
                 return jsonify({"ok": False, "error": "Visible MIXED account not found"}), 404
 
             connections: list[dict] = []
-            for account, inbound in rows:
+            servers: list[dict] = []
+            for item in candidates:
+                account = item["account"]
+                inbound = item["inbound"]
                 port = int(inbound.port)
                 username = account.identifier
                 password = account.secret
@@ -2462,13 +3437,25 @@ def create_app():
 
                 socks_url = f"socks5://{username}:{password}@{host}:{port}"
                 http_url = f"http://{username}:{password}@{host}:{port}"
+                panel_inbound_id = account.panel_inbound_id
+                if panel_inbound_id is None:
+                    try:
+                        panel_inbound_id = int(getattr(inbound, "external_inbound_id", ""))
+                    except (TypeError, ValueError):
+                        panel_inbound_id = None
                 connections.append(
                     {
                         "account_id": account.id,
                         "label": account.label or account.identifier or f"mixed-{account.id}",
                         "identifier": account.identifier,
-                        "panel_inbound_id": account.panel_inbound_id,
+                        "panel_inbound_id": panel_inbound_id,
+                        "panel_inbound_ref_id": account.panel_inbound_ref_id,
                         "inbound_remark": inbound.remark,
+                        "panel_id": item.get("panel_id"),
+                        "panel_name": item.get("panel_name"),
+                        "region": item.get("region"),
+                        "member_id": item.get("member_id"),
+                        "selected": bool(selected and selected.get("account").id == account.id),
                         "host": host,
                         "port": port,
                         "username": username,
@@ -2476,21 +3463,36 @@ def create_app():
                         "urls": [socks_url, http_url],
                     }
                 )
+                servers.append(
+                    {
+                        "member_id": item.get("member_id"),
+                        "label": account.label or account.identifier or f"mixed-{account.id}",
+                        "panel_id": item.get("panel_id"),
+                        "panel_name": item.get("panel_name"),
+                        "region": item.get("region"),
+                        "selected": bool(selected and selected.get("account").id == account.id),
+                    }
+                )
 
             if not connections:
                 return jsonify({"ok": False, "error": "Visible MIXED accounts have no credentials"}), 409
 
             first = connections[0]
+            db.commit()
 
             return jsonify(
                 {
                     "ok": True,
                     "protocol": "mixed",
+                    "group_key": "socks5",
+                    "selected_member_id": selected_member_id,
+                    "applied_strategy": strategy,
                     "host": first.get("host"),
                     "port": first.get("port"),
                     "username": first.get("username"),
                     "password": first.get("password"),
                     "urls": first.get("urls"),
+                    "servers": servers,
                     "connections": connections,
                     "total": len(connections),
                 }
@@ -2509,12 +3511,15 @@ def create_app():
             if not sub:
                 return jsonify({"ok": False, "error": "Active subscription required"}), 403
 
-            rows = _visible_accounts_for_protocol(db, auth["user_id"], "http")
-            if not rows:
+            candidates, selected, strategy, selected_member_id = _resolve_selected_candidate(db, auth["user_id"], "http")
+            if not candidates:
                 return jsonify({"ok": False, "error": "Visible HTTP account not found"}), 404
 
             connections: list[dict] = []
-            for account, inbound in rows:
+            servers: list[dict] = []
+            for item in candidates:
+                account = item["account"]
+                inbound = item["inbound"]
                 port = int(inbound.port)
                 username = account.identifier
                 password = account.secret
@@ -2522,13 +3527,25 @@ def create_app():
                     continue
 
                 http_url = f"http://{username}:{password}@{host}:{port}"
+                panel_inbound_id = account.panel_inbound_id
+                if panel_inbound_id is None:
+                    try:
+                        panel_inbound_id = int(getattr(inbound, "external_inbound_id", ""))
+                    except (TypeError, ValueError):
+                        panel_inbound_id = None
                 connections.append(
                     {
                         "account_id": account.id,
                         "label": account.label or account.identifier or f"http-{account.id}",
                         "identifier": account.identifier,
-                        "panel_inbound_id": account.panel_inbound_id,
+                        "panel_inbound_id": panel_inbound_id,
+                        "panel_inbound_ref_id": account.panel_inbound_ref_id,
                         "inbound_remark": inbound.remark,
+                        "panel_id": item.get("panel_id"),
+                        "panel_name": item.get("panel_name"),
+                        "region": item.get("region"),
+                        "member_id": item.get("member_id"),
+                        "selected": bool(selected and selected.get("account").id == account.id),
                         "host": host,
                         "port": port,
                         "username": username,
@@ -2536,22 +3553,591 @@ def create_app():
                         "urls": [http_url],
                     }
                 )
+                servers.append(
+                    {
+                        "member_id": item.get("member_id"),
+                        "label": account.label or account.identifier or f"http-{account.id}",
+                        "panel_id": item.get("panel_id"),
+                        "panel_name": item.get("panel_name"),
+                        "region": item.get("region"),
+                        "selected": bool(selected and selected.get("account").id == account.id),
+                    }
+                )
 
             if not connections:
                 return jsonify({"ok": False, "error": "Visible HTTP accounts have no credentials"}), 409
 
             first = connections[0]
+            db.commit()
             return jsonify(
                 {
                     "ok": True,
                     "protocol": "http",
+                    "group_key": "socks5",
+                    "selected_member_id": selected_member_id,
+                    "applied_strategy": strategy,
                     "host": first.get("host"),
                     "port": first.get("port"),
                     "username": first.get("username"),
                     "password": first.get("password"),
                     "urls": first.get("urls"),
+                    "servers": servers,
                     "connections": connections,
                     "total": len(connections),
+                }
+            )
+
+    def _serialize_panel(panel: Panel) -> dict:
+        return {
+            "id": panel.id,
+            "name": panel.name,
+            "provider": panel.provider,
+            "base_url": panel.base_url,
+            "auth_type": panel.auth_type,
+            "auth_secret_ref": panel.auth_secret_ref,
+            "is_active": bool(panel.is_active),
+            "is_default": bool(panel.is_default),
+            "region": panel.region,
+            "health_status": panel.health_status,
+            "last_ok_at": panel.last_ok_at.isoformat() if panel.last_ok_at else None,
+            "error_message": panel.error_message,
+            "created_at": panel.created_at.isoformat() if panel.created_at else None,
+            "updated_at": panel.updated_at.isoformat() if panel.updated_at else None,
+        }
+
+    @app.get("/api/admin/panels")
+    def admin_panels_list():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            rows = db.query(Panel).order_by(Panel.is_default.desc(), Panel.created_at.asc()).all()
+            return jsonify({"ok": True, "panels": [_serialize_panel(row) for row in rows]})
+
+    @app.post("/api/admin/panels/test-connection")
+    def admin_panels_test_connection():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        provider = _normalize_panel_provider(body.get("provider"))
+        base_url = str(body.get("base_url") or "").strip()
+        auth_type = str(body.get("auth_type") or "login_password").strip().lower() or "login_password"
+        if not base_url:
+            return jsonify({"ok": False, "error": "base_url is required"}), 400
+        auth_payload = {
+            "username": str(body.get("username") or body.get("login") or "").strip(),
+            "password": str(body.get("password") or "").strip(),
+            "token": str(body.get("token") or "").strip(),
+        }
+        panel_stub = Panel(
+            id=str(uuid4()),
+            name=str(body.get("name") or "Panel").strip() or "Panel",
+            provider=provider,
+            base_url=base_url,
+            auth_type=auth_type,
+            auth_secret_ref=str(uuid4()),
+            is_active=1,
+            is_default=0,
+        )
+        try:
+            result = panel_registry.get_provider(provider).health_check(panel_stub, auth_payload)
+            return jsonify({"ok": True, "result": result})
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 502
+
+    @app.post("/api/admin/panels")
+    def admin_panels_create():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        name = str(body.get("name") or "").strip()
+        base_url = str(body.get("base_url") or "").strip()
+        provider = _normalize_panel_provider(body.get("provider"))
+        auth_type = str(body.get("auth_type") or "login_password").strip().lower() or "login_password"
+        if not name:
+            return jsonify({"ok": False, "error": "name is required"}), 400
+        if not base_url:
+            return jsonify({"ok": False, "error": "base_url is required"}), 400
+
+        secret_payload = {
+            "username": str(body.get("username") or body.get("login") or "").strip(),
+            "password": str(body.get("password") or "").strip(),
+            "token": str(body.get("token") or "").strip(),
+        }
+        with SessionLocal() as db:
+            secret = PanelSecret(
+                id=str(uuid4()),
+                provider=provider,
+                auth_type=auth_type,
+                ciphertext=encrypt_payload(secret_payload),
+            )
+            db.add(secret)
+            db.flush()
+
+            row = Panel(
+                id=str(uuid4()),
+                name=name[:120],
+                provider=provider,
+                base_url=base_url[:512],
+                auth_type=auth_type,
+                auth_secret_ref=secret.id,
+                is_active=1 if body.get("is_active", True) else 0,
+                is_default=1 if body.get("is_default") else 0,
+                region=(str(body.get("region") or "").strip()[:16] or None),
+                health_status="unknown",
+            )
+            if row.is_default:
+                db.query(Panel).update({"is_default": 0})
+            db.add(row)
+            db.commit()
+            return jsonify({"ok": True, "panel": _serialize_panel(row)})
+
+    @app.post("/api/admin/panels/<panel_id>")
+    def admin_panels_update(panel_id: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        with SessionLocal() as db:
+            row = db.query(Panel).filter(Panel.id == panel_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Panel not found"}), 404
+            if "name" in body:
+                row.name = str(body.get("name") or "").strip()[:120] or row.name
+            if "base_url" in body:
+                base_url = str(body.get("base_url") or "").strip()
+                if base_url:
+                    row.base_url = base_url[:512]
+            if "provider" in body:
+                row.provider = _normalize_panel_provider(body.get("provider"))
+            if "region" in body:
+                row.region = str(body.get("region") or "").strip()[:16] or None
+            if "auth_type" in body:
+                row.auth_type = str(body.get("auth_type") or "").strip().lower() or row.auth_type
+            db.commit()
+            return jsonify({"ok": True, "panel": _serialize_panel(row)})
+
+    @app.post("/api/admin/panels/<panel_id>/rotate-secret")
+    def admin_panels_rotate_secret(panel_id: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        with SessionLocal() as db:
+            panel = db.query(Panel).filter(Panel.id == panel_id).first()
+            if not panel:
+                return jsonify({"ok": False, "error": "Panel not found"}), 404
+            secret = db.query(PanelSecret).filter(PanelSecret.id == panel.auth_secret_ref).first()
+            if not secret:
+                return jsonify({"ok": False, "error": "Panel secret not found"}), 404
+
+            payload = {
+                "username": str(body.get("username") or body.get("login") or "").strip(),
+                "password": str(body.get("password") or "").strip(),
+                "token": str(body.get("token") or "").strip(),
+            }
+            secret.auth_type = str(body.get("auth_type") or panel.auth_type).strip().lower() or panel.auth_type
+            secret.ciphertext = encrypt_payload(payload)
+            panel.auth_type = secret.auth_type
+            panel_registry.invalidate_panel(panel.id)
+            db.commit()
+            return jsonify({"ok": True, "panel": _serialize_panel(panel)})
+
+    @app.post("/api/admin/panels/<panel_id>/activate")
+    def admin_panels_activate(panel_id: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        is_active = 1 if body.get("is_active", True) else 0
+        with SessionLocal() as db:
+            panel = db.query(Panel).filter(Panel.id == panel_id).first()
+            if not panel:
+                return jsonify({"ok": False, "error": "Panel not found"}), 404
+            panel.is_active = is_active
+            db.commit()
+            return jsonify({"ok": True, "panel": _serialize_panel(panel)})
+
+    @app.post("/api/admin/panels/<panel_id>/set-default")
+    def admin_panels_set_default(panel_id: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            panel = db.query(Panel).filter(Panel.id == panel_id).first()
+            if not panel:
+                return jsonify({"ok": False, "error": "Panel not found"}), 404
+            db.query(Panel).update({"is_default": 0})
+            panel.is_default = 1
+            db.commit()
+            return jsonify({"ok": True, "panel": _serialize_panel(panel)})
+
+    @app.post("/api/admin/panels/<panel_id>/sync-inbounds")
+    def admin_panel_sync_inbounds(panel_id: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            panel = db.query(Panel).filter(Panel.id == panel_id, Panel.is_active == 1).first()
+            if not panel:
+                return jsonify({"ok": False, "error": "Panel not found or inactive"}), 404
+            try:
+                provider = panel_registry.get_provider(panel.provider)
+                auth_payload = panel_registry.get_auth_payload(db, panel)
+                items = provider.list_inbounds(panel, auth_payload)
+                seen: set[str] = set()
+                for item in items:
+                    row = _sync_single_inbound_from_panel(db, item, panel=panel)
+                    seen.add(row.external_inbound_id)
+                stale_rows = db.query(PanelInbound).filter(PanelInbound.panel_id == panel.id).all()
+                stale_disabled = 0
+                for stale in stale_rows:
+                    if stale.external_inbound_id in seen:
+                        continue
+                    stale.enabled = 0
+                    stale.last_sync_at = utcnow()
+                    stale_disabled += 1
+                panel.health_status = "green"
+                panel.last_ok_at = utcnow()
+                panel.error_message = None
+                sync_group_members_from_inbounds(db)
+                db.commit()
+                return jsonify({"ok": True, "upserted": len(seen), "stale_disabled": stale_disabled})
+            except Exception as exc:
+                panel_registry.invalidate_panel(panel.id)
+                panel.health_status = "red"
+                panel.error_message = str(exc)[:500]
+                db.commit()
+                return jsonify({"ok": False, "error": str(exc)}), 502
+
+    @app.get("/api/admin/panel-inbounds")
+    def admin_panel_inbounds_list():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            rows = (
+                db.query(PanelInbound, Panel)
+                .join(Panel, Panel.id == PanelInbound.panel_id)
+                .order_by(Panel.name.asc(), PanelInbound.id.asc())
+                .all()
+            )
+            payload = []
+            for inbound, panel in rows:
+                payload.append(
+                    {
+                        "id": inbound.id,
+                        "panel_id": panel.id,
+                        "panel_name": panel.name,
+                        "provider": panel.provider,
+                        "region": panel.region,
+                        "external_inbound_id": inbound.external_inbound_id,
+                        "protocol": inbound.protocol,
+                        "port": inbound.port,
+                        "remark": inbound.remark,
+                        "listen": inbound.listen,
+                        "enabled": bool(inbound.enabled),
+                        "show_in_app": bool(inbound.show_in_app),
+                        "last_sync_at": inbound.last_sync_at.isoformat() if inbound.last_sync_at else None,
+                        "updated_at": inbound.updated_at.isoformat() if inbound.updated_at else None,
+                    }
+                )
+            return jsonify({"ok": True, "inbounds": payload})
+
+    @app.post("/api/admin/panel-inbounds/<int:panel_inbound_ref_id>/visibility")
+    def admin_panel_inbound_visibility(panel_inbound_ref_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        if "show_in_app" not in body:
+            return jsonify({"ok": False, "error": "show_in_app is required"}), 400
+        with SessionLocal() as db:
+            inbound = db.query(PanelInbound).filter(PanelInbound.id == panel_inbound_ref_id).first()
+            if not inbound:
+                return jsonify({"ok": False, "error": "Panel inbound not found"}), 404
+            inbound.show_in_app = 1 if body.get("show_in_app") else 0
+            panel = db.query(Panel).filter(Panel.id == inbound.panel_id).first()
+            if panel and panel.is_default:
+                try:
+                    legacy_id = int(inbound.external_inbound_id)
+                except (TypeError, ValueError):
+                    legacy_id = None
+                if legacy_id is not None:
+                    legacy = db.query(Inbound).filter(Inbound.panel_inbound_id == legacy_id).first()
+                    if legacy:
+                        legacy.show_in_app = inbound.show_in_app
+            db.commit()
+            return jsonify(
+                {
+                    "ok": True,
+                    "inbound": {
+                        "id": inbound.id,
+                        "show_in_app": bool(inbound.show_in_app),
+                    },
+                }
+            )
+
+    @app.get("/api/admin/panel-inbounds/<int:panel_inbound_ref_id>/clients")
+    def admin_panel_inbound_clients(panel_inbound_ref_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            inbound = db.query(PanelInbound).filter(PanelInbound.id == panel_inbound_ref_id).first()
+            if not inbound:
+                return jsonify({"ok": False, "error": "Panel inbound not found"}), 404
+            clients = extract_clients_from_panel_inbound(inbound)
+            return jsonify(
+                {
+                    "ok": True,
+                    "panel_inbound_ref_id": inbound.id,
+                    "external_inbound_id": inbound.external_inbound_id,
+                    "protocol": inbound.protocol,
+                    "clients": clients,
+                }
+            )
+
+    @app.post("/api/admin/panel-inbounds/<int:panel_inbound_ref_id>/clients")
+    def admin_panel_inbound_clients_create(panel_inbound_ref_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        label = str(body.get("label") or body.get("email") or "").strip()
+        if not label:
+            return jsonify({"ok": False, "error": "label is required"}), 400
+        with SessionLocal() as db:
+            inbound = db.query(PanelInbound).filter(PanelInbound.id == panel_inbound_ref_id).first()
+            if not inbound:
+                return jsonify({"ok": False, "error": "Panel inbound not found"}), 404
+            panel = db.query(Panel).filter(Panel.id == inbound.panel_id).first()
+            if not panel:
+                return jsonify({"ok": False, "error": "Panel not found"}), 404
+            protocol = str(inbound.protocol or "").strip().lower()
+            if protocol != "vless":
+                return jsonify({"ok": False, "error": "Only VLESS panel inbounds support add client"}), 400
+            existing = extract_clients_from_panel_inbound(inbound)
+            existing_labels = {str(item.get("label") or "").strip().lower() for item in existing}
+            if label.lower() in existing_labels:
+                return jsonify({"ok": False, "error": "Client with this label already exists"}), 409
+            client_id = str(uuid4())
+            client_payload = {
+                "id": client_id,
+                "email": label[:64],
+                "flow": str(body.get("flow") or "xtls-rprx-vision").strip() or "xtls-rprx-vision",
+                "limitIp": int(body.get("limit_ip") or 0),
+                "totalGB": int(body.get("total_gb") or 0) * 1024 * 1024 * 1024,
+                "expiryTime": 0,
+                "enable": True,
+                "tgId": 0,
+                "subId": str(body.get("sub_id") or _generate_panel_sub_id()).strip()[:32] or _generate_panel_sub_id(),
+                "reset": 0,
+            }
+            try:
+                provider = panel_registry.get_provider(panel.provider)
+                auth_payload = panel_registry.get_auth_payload(db, panel)
+                panel_result = provider.create_client(panel, inbound, client_payload, auth_payload)
+                items = provider.list_inbounds(panel, auth_payload)
+                panel_item = next((item for item in items if str(item.get("id")) == str(inbound.external_inbound_id)), None)
+                if panel_item:
+                    inbound = _sync_single_inbound_from_panel(db, panel_item, panel=panel)
+                clients = extract_clients_from_panel_inbound(inbound)
+                db.commit()
+                return jsonify(
+                    {
+                        "ok": True,
+                        "panel_inbound_ref_id": inbound.id,
+                        "created_client": next((item for item in clients if item.get("identifier") == client_id), None),
+                        "clients": clients,
+                        "panel_result": panel_result,
+                    }
+                )
+            except Exception as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 502
+
+    @app.get("/api/admin/inbound-groups")
+    def admin_inbound_groups_list():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            groups = db.query(InboundGroup).order_by(InboundGroup.sort.asc(), InboundGroup.id.asc()).all()
+            payload = []
+            for group in groups:
+                members = (
+                    db.query(InboundGroupMember, PanelInbound, Panel)
+                    .join(PanelInbound, PanelInbound.id == InboundGroupMember.panel_inbound_id)
+                    .join(Panel, Panel.id == PanelInbound.panel_id)
+                    .filter(InboundGroupMember.group_id == group.id)
+                    .order_by(InboundGroupMember.priority.asc(), InboundGroupMember.id.asc())
+                    .all()
+                )
+                payload.append(
+                    {
+                        "id": group.id,
+                        "key": group.key,
+                        "title": group.title,
+                        "visible": bool(group.visible),
+                        "sort": group.sort,
+                        "members": [
+                            {
+                                "id": member.id,
+                                "panel_inbound_id": member.panel_inbound_id,
+                                "external_inbound_id": inbound.external_inbound_id,
+                                "panel_id": panel.id,
+                                "panel_name": panel.name,
+                                "label": member.label,
+                                "priority": member.priority,
+                                "is_active": bool(member.is_active),
+                            }
+                            for member, inbound, panel in members
+                        ],
+                    }
+                )
+            return jsonify({"ok": True, "groups": payload})
+
+    @app.post("/api/admin/inbound-groups")
+    def admin_inbound_groups_create():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        key = str(body.get("key") or "").strip().lower()
+        title = str(body.get("title") or "").strip()
+        if not key or not title:
+            return jsonify({"ok": False, "error": "key and title are required"}), 400
+        with SessionLocal() as db:
+            existing = db.query(InboundGroup).filter(InboundGroup.key == key).first()
+            if existing:
+                return jsonify({"ok": False, "error": "Group key already exists"}), 409
+            row = InboundGroup(
+                key=key[:32],
+                title=title[:64],
+                visible=1 if body.get("visible", True) else 0,
+                sort=int(body.get("sort") or 100),
+            )
+            db.add(row)
+            db.commit()
+            return jsonify({"ok": True, "group": {"id": row.id, "key": row.key, "title": row.title}})
+
+    @app.post("/api/admin/inbound-groups/<int:group_id>")
+    def admin_inbound_groups_update(group_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        with SessionLocal() as db:
+            row = db.query(InboundGroup).filter(InboundGroup.id == group_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Group not found"}), 404
+            if "title" in body:
+                title = str(body.get("title") or "").strip()
+                if title:
+                    row.title = title[:64]
+            if "visible" in body:
+                row.visible = 1 if body.get("visible") else 0
+            if "sort" in body:
+                row.sort = int(body.get("sort") or row.sort)
+            db.commit()
+            return jsonify({"ok": True})
+
+    @app.post("/api/admin/inbound-groups/<int:group_id>/members/upsert")
+    def admin_inbound_group_members_upsert(group_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        panel_inbound_id = body.get("panel_inbound_id")
+        if not panel_inbound_id:
+            return jsonify({"ok": False, "error": "panel_inbound_id is required"}), 400
+        with SessionLocal() as db:
+            group = db.query(InboundGroup).filter(InboundGroup.id == group_id).first()
+            if not group:
+                return jsonify({"ok": False, "error": "Group not found"}), 404
+            inbound = db.query(PanelInbound).filter(PanelInbound.id == int(panel_inbound_id)).first()
+            if not inbound:
+                return jsonify({"ok": False, "error": "Panel inbound not found"}), 404
+            row = (
+                db.query(InboundGroupMember)
+                .filter(
+                    InboundGroupMember.group_id == group.id,
+                    InboundGroupMember.panel_inbound_id == inbound.id,
+                )
+                .first()
+            )
+            if not row:
+                row = InboundGroupMember(group_id=group.id, panel_inbound_id=inbound.id)
+                db.add(row)
+            row.label = str(body.get("label") or inbound.remark or "").strip()[:120] or None
+            row.priority = int(body.get("priority") or 100)
+            row.is_active = 1 if body.get("is_active", True) else 0
+            db.commit()
+            return jsonify({"ok": True, "member_id": row.id})
+
+    @app.post("/api/admin/inbound-groups/<int:group_id>/members/<int:member_id>/delete")
+    def admin_inbound_group_members_delete(group_id: int, member_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            row = (
+                db.query(InboundGroupMember)
+                .filter(InboundGroupMember.id == member_id, InboundGroupMember.group_id == group_id)
+                .first()
+            )
+            if not row:
+                return jsonify({"ok": False, "error": "Group member not found"}), 404
+            db.delete(row)
+            db.commit()
+            return jsonify({"ok": True, "deleted": True})
+
+    @app.post("/api/vpn/select-server")
+    def vpn_select_server():
+        auth, err = _auth_context()
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        group_key = str(body.get("group_key") or "").strip().lower()
+        member_id_raw = body.get("member_id")
+        strategy_raw = body.get("strategy")
+        strategy = (
+            _normalize_selection_strategy(strategy_raw)
+            if strategy_raw not in (None, "")
+            else "manual"
+        )
+        if group_key not in {"vless", "socks5"}:
+            return jsonify({"ok": False, "error": "group_key must be vless or socks5"}), 400
+        try:
+            member_id = int(member_id_raw)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "member_id must be an integer"}), 400
+
+        with SessionLocal() as db:
+            user_conn = _ensure_user_connection(db, auth["user_id"], group_key)
+            if not user_conn:
+                return jsonify({"ok": False, "error": "Group not found"}), 404
+            member = (
+                db.query(InboundGroupMember)
+                .filter(
+                    InboundGroupMember.id == member_id,
+                    InboundGroupMember.group_id == user_conn.group_id,
+                    InboundGroupMember.is_active == 1,
+                )
+                .first()
+            )
+            if not member:
+                return jsonify({"ok": False, "error": "Group member not found or inactive"}), 404
+            user_conn.selected_member_id = member.id
+            user_conn.selection_strategy = strategy
+            db.commit()
+            return jsonify(
+                {
+                    "ok": True,
+                    "selected_member_id": member.id,
+                    "applied_strategy": user_conn.selection_strategy,
                 }
             )
 

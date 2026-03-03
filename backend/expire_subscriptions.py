@@ -2,7 +2,8 @@ import os
 from datetime import datetime, timezone
 
 from .db import SessionLocal
-from .models import Subscription, VpnAccount
+from .models import Panel, PanelInbound, Subscription, VpnAccount
+from .panels.registry import PanelRegistry
 from .xui_api import XUIClient
 
 
@@ -22,6 +23,7 @@ def run() -> int:
     changed = 0
     should_disable = os.getenv("DISABLE_CLIENTS_ON_EXPIRE", "true").strip().lower() in {"1", "true", "yes", "on"}
     xui = XUIClient() if should_disable else None
+    registry = PanelRegistry() if should_disable else None
 
     with SessionLocal() as db:
         subs = (
@@ -46,7 +48,27 @@ def run() -> int:
                     .all()
                 )
                 for account in accounts:
-                    if account.panel_inbound_id and account.identifier:
+                    if not account.identifier:
+                        continue
+                    if account.panel_inbound_ref_id and registry:
+                        inbound = db.query(PanelInbound).filter(PanelInbound.id == account.panel_inbound_ref_id).first()
+                        if inbound:
+                            panel = db.query(Panel).filter(Panel.id == inbound.panel_id).first()
+                            if panel:
+                                try:
+                                    provider = registry.get_provider(panel.provider)
+                                    auth_payload = registry.get_auth_payload(db, panel)
+                                    provider.update_client(
+                                        panel,
+                                        account.identifier,
+                                        {"inbound_id": int(inbound.external_inbound_id), "enable": False},
+                                        auth_payload,
+                                    )
+                                    continue
+                                except Exception:
+                                    # fallback to legacy path below
+                                    pass
+                    if account.panel_inbound_id:
                         xui.disable_client(account.panel_inbound_id, account.identifier)
 
         db.commit()

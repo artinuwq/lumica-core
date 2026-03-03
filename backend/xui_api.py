@@ -176,3 +176,49 @@ class XUIClient:
                 except requests.RequestException:
                     continue
         return False
+
+    def add_client(self, inbound_id: int, client: dict[str, Any]) -> dict[str, Any]:
+        self.login()
+        errors: list[str] = []
+        prefix_candidates = [self._active_prefix] + [p for p in self._candidate_prefixes() if p != self._active_prefix]
+
+        payload_settings = {"clients": [client]}
+        payload_variants = [
+            {"id": inbound_id, "settings": json.dumps(payload_settings, ensure_ascii=False)},
+            {"id": inbound_id, "settings": payload_settings},
+            {"inboundId": inbound_id, "settings": json.dumps(payload_settings, ensure_ascii=False)},
+        ]
+
+        for prefix in prefix_candidates:
+            add_urls = [
+                self._build_url(prefix, "/panel/api/inbounds/addClient"),
+                self._build_url(prefix, "/panel/api/inbounds/add-client"),
+                self._build_url(prefix, "/panel/api/inbounds/addclient"),
+                self._build_url(prefix, "/api/inbounds/addClient"),
+                self._build_url(prefix, "/api/inbounds/add-client"),
+                self._build_url(prefix, "/inbounds/addClient"),
+            ]
+            seen: list[str] = []
+            for url in add_urls:
+                if url in seen:
+                    continue
+                seen.append(url)
+                for payload in payload_variants:
+                    try:
+                        response = self.session.post(url, json=payload, timeout=10)
+                    except requests.RequestException as exc:
+                        errors.append(f"{url}: {exc}")
+                        continue
+                    if response.status_code >= 400:
+                        errors.append(f"{url}: HTTP {response.status_code}")
+                        continue
+                    try:
+                        parsed = response.json()
+                    except ValueError:
+                        parsed = {"ok": True, "raw": response.text}
+                    if isinstance(parsed, dict) and parsed.get("success") is False:
+                        errors.append(f"{url}: success=false")
+                        continue
+                    return parsed if isinstance(parsed, dict) else {"ok": True, "payload": parsed}
+
+        raise RuntimeError(f"Failed to add client to inbound {inbound_id}: {' | '.join(errors)[:1200]}")

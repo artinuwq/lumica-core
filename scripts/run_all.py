@@ -15,6 +15,7 @@ load_dotenv(ENV_FILE)
 
 from backend.app import create_app  # noqa: E402
 from bot.bot import start_bot  # noqa: E402
+from scripts.scheduler_jobs import run_scheduler_forever  # noqa: E402
 
 
 def run_web() -> None:
@@ -26,7 +27,9 @@ def run_web() -> None:
 
 async def main() -> None:
     web_thread = threading.Thread(target=run_web, daemon=True)
+    scheduler_thread = threading.Thread(target=run_scheduler_forever, daemon=True)
     web_thread.start()
+    scheduler_thread.start()
     await start_bot()
 
 
