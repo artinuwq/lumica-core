@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from ..models import InboundGroup, InboundGroupMember, Panel, PanelInbound
+from lumica.domain.models import InboundGroup, InboundGroupMember, Panel, PanelInbound
 from .registry import PanelRegistry
 from .xui_provider import _extract_clients_from_settings
 

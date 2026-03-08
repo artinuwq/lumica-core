@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from ..models import Panel, PanelSecret
+from lumica.domain.models import Panel, PanelSecret
 from .provider import PanelProvider
 from .xui_provider import XuiProvider
 
@@ -97,15 +97,9 @@ class PanelRegistry:
         return (
             db.query(Panel)
             .filter(Panel.is_active == 1)
-            .order_by(Panel.is_default.desc(), Panel.created_at.asc())
+            .order_by(Panel.created_at.asc())
             .all()
         )
-
-    def get_default_panel(self, db) -> Panel | None:
-        row = db.query(Panel).filter(Panel.is_default == 1).order_by(Panel.created_at.asc()).first()
-        if row:
-            return row
-        return db.query(Panel).filter(Panel.is_active == 1).order_by(Panel.created_at.asc()).first()
 
     def invalidate_panel(self, panel_id: str) -> None:
         self._auth_cache.pop(str(panel_id), None)
@@ -140,4 +134,3 @@ class PanelRegistry:
             panel.health_status = "red"
             panel.error_message = str(exc)[:500]
             return {"ok": False, "error": str(exc)}
-

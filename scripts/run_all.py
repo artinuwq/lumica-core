@@ -1,28 +1,27 @@
 import asyncio
-import os
 import sys
 import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+SRC = ROOT / "src"
+for path in (ROOT, SRC):
+    raw = str(path)
+    if raw not in sys.path:
+        sys.path.insert(0, raw)
 
-from scripts.env_loader import ENV_FILE, load_dotenv  # noqa: E402
+from lumica.bot import start_bot  # noqa: E402
+from lumica.infra import ENV_FILE, load_dotenv  # noqa: E402
+from lumica.jobs import run_scheduler_forever  # noqa: E402
 
 # Load environment before importing modules that read it at import time.
 load_dotenv(ENV_FILE)
 
-from backend.app import create_app  # noqa: E402
-from bot.bot import start_bot  # noqa: E402
-from scripts.scheduler_jobs import run_scheduler_forever  # noqa: E402
+from lumica.runtime.web import run_web_server  # noqa: E402
 
 
 def run_web() -> None:
-    app = create_app()
-    host = os.getenv("FLASK_HOST", "0.0.0.0")
-    port = int(os.getenv("FLASK_PORT", "8000"))
-    app.run(host=host, port=port, use_reloader=False)
+    run_web_server()
 
 
 async def main() -> None:

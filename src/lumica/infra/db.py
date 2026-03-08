@@ -6,7 +6,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+# src/lumica/infra/db.py -> project root is 3 levels above
+BASE_DIR = Path(__file__).resolve().parents[3]
 DATABASE_DIR = BASE_DIR / "database"
 DATABASE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -49,3 +50,6 @@ def _build_engine(url: str):
 engine, DATABASE_URL = _build_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
 Base = declarative_base()
+
+
+__all__ = ["Base", "SessionLocal", "engine"]

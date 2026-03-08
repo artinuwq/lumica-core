@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from ..models import Panel, PanelInbound
+from lumica.domain.models import Panel, PanelInbound
 
 
 class PanelProvider(Protocol):

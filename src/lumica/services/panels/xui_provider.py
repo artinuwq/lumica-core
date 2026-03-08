@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ..models import Panel, PanelInbound
-from ..xui_api import XUIClient
+from lumica.domain.models import Panel, PanelInbound
+from lumica.integrations.xui_client import XUIClient
 from .provider import PanelProvider
 
 

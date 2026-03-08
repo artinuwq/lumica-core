@@ -1,7 +1,9 @@
+"""Environment loading helpers."""
+
 import os
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 ENV_FILE = ROOT / ".env"
 
 
@@ -21,3 +23,7 @@ def load_dotenv(path: Path = ENV_FILE) -> None:
         key = key.strip()
         value = value.strip().strip("'\"")
         os.environ.setdefault(key, value)
+
+
+__all__ = ["ENV_FILE", "ROOT", "load_dotenv"]
+

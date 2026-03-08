@@ -3,8 +3,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from .db import SessionLocal
-from .models import AppSetting
+from lumica.infra.db import SessionLocal
+from lumica.domain.models import AppSetting
 
 _SETTING_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 

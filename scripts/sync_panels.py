@@ -3,26 +3,23 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+SRC = ROOT / "src"
+for path in (ROOT, SRC):
+    raw = str(path)
+    if raw not in sys.path:
+        sys.path.insert(0, raw)
 
-from scripts.env_loader import ENV_FILE, load_dotenv  # noqa: E402
+from lumica.infra import ENV_FILE, SessionLocal, bootstrap_runtime, load_dotenv  # noqa: E402
+from lumica.services.panels import PanelRegistry, sync_all_panels, sync_group_members_from_inbounds  # noqa: E402
 
 load_dotenv(ENV_FILE)
 
-from backend.app import _bootstrap_multi_panel_state, _ensure_schema_compatibility  # noqa: E402
-from backend.db import Base, SessionLocal, engine  # noqa: E402
-from backend.panels import PanelRegistry, sync_all_panels  # noqa: E402
-from backend.panels.service import sync_group_members_from_inbounds  # noqa: E402
-
 
 def main() -> int:
-    Base.metadata.create_all(bind=engine)
-    _ensure_schema_compatibility()
+    bootstrap_runtime(with_multi_panel_state=True)
 
     registry = PanelRegistry()
     with SessionLocal() as db:
-        _bootstrap_multi_panel_state(db)
         result = sync_all_panels(db, registry)
         sync_group_members_from_inbounds(db)
         db.commit()
@@ -32,4 +29,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

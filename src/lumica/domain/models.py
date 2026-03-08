@@ -2,7 +2,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, Numeric, Str
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
-from .db import Base
+from lumica.infra.db import Base
 
 
 class User(Base):

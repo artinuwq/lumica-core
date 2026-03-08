@@ -4,7 +4,7 @@ import time
 
 import requests
 
-from .settings_manager import (
+from lumica.services.settings import (
     CLOUD_TELEGRAM_SEND_RETRIES_KEY,
     CLOUD_TELEGRAM_SEND_RETRY_DELAY_SEC_KEY,
     CLOUD_TELEGRAM_SEND_TIMEOUT_SEC_KEY,
