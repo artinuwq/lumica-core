@@ -255,6 +255,25 @@
             display: grid;
             gap: 0.55rem;
         }
+        .connection-server-group {
+            display: grid;
+            gap: 0.45rem;
+            border: 1px solid rgba(133, 188, 255, 0.18);
+            border-radius: 14px;
+            background: rgba(16, 28, 50, 0.5);
+            padding: 0.7rem;
+        }
+        .connection-server-header {
+            color: #f2f7ff;
+            font-size: 0.82rem;
+            font-weight: 800;
+            line-height: 1.3;
+            letter-spacing: 0.01em;
+        }
+        .connection-server-list {
+            display: grid;
+            gap: 0.5rem;
+        }
         .connections-detail-info {
             border: 1px solid rgba(133, 188, 255, 0.34);
             border-radius: 12px;

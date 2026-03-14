@@ -1,0 +1,6 @@
+{
+  "name": "bot_template",
+  "token_env": "BOT_TEMPLATE_TOKEN",
+  "interval_seconds": 5,
+  "iterations": 0
+}

@@ -1269,6 +1269,46 @@ const statusCard = document.getElementById("status-card");
                 .map((url) => ({ label: `Копировать ${detectUrlType(url)}`, value: url, action: "copy" }));
         }
 
+        function buildConnectionServerParts(row) {
+            const parts = [];
+            const panelName = String(row?.panel_name || "").trim();
+            const region = String(row?.region || "").trim();
+            const memberId = row?.member_id;
+            if (panelName) parts.push(panelName);
+            if (region) parts.push(region.toUpperCase());
+            if (memberId !== null && memberId !== undefined) parts.push(`server#${memberId}`);
+            return parts;
+        }
+
+        function buildConnectionServerKey(row) {
+            return [row?.panel_id, row?.panel_name, row?.region, row?.member_id]
+                .map((value) => String(value ?? "").trim().toLowerCase())
+                .join("|");
+        }
+
+        function groupConnectionsByServer(rows) {
+            const groups = [];
+            const groupsByKey = new Map();
+            rows.forEach((row) => {
+                const key = buildConnectionServerKey(row);
+                let group = groupsByKey.get(key);
+                if (!group) {
+                    group = { row, rows: [] };
+                    groupsByKey.set(key, group);
+                    groups.push(group);
+                }
+                group.rows.push(row);
+            });
+            return groups.map((group, index) => {
+                const parts = buildConnectionServerParts(group.row);
+                const suffix = parts.length ? ` - ${parts.join(" - ")}` : "";
+                return {
+                    title: `\u0421\u0435\u0440\u0432\u0435\u0440 ${index + 1}${suffix}`,
+                    rows: group.rows,
+                };
+            });
+        }
+
         function openConnectionsMenu() {
             connectionsState.activeProtocol = null;
             connectionsMenuPageEl?.classList.remove("hidden");
@@ -1278,7 +1318,7 @@ const statusCard = document.getElementById("status-card");
             updateTelegramBackButton();
         }
 
-        function renderConnectionsDetail(protocol) {
+        function legacyRenderConnectionsDetail(protocol) {
             if (!connectionsDetailListEl) return;
             const rows = Array.isArray(connectionsState.entries?.[protocol]) ? connectionsState.entries[protocol] : [];
             const title = connectionProtocolTitle(protocol);
@@ -1395,6 +1435,106 @@ const statusCard = document.getElementById("status-card");
                 item.appendChild(itemTitle);
                 item.appendChild(copyRow);
                 connectionsDetailListEl.appendChild(item);
+            });
+        }
+
+        function renderConnectionsDetail(protocol) {
+            if (!connectionsDetailListEl) return;
+            const rows = Array.isArray(connectionsState.entries?.[protocol]) ? connectionsState.entries[protocol] : [];
+            const title = connectionProtocolTitle(protocol);
+            const serverGroups = groupConnectionsByServer(rows);
+            connectionsDetailTitleEl.textContent = title;
+            connectionsDetailTitleEl.title = title;
+            updateConnectionsPageContext(protocol);
+            connectionsDetailSubtitleEl.textContent = buildConnectionsInfoText(protocol, rows);
+            connectionsDetailListEl.innerHTML = "";
+
+            if (!rows.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Подключения не найдены.";
+                connectionsDetailListEl.appendChild(empty);
+                return;
+            }
+
+            serverGroups.forEach((group) => {
+                const groupEl = document.createElement("section");
+                groupEl.className = "connection-server-group";
+
+                const groupTitle = document.createElement("div");
+                groupTitle.className = "connection-server-header";
+                groupTitle.textContent = group.title;
+                groupEl.appendChild(groupTitle);
+
+                const groupList = document.createElement("div");
+                groupList.className = "connection-server-list";
+
+                group.rows.forEach((row, idx) => {
+                    const item = document.createElement("div");
+                    item.className = "connection-item";
+
+                    const itemTitle = document.createElement("div");
+                    itemTitle.className = "connection-item-title";
+                    const mixedEmail = String(row?.username || row?.identifier || "").trim();
+                    const rawTitle = String(row?.label || "").trim();
+                    let displayTitle = rawTitle || `Подключение ${idx + 1}`;
+                    if (protocol === "mixed" && mixedEmail) {
+                        const sameAsEmail = displayTitle.toLowerCase() === mixedEmail.toLowerCase();
+                        if (sameAsEmail) {
+                            displayTitle = `Подключение ${idx + 1}`;
+                        }
+                    }
+                    itemTitle.textContent = displayTitle;
+                    item.appendChild(itemTitle);
+
+                    if (protocol === "mixed") {
+                        const meta = document.createElement("div");
+                        meta.className = "connection-item-meta";
+
+                        const emailLine = document.createElement("div");
+                        emailLine.textContent = `Почта: ${mixedEmail || "—"}`;
+
+                        meta.appendChild(emailLine);
+                        item.appendChild(meta);
+                    }
+
+                    const copyRow = document.createElement("div");
+                    copyRow.className = "connection-copy-row";
+                    const copies = connectionCopyItems(protocol, row);
+                    copies.forEach((entry) => {
+                        const copyBtn = document.createElement("button");
+                        copyBtn.type = "button";
+                        copyBtn.className = "connection-copy-btn";
+                        copyBtn.textContent = entry.label;
+                        copyBtn.addEventListener("click", async () => {
+                            const baseText = entry.label;
+                            try {
+                                if (entry.action === "open") {
+                                    openExternalLink(entry.value);
+                                    copyBtn.textContent = "Открыто";
+                                } else {
+                                    await copyToClipboard(entry.value);
+                                    if (entry.showGuide) {
+                                        await openVlessGuide();
+                                    }
+                                    copyBtn.textContent = "Скопировано";
+                                }
+                            } catch (_err) {
+                                copyBtn.textContent = "Ошибка";
+                            }
+                            setTimeout(() => {
+                                copyBtn.textContent = baseText;
+                            }, 1000);
+                        });
+                        copyRow.appendChild(copyBtn);
+                    });
+
+                    item.appendChild(copyRow);
+                    groupList.appendChild(item);
+                });
+
+                groupEl.appendChild(groupList);
+                connectionsDetailListEl.appendChild(groupEl);
             });
         }
 
