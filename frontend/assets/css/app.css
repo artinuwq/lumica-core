@@ -726,6 +726,14 @@
             font-weight: 800;
             flex: 0 0 auto;
         }
+        .work-action-link-danger {
+            border-color: rgba(255, 126, 126, 0.45);
+            background: linear-gradient(135deg, rgba(96, 29, 39, 0.94), rgba(64, 18, 25, 0.98));
+        }
+        .work-action-link-danger .work-action-link-label,
+        .work-action-link-danger .work-action-link-chevron {
+            color: #ffe0e4;
+        }
         .work-btn {
             border: 1px solid rgba(120, 171, 255, 0.36);
             background: linear-gradient(135deg, rgba(30, 47, 84, 0.9), rgba(16, 27, 52, 0.95));

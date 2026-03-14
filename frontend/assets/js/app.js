@@ -126,7 +126,9 @@ const statusCard = document.getElementById("status-card");
         const workPanelDetailPasswordEl = document.getElementById("work-panel-detail-password");
         const workPanelDetailTestBtnEl = document.getElementById("work-panel-detail-test-btn");
         const workPanelDetailSaveBtnEl = document.getElementById("work-panel-detail-save-btn");
+        const workPanelDetailDeleteBtnEl = document.getElementById("work-panel-detail-delete-btn");
         const workPanelDetailStatusEl = document.getElementById("work-panel-detail-status");
+        const workPanelDetailInboundsListEl = document.getElementById("work-panel-detail-inbounds-list");
         const workInboundsListEl = document.getElementById("work-inbounds-list");
         const workInboundDetailTitleEl = document.getElementById("work-inbound-detail-title");
         const workInboundDetailMetaEl = document.getElementById("work-inbound-detail-meta");
@@ -2397,23 +2399,37 @@ const statusCard = document.getElementById("status-card");
         function renderWorkSubscriptionControls(sub) {
             const hasSubscription = Boolean(sub);
             const lifetimeSubscription = isSubscriptionLifetime(sub);
-            const createAsLifetime =
-                !hasSubscription && normalizeSubscriptionStatus(workSubStatusSelectEl?.value) === "lifetime";
-            workSubExtendWrapEl?.classList.toggle("hidden", !hasSubscription || lifetimeSubscription);
-            workSubCreateWrapEl?.classList.toggle("hidden", hasSubscription || createAsLifetime);
+            const selectedStatus = normalizeSubscriptionStatus(workSubStatusSelectEl?.value || sub?.status || "active");
+            const createAsLifetime = !hasSubscription && selectedStatus === "lifetime";
+            const switchingLifetimeToActive = hasSubscription && lifetimeSubscription && selectedStatus === "active";
+            workSubExtendWrapEl?.classList.toggle(
+                "hidden",
+                !hasSubscription || lifetimeSubscription || switchingLifetimeToActive
+            );
+            workSubCreateWrapEl?.classList.toggle(
+                "hidden",
+                (hasSubscription && !switchingLifetimeToActive) || createAsLifetime
+            );
 
             if (workSubExtendBtnEl) {
                 if (!hasSubscription && createAsLifetime) {
                     workSubExtendBtnEl.textContent = "Создать бессрочную подписку";
                 } else {
-                    workSubExtendBtnEl.textContent = hasSubscription ? "Продлить подписку" : "Создать подписку";
+                    workSubExtendBtnEl.textContent = hasSubscription
+                        ? "Продлить подписку"
+                        : "Создать подписку";
                 }
-                workSubExtendBtnEl.classList.toggle("hidden", hasSubscription && lifetimeSubscription);
+                workSubExtendBtnEl.classList.toggle(
+                    "hidden",
+                    (hasSubscription && lifetimeSubscription) || switchingLifetimeToActive
+                );
             }
 
             if (workSubCreateDateEl) {
-                if (!hasSubscription && !createAsLifetime && !workSubCreateDateEl.value) {
-                    workSubCreateDateEl.value = defaultSubscriptionDateValue(30);
+                if ((!hasSubscription && !createAsLifetime) || switchingLifetimeToActive) {
+                    if (!workSubCreateDateEl.value) {
+                        workSubCreateDateEl.value = defaultSubscriptionDateValue(30);
+                    }
                 }
                 if (createAsLifetime) {
                     workSubCreateDateEl.value = "";
@@ -2426,7 +2442,6 @@ const statusCard = document.getElementById("status-card");
                 }
             }
         }
-
         function isValidTelegramId(rawValue) {
             return /^\d+$/.test(String(rawValue || "").trim());
         }
@@ -2816,6 +2831,9 @@ const statusCard = document.getElementById("status-card");
                 renderWorkInboundsManager();
                 renderWorkInboundSelectOptions();
                 renderWorkPendingInboundSelectOptions();
+                if (workState.selectedPanelId) {
+                    renderWorkPanelInbounds(workState.selectedPanelId);
+                }
                 if (String(workState.selectedInboundPanelId) === String(panelInboundRefId)) {
                     renderWorkInboundDetail(panelInboundRefId);
                 }
@@ -3062,6 +3080,14 @@ const statusCard = document.getElementById("status-card");
             return workState.panels.find((row) => String(row?.id || "").trim() === panelId) || null;
         }
 
+        function getWorkPanelInbounds(panelIdRaw) {
+            const panelId = String(panelIdRaw || "").trim();
+            if (!panelId) return [];
+            return (Array.isArray(workState.inbounds) ? workState.inbounds : []).filter(
+                (row) => String(row?.panel_id || "").trim() === panelId
+            );
+        }
+
         function collectWorkPanelPayload() {
             return {
                 name: String(workPanelNameEl?.value || "").trim(),
@@ -3091,6 +3117,89 @@ const statusCard = document.getElementById("status-card");
             workPanelDetailAccessBtnEl.textContent = nextVisible
                 ? "Скрыть настройки доступа"
                 : "Настройки доступа";
+        }
+
+        function renderWorkPanelInbounds(panelIdRaw) {
+            if (!workPanelDetailInboundsListEl) return;
+            workPanelDetailInboundsListEl.innerHTML = "";
+
+            const panelId = String(panelIdRaw || "").trim();
+            if (!panelId) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Сначала открой панель.";
+                workPanelDetailInboundsListEl.appendChild(empty);
+                return;
+            }
+
+            const rows = getWorkPanelInbounds(panelId);
+            if (!rows.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "У панели пока нет синхронизированных подключений.";
+                workPanelDetailInboundsListEl.appendChild(empty);
+                return;
+            }
+
+            rows.forEach((inbound) => {
+                const panelInboundRefId = Number(inbound?.panel_inbound_ref_id || 0);
+                const externalInboundId = inbound?.panel_inbound_id ?? "—";
+                const panelEnabled = Boolean(inbound?.enable);
+                const visibleForUsers = Boolean(inbound?.show_in_app);
+
+                const card = document.createElement("div");
+                card.className = "work-inbound-card interactive";
+                if (String(workState.selectedInboundPanelId || "") === String(panelInboundRefId)) {
+                    card.classList.add("active");
+                }
+                card.tabIndex = 0;
+                card.setAttribute("role", "button");
+                card.setAttribute("aria-label", `Открыть подключение ${externalInboundId}`);
+
+                const head = document.createElement("div");
+                head.className = "work-inbound-head";
+
+                const title = document.createElement("div");
+                title.className = "work-inbound-title";
+                title.textContent = String(inbound?.remark || `Inbound ${externalInboundId}`).trim() || `Inbound ${externalInboundId}`;
+
+                const badges = document.createElement("div");
+                badges.className = "work-inbound-badges";
+                badges.appendChild(createWorkInboundStatusBadge("panel", panelEnabled));
+                badges.appendChild(createWorkInboundStatusBadge("visibility", visibleForUsers));
+
+                head.appendChild(title);
+                head.appendChild(badges);
+                card.appendChild(head);
+
+                const meta = document.createElement("div");
+                meta.className = "work-inbound-meta";
+                const protocol = String(inbound?.protocol || "unknown").toLowerCase();
+                meta.textContent = `#${externalInboundId} • ${protocol} • порт: ${inbound?.port ?? "—"}`;
+                card.appendChild(meta);
+
+                const hint = document.createElement("div");
+                hint.className = "work-inbound-meta";
+                hint.textContent = visibleForUsers
+                    ? "Нажми, чтобы открыть и настроить подключение."
+                    : "Подключение скрыто для пользователей. Нажми, чтобы настроить.";
+                card.appendChild(hint);
+
+                const openDetail = () => {
+                    openWorkInboundDetail(panelInboundRefId).catch((err) => {
+                        console.error("open panel inbound detail error:", err);
+                        setWorkPanelDetailStatus(err?.message || "Не удалось открыть подключение", "error");
+                    });
+                };
+                card.addEventListener("click", openDetail);
+                card.addEventListener("keydown", (event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    openDetail();
+                });
+
+                workPanelDetailInboundsListEl.appendChild(card);
+            });
         }
 
         function clearWorkPanelDetail(note = "Выбери панель в списке.") {
@@ -3128,6 +3237,9 @@ const statusCard = document.getElementById("status-card");
             if (workPanelDetailSaveBtnEl) {
                 workPanelDetailSaveBtnEl.removeAttribute("data-panel-id");
             }
+            if (workPanelDetailDeleteBtnEl) {
+                workPanelDetailDeleteBtnEl.removeAttribute("data-panel-id");
+            }
             if (workPanelDetailBaseUrlEl) {
                 workPanelDetailBaseUrlEl.value = "";
             }
@@ -3136,6 +3248,13 @@ const statusCard = document.getElementById("status-card");
             }
             if (workPanelDetailPasswordEl) {
                 workPanelDetailPasswordEl.value = "";
+            }
+            if (workPanelDetailInboundsListEl) {
+                workPanelDetailInboundsListEl.innerHTML = "";
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Сначала открой панель.";
+                workPanelDetailInboundsListEl.appendChild(empty);
             }
             toggleWorkPanelAccessSection(false);
             setWorkPanelDetailStatus("");
@@ -3152,12 +3271,13 @@ const statusCard = document.getElementById("status-card");
             const region = String(panel?.region || "").trim();
             const provider = String(panel?.provider || "").trim() || "provider";
             const health = String(panel?.health_status || "unknown").trim().toLowerCase() || "unknown";
+            const panelInbounds = getWorkPanelInbounds(panel.id);
 
             if (workPanelDetailTitleEl) {
                 workPanelDetailTitleEl.textContent = `${panelName}${region ? ` (${region})` : ""}`;
             }
             if (workPanelDetailMetaEl) {
-                workPanelDetailMetaEl.textContent = `Тип: ${provider} • Локация: ${region || "—"}`;
+                workPanelDetailMetaEl.textContent = `Тип: ${provider} • Локация: ${region || "—"} • inbound: ${panelInbounds.length}`;
             }
             if (workPanelDetailBadgesEl) {
                 workPanelDetailBadgesEl.innerHTML = "";
@@ -3176,6 +3296,7 @@ const statusCard = document.getElementById("status-card");
                     ["Локация", region || "—"],
                     ["Состояние", health],
                     ["Активность", panel?.is_active ? "active" : "inactive"],
+                    ["Подключения", String(panelInbounds.length)],
                     ["Последняя успешная проверка", panel?.last_ok_at ? fmtDateTime(panel.last_ok_at) : "—"],
                 ];
                 if (panel?.error_message) {
@@ -3212,6 +3333,9 @@ const statusCard = document.getElementById("status-card");
             if (workPanelDetailSaveBtnEl) {
                 workPanelDetailSaveBtnEl.dataset.panelId = panel.id;
             }
+            if (workPanelDetailDeleteBtnEl) {
+                workPanelDetailDeleteBtnEl.dataset.panelId = panel.id;
+            }
             if (workPanelDetailBaseUrlEl) {
                 workPanelDetailBaseUrlEl.value = String(panel?.base_url || "").trim();
             }
@@ -3221,6 +3345,7 @@ const statusCard = document.getElementById("status-card");
             if (workPanelDetailPasswordEl) {
                 workPanelDetailPasswordEl.value = "";
             }
+            renderWorkPanelInbounds(panel.id);
             toggleWorkPanelAccessSection(false);
             setWorkPanelDetailStatus("");
         }
@@ -3304,6 +3429,34 @@ const statusCard = document.getElementById("status-card");
             return { ok: true };
         }
 
+        async function deleteWorkPanel(panelIdRaw) {
+            const panel = findWorkPanelById(panelIdRaw);
+            if (!panel) {
+                throw new Error("Панель не найдена");
+            }
+
+            const panelName = String(panel?.name || "Panel").trim() || "Panel";
+            const confirmed = window.confirm(`Удалить панель "${panelName}" и все связанные подключения?`);
+            if (!confirmed) {
+                return { canceled: true };
+            }
+
+            setWorkPanelDetailStatus("Удаляем панель...");
+            const deletedInboundIds = new Set(
+                getWorkPanelInbounds(panel.id).map((row) => String(row?.panel_inbound_ref_id || "").trim())
+            );
+            const result = await postJson(adminPanelActionUrl(panel.id, "delete"), {});
+
+            if (deletedInboundIds.has(String(workState.selectedInboundPanelId || "").trim())) {
+                clearWorkInboundDetail("Подключение удалено вместе с панелью.");
+            }
+
+            workState.selectedPanelId = null;
+            switchWorkPage("work-panels-page");
+            setWorkPanelStatus(`Панель "${panelName}" удалена`, "success");
+            return result;
+        }
+
         function renderWorkPanelsList(panels) {
             if (!workPanelsListEl) return;
             workPanelsListEl.innerHTML = "";
@@ -3376,12 +3529,22 @@ const statusCard = document.getElementById("status-card");
         }
 
         async function loadWorkPanels() {
-            const resp = await fetchJson(adminPanelsUrl, false);
-            const rows = Array.isArray(resp?.panels) ? resp.panels : [];
+            const [panelsResp, inboundsResp] = await Promise.all([
+                fetchJson(adminPanelsUrl, false),
+                fetchJson(adminInboundsUrl, false),
+            ]);
+            const rows = Array.isArray(panelsResp?.panels) ? panelsResp.panels : [];
             workState.panels = rows;
+            workState.inbounds = Array.isArray(inboundsResp?.inbounds) ? inboundsResp.inbounds : [];
             renderWorkPanelsList(rows);
+            renderWorkInboundsManager();
+            renderWorkInboundSelectOptions();
+            renderWorkPendingInboundSelectOptions();
             if (workState.selectedPanelId) {
                 renderWorkPanelDetail(workState.selectedPanelId);
+            }
+            if (workState.selectedInboundPanelId) {
+                renderWorkInboundDetail(workState.selectedInboundPanelId);
             }
             return rows;
         }
@@ -3610,6 +3773,17 @@ const statusCard = document.getElementById("status-card");
             workState.overview = overview || null;
             const sub = overview?.subscription || null;
             const conn = overview?.connections || null;
+
+            if (workSubStatusSelectEl) {
+                workSubStatusSelectEl.value = sub?.status || "active";
+            }
+            if (workSubPriceInputEl) {
+                workSubPriceInputEl.value = sub?.price_amount ?? "";
+            }
+            if (workSubLimitInputEl) {
+                workSubLimitInputEl.value =
+                    conn?.limit === null || conn?.limit === undefined ? "" : String(conn.limit);
+            }
             renderWorkSubscriptionControls(sub);
 
             workClientSubStatusEl.textContent = sub?.status || "нет";
@@ -3623,19 +3797,7 @@ const statusCard = document.getElementById("status-card");
             } else {
                 workClientConnectionsAvailableEl.textContent = `${conn.active ?? 0}/${conn.limit}`;
             }
-
-            if (workSubStatusSelectEl) {
-                workSubStatusSelectEl.value = sub?.status || "active";
-            }
-            if (workSubPriceInputEl) {
-                workSubPriceInputEl.value = sub?.price_amount ?? "";
-            }
-            if (workSubLimitInputEl) {
-                workSubLimitInputEl.value =
-                    conn?.limit === null || conn?.limit === undefined ? "" : String(conn.limit);
-            }
         }
-
         async function loadSelectedUserOverview() {
             if (!workState.selectedUserId) {
                 renderWorkClientOverview(null);
@@ -4198,7 +4360,7 @@ const statusCard = document.getElementById("status-card");
         document.addEventListener("keydown", (event) => {
             if (event.key !== "Escape") return;
             if (getActiveScreenId() === "screen-work" && getActiveWorkPageId() === "work-inbound-detail-page") {
-                switchWorkPage("work-inbounds-page");
+                switchWorkPage("work-panel-detail-page");
                 return;
             }
             if (getActiveScreenId() === "screen-work" && getActiveWorkPageId() === "work-panel-detail-page") {
@@ -4340,6 +4502,17 @@ const statusCard = document.getElementById("status-card");
             } catch (err) {
                 console.error("save panel detail access error:", err);
                 setWorkPanelDetailStatus(err?.message || "Не удалось сохранить настройки доступа", "error");
+            }
+        });
+
+        workPanelDetailDeleteBtnEl?.addEventListener("click", async () => {
+            const panelId = String(workPanelDetailDeleteBtnEl.dataset.panelId || "").trim();
+            if (!panelId) return;
+            try {
+                await deleteWorkPanel(panelId);
+            } catch (err) {
+                console.error("delete panel error:", err);
+                setWorkPanelDetailStatus(err?.message || "Не удалось удалить панель", "error");
             }
         });
 
@@ -4508,8 +4681,11 @@ const statusCard = document.getElementById("status-card");
                     throw new Error("Сначала открой карточку клиента");
                 }
 
-                const creatingSubscription = !workState.overview?.subscription;
+                const currentSubscription = workState.overview?.subscription || null;
+                const creatingSubscription = !currentSubscription;
                 const selectedStatus = normalizeSubscriptionStatus(workSubStatusSelectEl?.value || "active");
+                const switchingLifetimeToActive =
+                    isSubscriptionLifetime(currentSubscription) && selectedStatus === "active";
                 const payload = {
                     status: selectedStatus || "active",
                     price_amount: workSubPriceInputEl?.value?.trim() || null,
@@ -4517,7 +4693,7 @@ const statusCard = document.getElementById("status-card");
                 };
                 if (selectedStatus === "lifetime") {
                     payload.access_until = null;
-                } else if (creatingSubscription) {
+                } else if (creatingSubscription || switchingLifetimeToActive) {
                     payload.access_until = validateSubscriptionDateValue(workSubCreateDateEl?.value);
                 }
                 const result = await postJson(adminUserSubscriptionUrl(workState.selectedUserId), payload);
@@ -4525,7 +4701,6 @@ const statusCard = document.getElementById("status-card");
                 return result;
             });
         });
-
         workSubExtendBtnEl?.addEventListener("click", async () => {
             await runWorkAction("Extend Subscription", async () => {
                 if (!workState.selectedUserId) {

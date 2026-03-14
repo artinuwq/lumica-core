@@ -169,9 +169,8 @@
                                     </div>
                                 </section>
                                 <section class="work-menu-group">
-                                    <div class="work-menu-group-title">Работа с подключениями</div>
+                                    <div class="work-menu-group-title">Панели и система</div>
                                     <div class="work-menu-buttons">
-                                        <button type="button" class="work-menu-btn" data-work-nav="work-inbounds-page">Подключения</button>
                                         <button type="button" class="work-menu-btn" data-work-nav="work-system-settings-page">Системные настройки</button>
                                         <button type="button" class="work-menu-btn" data-work-nav="work-panels-page">Панели</button>
                                     </div>
@@ -260,7 +259,7 @@
 
                         <section id="work-inbound-detail-page" class="work-page hidden">
                             <div class="work-page-head">
-                                <button class="work-back-btn" data-work-back="work-inbounds-page">← Назад</button>
+                                <button class="work-back-btn" data-work-back="work-panel-detail-page">← Назад</button>
                                 <div id="work-inbound-detail-title" class="work-page-title">Подключение</div>
                             </div>
                             <div id="work-inbound-detail-meta" class="work-inbound-meta">—</div>
@@ -366,6 +365,12 @@
                                 <button id="work-panel-detail-sync-btn" type="button" class="work-btn">Синхронизировать inbound</button>
                                 <button id="work-panel-detail-access-btn" type="button" class="work-btn">Настройки доступа</button>
                             </div>
+                            <div class="work-actions">
+                                <button id="work-panel-detail-delete-btn" type="button" class="work-action-link work-action-link-danger">
+                                    <span class="work-action-link-label">Удалить панель</span>
+                                    <span class="work-action-link-chevron" aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
                             <div id="work-panel-detail-access-wrap" class="work-bind hidden">
                                 <input id="work-panel-detail-base-url" type="url" placeholder="https://host:port/panel/api">
                                 <input id="work-panel-detail-username" type="text" placeholder="login (оставь пустым, если без изменений)">
@@ -377,6 +382,10 @@
                                 <div class="work-note">Данные логина/пароля применяются только при явном сохранении.</div>
                             </div>
                             <div id="work-panel-detail-status" class="work-note hidden"></div>
+                            <div class="work-page-title work-inbound-detail-section-title">Подключения панели</div>
+                            <div id="work-panel-detail-inbounds-list" class="work-inbounds-list">
+                                <div class="work-empty">Сначала открой панель.</div>
+                            </div>
                         </section>
 
                         <section id="work-client-page" class="work-page hidden">

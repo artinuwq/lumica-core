@@ -345,11 +345,96 @@ def build_admin_helpers(deps):
         db.flush()
         return user, True
 
+    def _admin_latest_subscription(db, user_id: int) -> Subscription | None:
+        getter = globals().get("_latest_subscription")
+        if callable(getter):
+            return getter(db, user_id)
+        return (
+            db.query(Subscription)
+            .filter(Subscription.user_id == user_id)
+            .order_by(Subscription.id.desc())
+            .first()
+        )
+
+    def _delete_panel(db, panel_id: str) -> dict | None:
+        panel = db.query(Panel).filter(Panel.id == panel_id).first()
+        if not panel:
+            return None
+
+        inbound_rows = db.query(PanelInbound).filter(PanelInbound.panel_id == panel.id).all()
+        inbound_ref_ids = [row.id for row in inbound_rows]
+        secret = db.query(PanelSecret).filter(PanelSecret.id == panel.auth_secret_ref).first()
+        deleted = {
+            "panels": 0,
+            "panel_secrets": 0,
+            "panel_inbounds": 0,
+            "vpn_accounts": 0,
+            "pending_bindings": 0,
+            "group_members": 0,
+            "user_connections_cleared": 0,
+        }
+
+        if inbound_ref_ids:
+            member_rows = (
+                db.query(InboundGroupMember)
+                .filter(InboundGroupMember.panel_inbound_id.in_(inbound_ref_ids))
+                .all()
+            )
+            member_ids = [row.id for row in member_rows]
+            if member_ids:
+                user_connections = (
+                    db.query(UserConnection)
+                    .filter(UserConnection.selected_member_id.in_(member_ids))
+                    .all()
+                )
+                for row in user_connections:
+                    row.selected_member_id = None
+                deleted["user_connections_cleared"] = len(user_connections)
+
+            for row in member_rows:
+                db.delete(row)
+            deleted["group_members"] = len(member_rows)
+
+            vpn_rows = (
+                db.query(VpnAccount)
+                .filter(VpnAccount.panel_inbound_ref_id.in_(inbound_ref_ids))
+                .all()
+            )
+            for row in vpn_rows:
+                db.delete(row)
+            deleted["vpn_accounts"] = len(vpn_rows)
+
+            pending_rows = (
+                db.query(PendingBinding)
+                .filter(PendingBinding.panel_inbound_ref_id.in_(inbound_ref_ids))
+                .all()
+            )
+            for row in pending_rows:
+                db.delete(row)
+            deleted["pending_bindings"] = len(pending_rows)
+
+            for row in inbound_rows:
+                db.delete(row)
+            deleted["panel_inbounds"] = len(inbound_rows)
+
+        db.delete(panel)
+        deleted["panels"] = 1
+        db.flush()
+        if secret:
+            db.delete(secret)
+            deleted["panel_secrets"] = 1
+
+        panel_registry.invalidate_panel(panel.id)
+        return {
+            "panel_id": panel.id,
+            "name": panel.name,
+            "deleted": deleted,
+        }
     def _apply_admin_subscription_payload(db, user: User, body: dict):
         touches_subscription = any(
             key in body for key in ("extend_months", "status", "price_amount", "access_until")
         )
-        sub = _latest_subscription(db, user.id)
+        sub = _admin_latest_subscription(db, user.id)
         if touches_subscription and not sub:
             sub = Subscription(user_id=user.id, status="active")
             db.add(sub)
@@ -454,6 +539,7 @@ def build_admin_helpers(deps):
         "_panels_status_payload": _panels_status_payload,
         "_get_or_create_user_by_telegram_id": _get_or_create_user_by_telegram_id,
         "_apply_admin_subscription_payload": _apply_admin_subscription_payload,
+        "_delete_panel": _delete_panel,
         "_serialize_panel": _serialize_panel,
     }
 

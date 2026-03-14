@@ -959,6 +959,17 @@ def register_admin_routes(app, deps):
             db.commit()
             return jsonify({"ok": True, "panel": _serialize_panel(panel)})
 
+    @app.post("/api/admin/panels/<panel_id>/delete")
+    def admin_panels_delete(panel_id: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            result = _delete_panel(db, panel_id)
+            if not result:
+                return jsonify({"ok": False, "error": "Panel not found"}), 404
+            db.commit()
+            return jsonify({"ok": True, **result})
     @app.post("/api/admin/panels/<panel_id>/sync-inbounds")
     def admin_panel_sync_inbounds(panel_id: str):
         _, err = _auth_context(require_role="admin")

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
+from lumica.infra import ENV_FILE, load_dotenv
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_BOTS_ROOT = PROJECT_ROOT / "external_bots"
 SCRIPT_ENTRYPOINT = PROJECT_ROOT / "scripts" / "run_external_bots.py"
@@ -232,6 +234,7 @@ async def main_async(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    load_dotenv(ENV_FILE)
     args = parse_args()
     configure_logging(args.log_level)
     try:
