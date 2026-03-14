@@ -11,7 +11,7 @@ def register_vpn_routes(app, deps):
         if err:
             return err
 
-        host = os.getenv("PUBLIC_VPN_HOST") or request.host.split(":")[0]
+        default_host = os.getenv("PUBLIC_VPN_HOST") or request.host.split(":")[0]
         subscription_cache: dict[str, list[str]] = {}
 
         with SessionLocal() as db:
@@ -29,12 +29,14 @@ def register_vpn_routes(app, deps):
                 account = item["account"]
                 inbound = item["inbound"]
                 port = int(inbound.port)
-                meta = account.meta_json or {}
+                meta = account.meta_json if isinstance(account.meta_json, dict) else {}
                 subscription_url = meta.get("sub_url")
                 subscription_urls = _build_subscription_urls(meta.get("sub_id"), subscription_url)
+                panel_host = item.get("panel_host") or _panel_public_host(item.get("panel_base_url"))
+                preferred_host = _extract_host_from_url(meta.get("vless_url")) or panel_host or default_host
 
-                vless_url = meta.get("vless_url")
-                if not vless_url and subscription_urls:
+                subscription_vless_url = None
+                if subscription_urls:
                     for candidate_url in subscription_urls:
                         cached_links = subscription_cache.get(candidate_url)
                         if cached_links is None:
@@ -45,28 +47,27 @@ def register_vpn_routes(app, deps):
                         picked = _pick_vless_from_subscription(cached_links, account.identifier)
                         if not picked:
                             continue
-                        vless_url = picked
+                        subscription_vless_url = picked
                         subscription_url = candidate_url
                         break
-                    if not vless_url and subscription_urls:
+                    if not subscription_vless_url and subscription_urls:
                         subscription_url = subscription_urls[0]
-                if not vless_url and account.identifier:
-                    query_params = {
-                        "type": meta.get("type", "tcp"),
-                        "security": meta.get("security", "reality"),
-                        "flow": meta.get("flow", "xtls-rprx-vision"),
-                        "sni": meta.get("sni", host),
-                        "fp": meta.get("fp", "chrome"),
-                    }
-                    if meta.get("pbk"):
-                        query_params["pbk"] = meta.get("pbk")
-                    if meta.get("sid"):
-                        query_params["sid"] = meta.get("sid")
-                    q = urlencode({k: v for k, v in query_params.items() if v})
-                    label = quote(account.label or "lumica")
-                    vless_url = f"vless://{account.identifier}@{host}:{port}?{q}#{label}"
+
+                built_vless_url = None
+                if account.identifier:
+                    built_vless_url = _build_vless_url_from_inbound(
+                        identifier=account.identifier,
+                        label=account.label,
+                        host=preferred_host,
+                        port=port,
+                        inbound=inbound,
+                        meta=meta,
+                    )
+
+                vless_url = subscription_vless_url or built_vless_url or meta.get("vless_url")
                 if vless_url:
-                    vless_url = _apply_vless_display_name(vless_url, account.label, account.identifier)
+                    vless_url = _apply_vless_display_name(vless_url, account.label, account.identifier, item.get("region"))
+                resolved_host = _extract_host_from_url(vless_url) or preferred_host
 
                 panel_inbound_id = None
                 try:
@@ -87,7 +88,7 @@ def register_vpn_routes(app, deps):
                         "region": item.get("region"),
                         "member_id": item.get("member_id"),
                         "selected": bool(selected and selected.get("account").id == account.id),
-                        "host": host,
+                        "host": resolved_host,
                         "port": port,
                         "sub_id": meta.get("sub_id"),
                         "subscription_url": subscription_url,

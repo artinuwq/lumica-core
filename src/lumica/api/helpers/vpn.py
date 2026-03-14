@@ -79,6 +79,56 @@ def build_vpn_helpers(deps):
                     return link
         return vless_links[0]
 
+    def _safe_dict(value) -> dict:
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except ValueError:
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+        return {}
+
+    def _first_text(*values) -> str:
+        for value in values:
+            if isinstance(value, (list, tuple)):
+                nested = _first_text(*value)
+                if nested:
+                    return nested
+                continue
+            text = str(value or "").strip()
+            if text:
+                return text
+        return ""
+
+    def _extract_host_from_url(raw_url: str | None) -> str | None:
+        value = str(raw_url or "").strip()
+        if not value:
+            return None
+        try:
+            parsed = urlparse(value)
+        except Exception:
+            return None
+        return parsed.hostname or None
+
+    def _panel_public_host(panel_base_url: str | None) -> str | None:
+        return _extract_host_from_url(panel_base_url)
+
+    def _find_vless_client(inbound, identifier: str | None, label: str | None = None) -> dict | None:
+        rows = extract_clients_from_panel_inbound(inbound) if inbound else []
+        wanted_identifier = str(identifier or "").strip().lower()
+        if wanted_identifier:
+            for row in rows:
+                if str(row.get("identifier") or "").strip().lower() == wanted_identifier:
+                    return row
+        wanted_label = str(label or "").strip().lower()
+        if wanted_label:
+            for row in rows:
+                if str(row.get("label") or "").strip().lower() == wanted_label:
+                    return row
+        return None
+
     def _normalize_vless_client_name(label: str | None, identifier: str | None) -> str:
         value = str(label or "").strip()
         if not value:
@@ -94,15 +144,129 @@ def build_vpn_helpers(deps):
 
         return value or "client"
 
-    def _apply_vless_display_name(link: str | None, label: str | None, identifier: str | None) -> str | None:
+    def _normalize_vless_region_name(region: str | None) -> str:
+        value = str(region or "").strip()
+        return value.title() if value else ""
+
+    def _build_vless_display_name(label: str | None, identifier: str | None, region: str | None = None) -> str:
+        client_name = _normalize_vless_client_name(label, identifier)
+        region_name = _normalize_vless_region_name(region)
+        prefix = f"Lumica[{region_name}]" if region_name else "Lumica"
+        return f"{prefix} - {client_name}"
+
+    def _build_vless_query_params(meta: dict | None, inbound, client: dict | None = None) -> list[tuple[str, str]]:
+        overrides = meta if isinstance(meta, dict) else {}
+        stream = _safe_dict(getattr(inbound, "stream_settings", None))
+        reality = _safe_dict(stream.get("realitySettings"))
+        reality_settings = _safe_dict(reality.get("settings"))
+        tcp_header = _safe_dict(_safe_dict(stream.get("tcpSettings")).get("header"))
+        ws_settings = _safe_dict(stream.get("wsSettings"))
+        ws_headers = _safe_dict(ws_settings.get("headers"))
+        httpupgrade_settings = _safe_dict(stream.get("httpupgradeSettings"))
+        httpupgrade_headers = _safe_dict(httpupgrade_settings.get("headers"))
+        split_http_settings = _safe_dict(stream.get("splithttpSettings"))
+        grpc_settings = _safe_dict(stream.get("grpcSettings"))
+        client_raw = _safe_dict((client or {}).get("raw"))
+
+        network = _first_text(overrides.get("type"), stream.get("network")) or "tcp"
+        security = _first_text(overrides.get("security"), stream.get("security"))
+        if not security and reality:
+            security = "reality"
+
+        encryption = _first_text(overrides.get("encryption"), client_raw.get("encryption")) or "none"
+        flow = _first_text(overrides.get("flow"), client_raw.get("flow"))
+        if not flow and security == "reality":
+            flow = "xtls-rprx-vision"
+
+        pbk = _first_text(overrides.get("pbk"), reality_settings.get("publicKey"), reality.get("publicKey"))
+        fp = _first_text(overrides.get("fp"), reality_settings.get("fingerprint"), reality.get("fingerprint"))
+        sni = _first_text(
+            overrides.get("sni"),
+            reality_settings.get("serverName"),
+            reality.get("serverName"),
+            reality.get("serverNames"),
+        )
+        sid = _first_text(overrides.get("sid"), reality.get("shortId"), reality.get("shortIds"))
+        spx = _first_text(overrides.get("spx"), reality_settings.get("spiderX"), reality.get("spiderX"))
+        path = _first_text(
+            overrides.get("path"),
+            ws_settings.get("path"),
+            httpupgrade_settings.get("path"),
+            split_http_settings.get("path"),
+        )
+        service_name = _first_text(overrides.get("serviceName"), grpc_settings.get("serviceName"))
+        authority = _first_text(overrides.get("authority"), grpc_settings.get("authority"))
+        host_header = _first_text(
+            overrides.get("host"),
+            ws_headers.get("Host"),
+            ws_headers.get("host"),
+            httpupgrade_headers.get("Host"),
+            httpupgrade_headers.get("host"),
+        )
+        header_type = _first_text(overrides.get("headerType"), tcp_header.get("type"))
+
+        query_params: list[tuple[str, str]] = [("type", network)]
+        if encryption:
+            query_params.append(("encryption", encryption))
+        if security:
+            query_params.append(("security", security))
+        if pbk:
+            query_params.append(("pbk", pbk))
+        if fp:
+            query_params.append(("fp", fp))
+        if sni:
+            query_params.append(("sni", sni))
+        if sid:
+            query_params.append(("sid", sid))
+        if spx:
+            query_params.append(("spx", spx))
+        if service_name:
+            query_params.append(("serviceName", service_name))
+        if authority:
+            query_params.append(("authority", authority))
+        if path:
+            query_params.append(("path", path))
+        if host_header:
+            query_params.append(("host", host_header))
+        if header_type and header_type.lower() != "none":
+            query_params.append(("headerType", header_type))
+        if flow:
+            query_params.append(("flow", flow))
+        return query_params
+
+    def _build_vless_url_from_inbound(
+        *,
+        identifier: str | None,
+        label: str | None,
+        host: str | None,
+        port,
+        inbound,
+        meta: dict | None = None,
+    ) -> str | None:
+        user_id = str(identifier or "").strip()
+        public_host = str(host or "").strip()
+        if not user_id or not public_host or port in (None, ""):
+            return None
+
+        client = _find_vless_client(inbound, user_id, label)
+        query_params = _build_vless_query_params(meta, inbound, client)
+        query = urlencode([(key, value) for key, value in query_params if str(value or "").strip()])
+        fragment = quote(_normalize_vless_client_name(label, user_id), safe="")
+        return f"vless://{quote(user_id, safe='')}@{public_host}:{int(port)}?{query}#{fragment}"
+
+    def _apply_vless_display_name(
+        link: str | None,
+        label: str | None,
+        identifier: str | None,
+        region: str | None = None,
+    ) -> str | None:
         value = str(link or "").strip()
         if not value:
             return None
         if not value.lower().startswith("vless://"):
             return value
 
-        client_name = _normalize_vless_client_name(label, identifier)
-        display_name = f"Lumica - {client_name}"
+        display_name = _build_vless_display_name(label, identifier, region)
         base = value.split("#", 1)[0]
         return f"{base}#{quote(display_name, safe='')}"
 
@@ -381,6 +545,8 @@ def build_vpn_helpers(deps):
                     "region": panel.region if panel else None,
                     "panel_id": panel.id if panel else None,
                     "panel_name": panel.name if panel else None,
+                    "panel_base_url": panel.base_url if panel else None,
+                    "panel_host": _panel_public_host(panel.base_url if panel else None),
                 }
             )
         return out
@@ -462,7 +628,16 @@ def build_vpn_helpers(deps):
         "_load_subscription_links": _load_subscription_links,
         "_vless_identifier_from_url": _vless_identifier_from_url,
         "_pick_vless_from_subscription": _pick_vless_from_subscription,
+        "_safe_dict": _safe_dict,
+        "_first_text": _first_text,
+        "_extract_host_from_url": _extract_host_from_url,
+        "_panel_public_host": _panel_public_host,
+        "_find_vless_client": _find_vless_client,
         "_normalize_vless_client_name": _normalize_vless_client_name,
+        "_normalize_vless_region_name": _normalize_vless_region_name,
+        "_build_vless_display_name": _build_vless_display_name,
+        "_build_vless_query_params": _build_vless_query_params,
+        "_build_vless_url_from_inbound": _build_vless_url_from_inbound,
         "_apply_vless_display_name": _apply_vless_display_name,
         "_build_subscription_urls": _build_subscription_urls,
         "_normalize_account_protocol": _normalize_account_protocol,
