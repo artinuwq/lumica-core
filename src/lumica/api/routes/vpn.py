@@ -64,6 +64,11 @@ def register_vpn_routes(app, deps):
                         meta=meta,
                     )
 
+                if subscription_vless_url and panel_host:
+                    sub_host = _extract_host_from_url(subscription_vless_url)
+                    if sub_host and sub_host != panel_host:
+                        subscription_vless_url = None
+
                 vless_url = subscription_vless_url or built_vless_url or meta.get("vless_url")
                 if vless_url:
                     vless_url = _apply_vless_display_name(vless_url, account.label, account.identifier, item.get("region"))
