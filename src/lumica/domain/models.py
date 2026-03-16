@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -13,7 +13,8 @@ class User(Base):
     username = Column(String, nullable=True)
     name = Column(String, nullable=True)
     profile_data = Column(JSON, nullable=True)
-    role = Column(String, nullable=False, default="user", server_default="user")
+    status = Column(String, nullable=False, default="verified", server_default=text("'verified'"))
+    role = Column(String, nullable=False, default="user", server_default=text("'user'"))
 
     auth_sessions = relationship(
         "AuthSession",
@@ -92,9 +93,11 @@ class Subscription(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    status = Column(String, nullable=False, default="active", server_default="active")
+    status = Column(String, nullable=False, default="active", server_default=text("'active'"))
     access_until = Column(DateTime(timezone=True), nullable=True)
     price_amount = Column(Numeric(10, 2), nullable=True)
+    total_price = Column(Numeric(10, 2), nullable=True)
+    payload = Column(JSON, nullable=True)
     notes = Column(String, nullable=True)
 
     user = relationship("User", back_populates="subscriptions")
@@ -111,8 +114,9 @@ class VpnAccount(Base, TimestampMixin):
     identifier = Column(String, nullable=True)
     label = Column(String, nullable=True)
     secret = Column(String, nullable=True)
+    purpose = Column(String, nullable=True)
     meta_json = Column("meta", JSON, nullable=True)
-    status = Column(String, nullable=False, default="active", server_default="active")
+    status = Column(String, nullable=False, default="active", server_default=text("'active'"))
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     user = relationship("User", back_populates="vpn_accounts")
@@ -130,9 +134,80 @@ class PendingBinding(Base, TimestampMixin):
     label = Column(String, nullable=True)
     secret = Column(String, nullable=True)
     meta_json = Column("meta", JSON, nullable=True)
-    status = Column(String, nullable=False, default="pending", server_default="pending")
+    status = Column(String, nullable=False, default="pending", server_default=text("'pending'"))
     applied_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     applied_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class VerificationCode(Base, TimestampMixin):
+    __tablename__ = "verification_codes"
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(8), nullable=False, unique=True)
+    status = Column(String, nullable=False, default="active", server_default=text("'active'"))
+    issued_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    used_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class UserVerification(Base, TimestampMixin):
+    __tablename__ = "user_verifications"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    method = Column(String, nullable=False)
+    code_id = Column(Integer, ForeignKey("verification_codes.id", ondelete="SET NULL"), nullable=True)
+    approved_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
+class SubscriptionPlan(Base, TimestampMixin):
+    __tablename__ = "subscription_plans"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    is_active = Column(Integer, nullable=False, default=1, server_default="1")
+    base_price = Column(Numeric(10, 2), nullable=True)
+    meta_json = Column("meta", JSON, nullable=True)
+
+
+class SubscriptionItem(Base, TimestampMixin):
+    __tablename__ = "subscription_items"
+
+    id = Column(Integer, primary_key=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
+    item_type = Column(String, nullable=False)
+    code = Column(String, nullable=False)
+    price = Column(Numeric(10, 2), nullable=True)
+    quantity = Column(Integer, nullable=False, default=1, server_default="1")
+    meta_json = Column("meta", JSON, nullable=True)
+
+
+class Region(Base, TimestampMixin):
+    __tablename__ = "regions"
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(16), nullable=False, unique=True)
+    name = Column(String(64), nullable=False)
+    is_active = Column(Integer, nullable=False, default=1, server_default="1")
+
+
+class PanelTemplate(Base, TimestampMixin):
+    __tablename__ = "panel_templates"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=False)
+    protocol = Column(String(32), nullable=False)
+    settings = Column(JSON, nullable=True)
+    apply_mode = Column(String(16), nullable=False, default="only_auto", server_default=text("'only_auto'"))
+
+
+class PanelTemplateLink(Base, TimestampMixin):
+    __tablename__ = "panel_template_links"
+
+    id = Column(Integer, primary_key=True)
+    panel_id = Column(String(36), ForeignKey("panels.id", ondelete="CASCADE"), nullable=False)
+    template_id = Column(Integer, ForeignKey("panel_templates.id", ondelete="CASCADE"), nullable=False)
+    mode = Column(String(32), nullable=False, default="bind_existing", server_default=text("'bind_existing'"))
 
 
 class AppSetting(Base, TimestampMixin):
@@ -183,7 +258,8 @@ class Panel(Base, TimestampMixin):
     is_active = Column(Integer, nullable=False, default=1, server_default="1")
     is_default = Column(Integer, nullable=False, default=0, server_default="0")
     region = Column(String(16), nullable=True)
-    health_status = Column(String(16), nullable=False, default="unknown", server_default="unknown")
+    region_id = Column(Integer, ForeignKey("regions.id", ondelete="SET NULL"), nullable=True)
+    health_status = Column(String(16), nullable=False, default="unknown", server_default=text("'unknown'"))
     last_ok_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(String(500), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -204,6 +280,7 @@ class PanelInbound(Base, TimestampMixin):
     listen = Column(String, nullable=True)
     enabled = Column(Integer, nullable=False, default=1, server_default="1")
     show_in_app = Column(Integer, nullable=False, default=1, server_default="1")
+    tag = Column(String(4), nullable=True)
     stream_settings = Column(JSON, nullable=True)
     settings = Column(JSON, nullable=True)
     last_sync_at = Column(DateTime(timezone=True), nullable=True)
@@ -246,7 +323,8 @@ class UserConnection(Base, TimestampMixin):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     group_id = Column(Integer, ForeignKey("inbound_groups.id", ondelete="CASCADE"), nullable=False)
     selected_member_id = Column(Integer, ForeignKey("inbound_group_members.id", ondelete="SET NULL"), nullable=True)
-    selection_strategy = Column(String(32), nullable=False, default="manual", server_default="manual")
+    selection_strategy = Column(String(32), nullable=False, default="manual", server_default=text("'manual'"))
+    purpose = Column(String(32), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
