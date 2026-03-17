@@ -105,7 +105,6 @@ const statusCard = document.getElementById("status-card");
         const subscriptionBuilderSubEl = document.getElementById("subscription-builder-sub");
         const subscriptionRegionListEl = document.getElementById("subscription-region-list");
         const subscriptionTrafficListEl = document.getElementById("subscription-traffic-list");
-        const subscriptionExtraConnectionsEl = document.getElementById("subscription-extra-connections");
         const subscriptionCloudGbEl = document.getElementById("subscription-cloud-gb");
         const subscriptionPriceValueEl = document.getElementById("subscription-price-value");
         const subscriptionBuilderStatusEl = document.getElementById("subscription-builder-status");
@@ -266,7 +265,6 @@ const statusCard = document.getElementById("status-card");
             ],
             selectedRegions: new Set(),
             trafficType: "vless",
-            extraConnections: 0,
             cloudGb: 0,
             draft: null,
             draftId: null,
@@ -1871,21 +1869,6 @@ const statusCard = document.getElementById("status-card");
                 quantity: 1,
             });
 
-            const extraConnections = Math.max(0, Number(subscriptionBuilderState.extraConnections) || 0);
-            if (extraConnections > 0) {
-                const extraDef = resolveItemDefinition(catalog, {
-                    typeHints: ["connections", "connection", "extra_connection", "extra-connections", "extra"],
-                    codeHints: ["extra_connection", "extra_connections", "connections", "connection", "extra"],
-                    fallbackType: "connections",
-                    fallbackCode: "extra_connection",
-                });
-                items.push({
-                    item_type: extraDef.itemType || "connections",
-                    code: extraDef.code || "extra_connection",
-                    quantity: Math.round(extraConnections),
-                });
-            }
-
             const cloudGb = Math.max(0, Number(subscriptionBuilderState.cloudGb) || 0);
             const cloudUnits = Math.floor(cloudGb / 100);
             if (cloudUnits > 0) {
@@ -1907,11 +1890,9 @@ const statusCard = document.getElementById("status-card");
                 plan_id: plan.id,
                 items,
                 region_code: selectedRegionCodes[0] || null,
-                connections_limit: extraConnections || null,
                 payload: {
                     region_codes: selectedRegionCodes,
                     traffic_type: trafficKey,
-                    extra_connections: extraConnections,
                     cloud_gb: cloudGb,
                 },
             };
@@ -1935,9 +1916,6 @@ const statusCard = document.getElementById("status-card");
                     subscriptionBuilderSubEl.textContent = subscriptionBuilderState.plan
                         ? `План: ${subscriptionBuilderState.plan.name}`
                         : "План не найден";
-                }
-                if (subscriptionExtraConnectionsEl) {
-                    subscriptionExtraConnectionsEl.value = subscriptionBuilderState.extraConnections || 0;
                 }
                 if (subscriptionCloudGbEl) {
                     subscriptionCloudGbEl.value = subscriptionBuilderState.cloudGb || 0;
@@ -4769,10 +4747,6 @@ const statusCard = document.getElementById("status-card");
             }
         });
 
-        subscriptionExtraConnectionsEl?.addEventListener("input", () => {
-            subscriptionBuilderState.extraConnections = Math.max(0, Number(subscriptionExtraConnectionsEl?.value) || 0);
-            scheduleSubscriptionDraft();
-        });
         subscriptionCloudGbEl?.addEventListener("input", () => {
             subscriptionBuilderState.cloudGb = Math.max(0, Number(subscriptionCloudGbEl?.value) || 0);
             scheduleSubscriptionDraft();
