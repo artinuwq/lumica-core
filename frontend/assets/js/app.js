@@ -46,6 +46,7 @@ const statusCard = document.getElementById("status-card");
         const adminInboundClientsUrl = (panelInboundId) => `${window.location.origin}/api/admin/inbounds/${panelInboundId}/clients`;
         const adminUserBindingsUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/bindings`;
         const adminUserOverviewUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/overview`;
+        const adminUserRoleUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/role`;
         const adminUserSubscriptionUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/subscription`;
         const adminUserOverviewByTelegramUrl = (telegramId) =>
             `${window.location.origin}/api/admin/users/by-telegram/${encodeURIComponent(telegramId)}/overview`;
@@ -172,6 +173,9 @@ const statusCard = document.getElementById("status-card");
         const workClientSubUntilEl = document.getElementById("work-client-sub-until");
         const workClientSubPriceEl = document.getElementById("work-client-sub-price");
         const workClientConnectionsAvailableEl = document.getElementById("work-client-connections-available");
+        const workClientRoleSelectEl = document.getElementById("work-client-role-select");
+        const workClientRoleSaveBtnEl = document.getElementById("work-client-role-save-btn");
+        const workClientRoleStatusEl = document.getElementById("work-client-role-status");
         const workExistingLinksEl = document.getElementById("work-existing-links");
         const workInboundSelectEl = document.getElementById("work-inbound-select");
         const workClientSelectEl = document.getElementById("work-client-select");
@@ -4046,10 +4050,26 @@ const statusCard = document.getElementById("status-card");
         }
 
         
+        function setWorkClientRoleStatus(message, tone = "") {
+            if (!workClientRoleStatusEl) return;
+            workClientRoleStatusEl.classList.remove("success", "error");
+            if (!message) {
+                workClientRoleStatusEl.textContent = "";
+                workClientRoleStatusEl.classList.add("hidden");
+                return;
+            }
+            if (tone === "success" || tone === "error") {
+                workClientRoleStatusEl.classList.add(tone);
+            }
+            workClientRoleStatusEl.textContent = message;
+            workClientRoleStatusEl.classList.remove("hidden");
+        }
+
         function renderWorkClientOverview(overview) {
             workState.overview = overview || null;
             const sub = overview?.subscription || null;
             const conn = overview?.connections || null;
+            const role = String(overview?.user?.role || "user").trim().toLowerCase();
 
             if (workSubStatusSelectEl) {
                 workSubStatusSelectEl.value = sub?.status || "active";
@@ -4061,6 +4081,10 @@ const statusCard = document.getElementById("status-card");
                 workSubLimitInputEl.value =
                     conn?.limit === null || conn?.limit === undefined ? "" : String(conn.limit);
             }
+            if (workClientRoleSelectEl) {
+                workClientRoleSelectEl.value = role || "user";
+            }
+            setWorkClientRoleStatus("");
             renderWorkSubscriptionControls(sub);
 
             workClientSubStatusEl.textContent = sub?.status || "нет";
@@ -4094,6 +4118,10 @@ const statusCard = document.getElementById("status-card");
                 }
                 workClientNameEl.textContent = "—";
                 workClientMetaEl.textContent = "—";
+                if (workClientRoleSelectEl) {
+                    workClientRoleSelectEl.value = "user";
+                }
+                setWorkClientRoleStatus("");
                 renderWorkClientOverview(null);
                 return;
             }
@@ -4105,6 +4133,10 @@ const statusCard = document.getElementById("status-card");
             }
             workClientNameEl.textContent = title;
             workClientMetaEl.textContent = `${user.id} · ${user.username ? `@${user.username}` : "—"}`;
+            if (workClientRoleSelectEl) {
+                workClientRoleSelectEl.value = String(user.role || "user").toLowerCase();
+            }
+            setWorkClientRoleStatus("");
         }
 
         async function loadWorkClientsData() {
@@ -5027,6 +5059,41 @@ const statusCard = document.getElementById("status-card");
                 await loadPendingBindings(telegramId);
                 return result;
             });
+        });
+
+        workClientRoleSaveBtnEl?.addEventListener("click", async () => {
+            if (!workState.selectedUserId) {
+                setWorkClientRoleStatus("Сначала открой карточку клиента", "error");
+                return;
+            }
+            const nextRole = String(workClientRoleSelectEl?.value || "").trim().toLowerCase();
+            if (!nextRole) {
+                setWorkClientRoleStatus("Выбери роль", "error");
+                return;
+            }
+            try {
+                setWorkClientRoleStatus("Сохраняем роль...");
+                const result = await postJson(adminUserRoleUrl(workState.selectedUserId), { role: nextRole });
+                const updatedRole = String(result?.user?.role || nextRole).trim().toLowerCase();
+                workState.users = workState.users.map((user) =>
+                    String(user.id) === String(workState.selectedUserId)
+                        ? { ...user, role: updatedRole }
+                        : user
+                );
+                if (workState.overview?.user && String(workState.overview.user.id) === String(workState.selectedUserId)) {
+                    workState.overview = {
+                        ...workState.overview,
+                        user: { ...workState.overview.user, role: updatedRole },
+                    };
+                }
+                if (workClientRoleSelectEl) {
+                    workClientRoleSelectEl.value = updatedRole || "user";
+                }
+                setWorkClientRoleStatus("Роль обновлена", "success");
+            } catch (err) {
+                console.error("save client role error:", err);
+                setWorkClientRoleStatus(err?.message || "Не удалось обновить роль", "error");
+            }
         });
 
         workSubSaveBtnEl?.addEventListener("click", async () => {

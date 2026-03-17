@@ -527,6 +527,42 @@ def register_admin_routes(app, deps):
                 }
             )
 
+    @app.post("/api/admin/users/<int:user_id>/role")
+    def admin_user_role_update(user_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+
+        body = request.get_json(silent=True) or {}
+        role_raw = body.get("role")
+        if role_raw is None:
+            return jsonify({"ok": False, "error": "role is required"}), 400
+
+        role = str(role_raw).strip().lower()
+        if role not in ROLE_PRIORITY:
+            return jsonify({"ok": False, "error": "role is invalid"}), 400
+
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return jsonify({"ok": False, "error": "User not found"}), 404
+
+            user.role = role
+            db.commit()
+            db.refresh(user)
+            return jsonify(
+                {
+                    "ok": True,
+                    "user": {
+                        "id": user.id,
+                        "telegram_id": user.telegram_id,
+                        "username": user.username,
+                        "name": user.name,
+                        "role": user.role,
+                    },
+                }
+            )
+
     @app.get("/api/admin/users/<int:user_id>/bindings")
     def admin_user_bindings(user_id: int):
         _, err = _auth_context(require_role="admin")
