@@ -38,6 +38,11 @@ def register_auth_routes(app, deps):
                 elif not user.role:
                     user.role = "user"
 
+                if not getattr(user, "status", None):
+                    user.status = "unverified"
+                if user.role in {"owner", "admin", "support", "moderator"}:
+                    user.status = "verified"
+
                 now = utcnow()
                 old_profile = user.profile_data or {}
                 last_seen_raw = old_profile.get("last_seen")
