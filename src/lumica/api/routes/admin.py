@@ -1,9 +1,37 @@
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 def register_admin_routes(app, deps):
     # Transitional dependency injection while handlers are being migrated out
     # of shared app helper closures.
     globals().update(deps)
+
+    def _serialize_subscription_plan(plan: SubscriptionPlan) -> dict:
+        return {
+            "id": plan.id,
+            "name": plan.name,
+            "is_active": bool(plan.is_active),
+            "base_price": str(plan.base_price) if plan.base_price is not None else None,
+            "meta": plan.meta_json if isinstance(plan.meta_json, dict) else {},
+        }
+
+    def _serialize_region(region: Region) -> dict:
+        return {
+            "id": region.id,
+            "code": region.code,
+            "name": region.name,
+            "is_active": bool(region.is_active),
+        }
+
+    def _serialize_panel_template(template: PanelTemplate) -> dict:
+        return {
+            "id": template.id,
+            "name": template.name,
+            "protocol": template.protocol,
+            "apply_mode": template.apply_mode,
+            "settings": template.settings if isinstance(template.settings, dict) else {},
+        }
 
     @app.post("/api/admin/sync-inbounds")
     def sync_inbounds():
@@ -189,6 +217,252 @@ def register_admin_routes(app, deps):
                 return jsonify({"ok": False, "error": "Setting not found"}), 404
             db.commit()
             return jsonify({"ok": True, "deleted": True})
+
+    @app.get("/api/admin/subscription-plans")
+    def admin_subscription_plans_list():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            rows = db.query(SubscriptionPlan).order_by(SubscriptionPlan.id.asc()).all()
+            return jsonify({"ok": True, "plans": [_serialize_subscription_plan(row) for row in rows]})
+
+    @app.post("/api/admin/subscription-plans")
+    def admin_subscription_plans_create():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        name = str(body.get("name") or "").strip()
+        if not name:
+            return jsonify({"ok": False, "error": "name is required"}), 400
+
+        base_price = None
+        if "base_price" in body:
+            raw_price = body.get("base_price")
+            if raw_price not in (None, ""):
+                try:
+                    base_price = Decimal(str(raw_price))
+                except (InvalidOperation, ValueError):
+                    return jsonify({"ok": False, "error": "base_price must be a number"}), 400
+
+        meta = body.get("meta")
+        if meta is not None and not isinstance(meta, dict):
+            return jsonify({"ok": False, "error": "meta must be an object"}), 400
+
+        with SessionLocal() as db:
+            row = SubscriptionPlan(
+                name=name,
+                is_active=1 if body.get("is_active", True) else 0,
+                base_price=base_price,
+                meta_json=meta if isinstance(meta, dict) else None,
+            )
+            db.add(row)
+            db.commit()
+            return jsonify({"ok": True, "plan": _serialize_subscription_plan(row)})
+
+    @app.post("/api/admin/subscription-plans/<int:plan_id>")
+    def admin_subscription_plans_update(plan_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        with SessionLocal() as db:
+            row = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == plan_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Plan not found"}), 404
+            if "name" in body:
+                name = str(body.get("name") or "").strip()
+                if name:
+                    row.name = name
+            if "is_active" in body:
+                row.is_active = 1 if body.get("is_active") else 0
+            if "base_price" in body:
+                raw_price = body.get("base_price")
+                if raw_price in (None, ""):
+                    row.base_price = None
+                else:
+                    try:
+                        row.base_price = Decimal(str(raw_price))
+                    except (InvalidOperation, ValueError):
+                        return jsonify({"ok": False, "error": "base_price must be a number"}), 400
+            if "meta" in body:
+                meta = body.get("meta")
+                if meta is None:
+                    row.meta_json = None
+                elif not isinstance(meta, dict):
+                    return jsonify({"ok": False, "error": "meta must be an object"}), 400
+                else:
+                    row.meta_json = meta
+            db.commit()
+            return jsonify({"ok": True, "plan": _serialize_subscription_plan(row)})
+
+    @app.post("/api/admin/subscription-plans/<int:plan_id>/delete")
+    def admin_subscription_plans_delete(plan_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            row = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == plan_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Plan not found"}), 404
+            deleted = _serialize_subscription_plan(row)
+            db.delete(row)
+            db.commit()
+            return jsonify({"ok": True, "deleted": deleted})
+
+    @app.get("/api/admin/regions")
+    def admin_regions_list():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            rows = db.query(Region).order_by(Region.name.asc(), Region.id.asc()).all()
+            return jsonify({"ok": True, "regions": [_serialize_region(row) for row in rows]})
+
+    @app.post("/api/admin/regions")
+    def admin_regions_create():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        code = str(body.get("code") or "").strip().upper()
+        name = str(body.get("name") or "").strip()
+        if not code or not name:
+            return jsonify({"ok": False, "error": "code and name are required"}), 400
+        with SessionLocal() as db:
+            existing = db.query(Region).filter(Region.code == code).first()
+            if existing:
+                return jsonify({"ok": False, "error": "Region code already exists"}), 409
+            row = Region(
+                code=code[:16],
+                name=name[:64],
+                is_active=1 if body.get("is_active", True) else 0,
+            )
+            db.add(row)
+            db.commit()
+            return jsonify({"ok": True, "region": _serialize_region(row)})
+
+    @app.post("/api/admin/regions/<int:region_id>")
+    def admin_regions_update(region_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        with SessionLocal() as db:
+            row = db.query(Region).filter(Region.id == region_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Region not found"}), 404
+            if "code" in body:
+                code = str(body.get("code") or "").strip().upper()
+                if code and code != row.code:
+                    existing = db.query(Region).filter(Region.code == code).first()
+                    if existing:
+                        return jsonify({"ok": False, "error": "Region code already exists"}), 409
+                    row.code = code[:16]
+            if "name" in body:
+                name = str(body.get("name") or "").strip()
+                if name:
+                    row.name = name[:64]
+            if "is_active" in body:
+                row.is_active = 1 if body.get("is_active") else 0
+            db.commit()
+            return jsonify({"ok": True, "region": _serialize_region(row)})
+
+    @app.post("/api/admin/regions/<int:region_id>/delete")
+    def admin_regions_delete(region_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            row = db.query(Region).filter(Region.id == region_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Region not found"}), 404
+            deleted = _serialize_region(row)
+            db.delete(row)
+            db.commit()
+            return jsonify({"ok": True, "deleted": deleted})
+
+    @app.get("/api/admin/panel-templates")
+    def admin_panel_templates_list():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            rows = db.query(PanelTemplate).order_by(PanelTemplate.name.asc(), PanelTemplate.id.asc()).all()
+            return jsonify({"ok": True, "templates": [_serialize_panel_template(row) for row in rows]})
+
+    @app.post("/api/admin/panel-templates")
+    def admin_panel_templates_create():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        name = str(body.get("name") or "").strip()
+        protocol = str(body.get("protocol") or "").strip().lower()
+        if not name or not protocol:
+            return jsonify({"ok": False, "error": "name and protocol are required"}), 400
+        settings = body.get("settings")
+        if settings is not None and not isinstance(settings, dict):
+            return jsonify({"ok": False, "error": "settings must be an object"}), 400
+        apply_mode = str(body.get("apply_mode") or body.get("applyMode") or "").strip()
+        with SessionLocal() as db:
+            row = PanelTemplate(
+                name=name[:120],
+                protocol=protocol[:32],
+                settings=settings if isinstance(settings, dict) else None,
+                apply_mode=apply_mode[:16] or "only_auto",
+            )
+            db.add(row)
+            db.commit()
+            return jsonify({"ok": True, "template": _serialize_panel_template(row)})
+
+    @app.post("/api/admin/panel-templates/<int:template_id>")
+    def admin_panel_templates_update(template_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        with SessionLocal() as db:
+            row = db.query(PanelTemplate).filter(PanelTemplate.id == template_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Template not found"}), 404
+            if "name" in body:
+                name = str(body.get("name") or "").strip()
+                if name:
+                    row.name = name[:120]
+            if "protocol" in body:
+                protocol = str(body.get("protocol") or "").strip().lower()
+                if protocol:
+                    row.protocol = protocol[:32]
+            if "apply_mode" in body or "applyMode" in body:
+                apply_mode = str(body.get("apply_mode") or body.get("applyMode") or "").strip()
+                if apply_mode:
+                    row.apply_mode = apply_mode[:16]
+            if "settings" in body:
+                settings = body.get("settings")
+                if settings is None:
+                    row.settings = None
+                elif not isinstance(settings, dict):
+                    return jsonify({"ok": False, "error": "settings must be an object"}), 400
+                else:
+                    row.settings = settings
+            db.commit()
+            return jsonify({"ok": True, "template": _serialize_panel_template(row)})
+
+    @app.post("/api/admin/panel-templates/<int:template_id>/delete")
+    def admin_panel_templates_delete(template_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            row = db.query(PanelTemplate).filter(PanelTemplate.id == template_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Template not found"}), 404
+            deleted = _serialize_panel_template(row)
+            db.delete(row)
+            db.commit()
+            return jsonify({"ok": True, "deleted": deleted})
 
     @app.post("/api/admin/inbounds/<int:panel_inbound_ref_id>/visibility")
     def admin_inbound_visibility(panel_inbound_ref_id: int):

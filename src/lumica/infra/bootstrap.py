@@ -1,10 +1,14 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import text
 
 from lumica.infra.db import Base, SessionLocal, engine
 from lumica.domain.models import (
     InboundGroupMember,
+    PanelTemplate,
+    Region,
+    SubscriptionPlan,
     UserConnection,
     VpnAccount,
 )
@@ -100,6 +104,55 @@ def _bootstrap_multi_panel_state(db) -> None:
         )
 
 
+def _seed_constructor_data(db) -> None:
+    if not db.query(SubscriptionPlan.id).first():
+        db.add_all(
+            [
+                SubscriptionPlan(
+                    name="Starter",
+                    is_active=1,
+                    base_price=Decimal("9.99"),
+                    meta_json={
+                        "duration_months": 1,
+                        "items": [
+                            {
+                                "code": "extra_connection",
+                                "item_type": "addon",
+                                "price": "2.00",
+                                "title": "Extra connection",
+                            }
+                        ],
+                    },
+                )
+            ]
+        )
+
+    if not db.query(Region.id).first():
+        db.add_all(
+            [
+                Region(code="EU", name="Europe", is_active=1),
+                Region(code="RU", name="Russia", is_active=1),
+                Region(code="US", name="United States", is_active=1),
+            ]
+        )
+
+    if not db.query(PanelTemplate.id).first():
+        db.add_all(
+            [
+                PanelTemplate(
+                    name="VLESS Default",
+                    protocol="vless",
+                    settings={},
+                    apply_mode="only_auto",
+                ),
+                PanelTemplate(
+                    name="Mixed Default",
+                    protocol="mixed",
+                    settings={},
+                    apply_mode="only_auto",
+                ),
+            ]
+        )
 
 
 def bootstrap_runtime(*, with_multi_panel_state: bool = True) -> None:
@@ -109,7 +162,13 @@ def bootstrap_runtime(*, with_multi_panel_state: bool = True) -> None:
         return
     with SessionLocal() as db:
         _bootstrap_multi_panel_state(db)
+        _seed_constructor_data(db)
         db.commit()
 
 
-__all__ = ["_bootstrap_multi_panel_state", "_ensure_schema_compatibility", "bootstrap_runtime"]
+__all__ = [
+    "_bootstrap_multi_panel_state",
+    "_ensure_schema_compatibility",
+    "_seed_constructor_data",
+    "bootstrap_runtime",
+]

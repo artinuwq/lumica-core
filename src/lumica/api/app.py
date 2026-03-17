@@ -19,7 +19,7 @@ from flask import Flask, Response, jsonify, make_response, render_template, requ
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from lumica.infra.bootstrap import _bootstrap_multi_panel_state, _ensure_schema_compatibility
+from lumica.infra.bootstrap import _bootstrap_multi_panel_state, _ensure_schema_compatibility, _seed_constructor_data
 from lumica.integrations.telegram_storage import (
     TelegramStorageError,
     cloud_chunk_size_bytes,
@@ -39,8 +39,11 @@ from lumica.domain.models import (
     Panel,
     PanelInbound,
     PanelSecret,
+    PanelTemplate,
     PendingBinding,
+    Region,
     Subscription,
+    SubscriptionPlan,
     User,
     UserConnection,
     UserVerification,
@@ -240,6 +243,7 @@ def create_app():
     _ensure_schema_compatibility()
     with SessionLocal() as db:
         _bootstrap_multi_panel_state(db)
+        _seed_constructor_data(db)
         db.commit()
 
     session_cookie_name = os.getenv("SESSION_COOKIE_NAME", "session")
