@@ -149,6 +149,7 @@ const statusCard = document.getElementById("status-card");
         const workInboundDetailAddClientBtnEl = document.getElementById("work-inbound-detail-add-client-btn");
         const workInboundDetailAddStatusEl = document.getElementById("work-inbound-detail-add-status");
         const workClientCardsEl = document.getElementById("work-client-cards");
+        const workClientSearchEl = document.getElementById("work-client-search");
         const workClientPageTitleEl = document.getElementById("work-client-page-title");
         const workClientNameEl = document.getElementById("work-client-name");
         const workClientMetaEl = document.getElementById("work-client-meta");
@@ -294,7 +295,6 @@ const statusCard = document.getElementById("status-card");
         const workContextTitleByPage = new Map([
             ["work-staff-page", "Персонал"],
             ["work-clients-page", "Клиенты"],
-            ["work-pending-page", "Создание клиентов до входа"],
             ["work-inbounds-page", "Подключения"],
             ["work-inbound-detail-page", "Подключение"],
             ["work-system-settings-page", "Системные настройки"],
@@ -617,7 +617,6 @@ const statusCard = document.getElementById("status-card");
                     workState.inbounds = Array.isArray(inboundsResp?.inbounds) ? inboundsResp.inbounds : [];
                     renderWorkInboundsManager();
                     renderWorkInboundSelectOptions();
-                    renderWorkPendingInboundSelectOptions();
                 } else if (action === "refresh-work-panels") {
                     await loadWorkPanels();
                 } else if (action === "refresh-work-client") {
@@ -2622,7 +2621,26 @@ const statusCard = document.getElementById("status-card");
                 return;
             }
 
-            workState.users.forEach((user) => {
+            const query = String(workClientSearchEl?.value || "").trim().toLowerCase();
+            const filtered = query
+                ? workState.users.filter((user) => {
+                    const name = String(user?.name || "").toLowerCase();
+                    const username = String(user?.username || "").toLowerCase();
+                    const telegramId = String(user?.telegram_id || "").toLowerCase();
+                    const id = String(user?.id || "").toLowerCase();
+                    return [name, username, telegramId, id].some((value) => value.includes(query));
+                })
+                : workState.users;
+
+            if (!filtered.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Ничего не найдено.";
+                workClientCardsEl.appendChild(empty);
+                return;
+            }
+
+            filtered.forEach((user) => {
                 const card = document.createElement("button");
                 card.type = "button";
                 card.className = "work-client-card";
@@ -4432,6 +4450,10 @@ const statusCard = document.getElementById("status-card");
         profileIdToggleEl?.addEventListener("click", () => {
             showFullTelegramId = !showFullTelegramId;
             renderTelegramId();
+        });
+
+        workClientSearchEl?.addEventListener("input", () => {
+            renderWorkClientCards();
         });
 
         profileReferralApplyEl?.addEventListener("click", async () => {

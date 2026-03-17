@@ -191,58 +191,11 @@
                                 <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
                                 <div class="work-page-title">Клиенты</div>
                             </div>
+                            <div class="work-bind">
+                                <input id="work-client-search" type="text" placeholder="Поиск по имени / username / Telegram ID">
+                            </div>
                             <div id="work-client-cards" class="work-client-cards">
                                 <div class="work-empty">Загрузка списка клиентов...</div>
-                            </div>
-                            <div class="work-actions">
-                                <button type="button" class="work-action-link" data-work-nav="work-pending-page">
-                                    <span class="work-action-link-label">Создание клиентов до входа</span>
-                                    <span class="work-action-link-chevron" aria-hidden="true">›</span>
-                                </button>
-                            </div>
-                        </section>
-
-                        <section id="work-pending-page" class="work-page hidden">
-                            <div class="work-page-head">
-                                <button class="work-back-btn" data-work-back="work-clients-page">← Назад</button>
-                                <div class="work-page-title">Создание клиентов до входа</div>
-                            </div>
-                            <div class="work-bind">
-                                <label class="work-sub-create-label" for="work-pending-telegram-id">1. Telegram ID</label>
-                                <input id="work-pending-telegram-id" type="text" inputmode="numeric" placeholder="Telegram ID">
-                            </div>
-                            <div class="work-page-title">2. Работа с подпиской</div>
-                            <div class="work-bind">
-                                <select id="work-pending-sub-status-select">
-                                    <option value="active">active</option>
-                                    <option value="lifetime">lifetime</option>
-                                    <option value="paused">paused</option>
-                                    <option value="expired">expired</option>
-                                    <option value="canceled">canceled</option>
-                                    <option value="inactive">inactive</option>
-                                </select>
-                                <input id="work-pending-sub-price-input" type="number" min="0" step="0.01" placeholder="Цена (₽)">
-                                <input id="work-pending-sub-limit-input" type="number" min="0" step="1" placeholder="Лимит подключений">
-                                <div id="work-pending-sub-create-wrap" class="work-sub-create-wrap">
-                                    <label class="work-sub-create-label" for="work-pending-sub-create-date">Дата окончания</label>
-                                    <input id="work-pending-sub-create-date" class="work-sub-create-input" type="date">
-                                </div>
-                                <button id="work-pending-sub-save-btn" class="work-btn">Сохранить подписку</button>
-                                <div id="work-pending-sub-save-status" class="work-note">Укажи Telegram ID и сохрани параметры подписки.</div>
-                            </div>
-                            <div class="work-page-title">3. Добавить подключения</div>
-                            <div class="work-bind">
-                                <select id="work-pending-inbound-select">
-                                    <option value="">Выбери inbound</option>
-                                </select>
-                                <select id="work-pending-client-select">
-                                    <option value="">Выбери клиента из inbound</option>
-                                </select>
-                                <button id="work-pending-add-btn" class="work-btn">Добавить pending-привязку</button>
-                                <div class="work-note">Этот inbound будет выдан автоматически при первом входе пользователя в приложение.</div>
-                            </div>
-                            <div id="work-pending-list" class="work-links-list">
-                                <div class="work-empty">Pending-привязки пока нет.</div>
                             </div>
                         </section>
 
