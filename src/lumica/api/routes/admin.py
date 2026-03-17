@@ -815,6 +815,69 @@ def register_admin_routes(app, deps):
             rows = db.query(Panel).order_by(Panel.created_at.asc()).all()
             return jsonify({"ok": True, "panels": [_serialize_panel(row) for row in rows]})
 
+    @app.post("/api/admin/verification-codes")
+    def admin_verification_codes_create():
+        auth, err = _auth_context(require_role="support")
+        if err:
+            return err
+
+        body = request.get_json(silent=True) or {}
+        count_raw = body.get("count") or 1
+        length_raw = body.get("length") or 5
+        try:
+            count = max(1, min(50, int(count_raw)))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "count must be an integer"}), 400
+        try:
+            length = max(5, min(12, int(length_raw)))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "length must be an integer"}), 400
+
+        alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+        created = []
+        with SessionLocal() as db:
+            for _ in range(count):
+                code = "".join(secrets.choice(alphabet) for _ in range(length))
+                row = VerificationCode(code=code, status="active", issued_by=auth["user_id"])
+                db.add(row)
+                created.append(code)
+            db.commit()
+
+        return jsonify({"ok": True, "codes": created})
+
+    @app.post("/api/admin/verify-user")
+    def admin_verify_user():
+        auth, err = _auth_context(require_role="support")
+        if err:
+            return err
+
+        body = request.get_json(silent=True) or {}
+        user_id = body.get("user_id")
+        telegram_id = body.get("telegram_id")
+        if not user_id and not telegram_id:
+            return jsonify({"ok": False, "error": "user_id or telegram_id is required"}), 400
+
+        with SessionLocal() as db:
+            user = None
+            if user_id:
+                user = db.query(User).filter(User.id == int(user_id)).first()
+            if not user and telegram_id:
+                user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+            if not user:
+                return jsonify({"ok": False, "error": "User not found"}), 404
+
+            user.status = "verified"
+            db.add(
+                UserVerification(
+                    user_id=user.id,
+                    method="manual",
+                    code_id=None,
+                    approved_by=auth["user_id"],
+                )
+            )
+            db.commit()
+            return jsonify({"ok": True, "user_id": user.id, "status": user.status})
+
     @app.post("/api/admin/panels/test-connection")
     def admin_panels_test_connection():
         _, err = _auth_context(require_role="admin")

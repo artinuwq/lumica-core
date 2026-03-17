@@ -44,7 +44,7 @@
 
                     <div id="screen-home" class="screen">
                         <div class="cards">
-                            <div class="card">
+                            <div class="card" id="home-server-card">
                                 <div class="left">
                                     <div class="badge">✓</div>
                                     <div>
@@ -66,7 +66,7 @@
                             </div>
                         </div>
                         <div class="home-main-actions">
-                            <button type="button" class="card home-main-btn" data-screen="screen-connections">
+                            <button type="button" class="card home-main-btn" id="home-connections-btn" data-screen="screen-connections">
                                 <div class="left">
                                     <div class="badge">↧</div>
                                     <div>
@@ -562,6 +562,31 @@
                                 </div>
                             </div>
                             <div class="pill-soft" id="profile-role">user</div>
+                        </div>
+
+                        <div class="card" id="profile-referral-card">
+                            <div class="left">
+                                <div class="badge">★</div>
+                                <div>
+                                    <div class="card-title">Реферальный код</div>
+                                    <div class="card-sub">Введите код, чтобы открыть полный доступ</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card" id="profile-referral-input-card">
+                            <div class="left">
+                                <input id="profile-referral-code" type="text" maxlength="12" placeholder="Код (5 символов)" class="profile-nav-select">
+                            </div>
+                            <button id="profile-referral-apply" type="button" class="work-btn">Активировать</button>
+                        </div>
+                        <div class="card hidden" id="profile-referral-status-card">
+                            <div class="left">
+                                <div class="badge">ℹ</div>
+                                <div>
+                                    <div class="card-title" id="profile-referral-status-title">Реферальный код</div>
+                                    <div class="card-sub" id="profile-referral-status">...</div>
+                                </div>
+                            </div>
                         </div>
                         <button type="button" class="card home-main-btn" data-screen="screen-settings">
                             <div class="left">

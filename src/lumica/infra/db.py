@@ -52,4 +52,37 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, futu
 Base = declarative_base()
 
 
-__all__ = ["Base", "SessionLocal", "engine"]
+def _parse_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _alembic_config():
+    from alembic.config import Config
+
+    project_root = Path(__file__).resolve().parents[3]
+    alembic_ini = project_root / "alembic.ini"
+    alembic_dir = project_root / "alembic"
+
+    config = Config(str(alembic_ini))
+    config.set_main_option("script_location", str(alembic_dir))
+    config.set_main_option("sqlalchemy.url", DATABASE_URL)
+    return config
+
+
+def ensure_db_schema() -> None:
+    """Run Alembic migrations up to head when enabled by config."""
+    env = os.getenv("ENV", "dev").strip().lower()
+    migrate_default = "1" if env == "dev" else "0"
+    migrate_on_start = _parse_bool(os.getenv("MIGRATE_ON_START", migrate_default), env == "dev")
+    if not migrate_on_start:
+        Base.metadata.create_all(bind=engine)
+        return
+
+    from alembic import command
+
+    command.upgrade(_alembic_config(), "head")
+
+
+__all__ = ["Base", "SessionLocal", "engine", "ensure_db_schema"]

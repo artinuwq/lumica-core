@@ -13,6 +13,7 @@ for path in (ROOT, SRC):
 from lumica.bot import start_bot  # noqa: E402
 from lumica.infra import ENV_FILE, load_dotenv  # noqa: E402
 from lumica.jobs import run_scheduler_forever  # noqa: E402
+from lumica.infra.db import ensure_db_schema  # noqa: E402
 
 # Load environment before importing modules that read it at import time.
 load_dotenv(ENV_FILE)
@@ -26,6 +27,9 @@ def run_web() -> None:
 
 
 async def main() -> None:
+    # Ensure migrations applied before any workers start
+    ensure_db_schema()
+
     web_thread = threading.Thread(target=run_web, daemon=True)
     scheduler_thread = threading.Thread(target=run_scheduler_forever, daemon=True)
     external_bots_thread = threading.Thread(target=run_external_bots, daemon=True)

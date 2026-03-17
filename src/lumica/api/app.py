@@ -27,7 +27,7 @@ from lumica.integrations.telegram_storage import (
     iter_telegram_file_bytes,
     send_chunk_to_telegram,
 )
-from lumica.infra.db import Base, SessionLocal, engine
+from lumica.infra.db import Base, SessionLocal, engine, ensure_db_schema
 from lumica.domain.models import (
     AppSetting,
     AuthSession,
@@ -43,6 +43,8 @@ from lumica.domain.models import (
     Subscription,
     User,
     UserConnection,
+    UserVerification,
+    VerificationCode,
     VpnAccount,
 )
 from lumica.services.panels import PanelRegistry, extract_clients_from_panel_inbound, protocol_to_group_key
@@ -234,7 +236,7 @@ def create_app():
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.jinja_env.auto_reload = True
 
-    Base.metadata.create_all(bind=engine)
+    ensure_db_schema()
     _ensure_schema_compatibility()
     with SessionLocal() as db:
         _bootstrap_multi_panel_state(db)

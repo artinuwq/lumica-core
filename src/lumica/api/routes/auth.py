@@ -130,6 +130,7 @@ def register_auth_routes(app, deps):
                         "username": user.username,
                         "name": user.name,
                         "role": user.role,
+                        "status": getattr(user, "status", None),
                     },
                     "subscription": None
                     if not sub
@@ -143,5 +144,46 @@ def register_auth_routes(app, deps):
                     },
                 }
             )
+
+    @app.post("/api/verify")
+    def verify_user():
+        auth, err = _auth_context()
+        if err:
+            return err
+
+        body = request.get_json(silent=True) or {}
+        code = str(body.get("code") or "").strip()
+        if not code:
+            return jsonify({"ok": False, "error": "code is required"}), 400
+
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.id == auth["user_id"]).first()
+            if not user:
+                return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+            row = (
+                db.query(VerificationCode)
+                .filter(VerificationCode.code == code, VerificationCode.status == "active")
+                .first()
+            )
+            if not row:
+                return jsonify({"ok": False, "error": "Invalid or used code"}), 404
+
+            user.status = "verified"
+            row.status = "used"
+            row.used_by = user.id
+            row.used_at = utcnow()
+
+            db.add(
+                UserVerification(
+                    user_id=user.id,
+                    method="code",
+                    code_id=row.id,
+                    approved_by=None,
+                )
+            )
+            db.commit()
+
+            return jsonify({"ok": True, "status": user.status})
 
 __all__ = ["register_auth_routes"]

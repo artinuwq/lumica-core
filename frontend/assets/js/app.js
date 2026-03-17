@@ -69,6 +69,8 @@ const statusCard = document.getElementById("status-card");
         const homeSubSub = document.getElementById("home-sub-sub");
         const homeSubRight = document.getElementById("home-sub-right");
         const homeCloudBtnEl = document.getElementById("home-cloud-btn");
+        const homeServerCardEl = document.getElementById("home-server-card");
+        const homeConnectionsBtnEl = document.getElementById("home-connections-btn");
         const settingsNavSecondSelectEl = document.getElementById("settings-nav-second-select");
         const connectionsMenuPageEl = document.getElementById("connections-menu-page");
         const connectionsDetailPageEl = document.getElementById("connections-detail-page");
@@ -92,6 +94,13 @@ const statusCard = document.getElementById("status-card");
         const profileSubTitleEl = document.getElementById("profile-sub-title");
         const profileSubSubEl = document.getElementById("profile-sub-sub");
         const profileRoleEl = document.getElementById("profile-role");
+        const profileReferralCardEl = document.getElementById("profile-referral-card");
+        const profileReferralInputCardEl = document.getElementById("profile-referral-input-card");
+        const profileReferralCodeEl = document.getElementById("profile-referral-code");
+        const profileReferralApplyEl = document.getElementById("profile-referral-apply");
+        const profileReferralStatusCardEl = document.getElementById("profile-referral-status-card");
+        const profileReferralStatusEl = document.getElementById("profile-referral-status");
+        const profileReferralStatusTitleEl = document.getElementById("profile-referral-status-title");
         const workOwnerNameEl = document.getElementById("work-owner-name");
         const workOwnerRoleEl = document.getElementById("work-owner-role");
         const workRolePillEl = document.getElementById("work-role-pill");
@@ -267,6 +276,7 @@ const statusCard = document.getElementById("status-card");
             loaded: false,
         };
         let lastUserPayload = null;
+        let isVerifiedUser = true;
         let csrfToken = "";
         let showFullTelegramId = false;
         let viewportListenerBound = false;
@@ -733,6 +743,9 @@ const statusCard = document.getElementById("status-card");
         }
 
         function resolveEffectiveNavSecondItemKey() {
+            if (!isVerifiedUser) {
+                return "cloud";
+            }
             const selected = normalizeNavSecondItemKey(navPreference.secondItem);
             if (selected === "cloud" && !uiFeatures.cloudEnabled) {
                 return "connections";
@@ -759,7 +772,13 @@ const statusCard = document.getElementById("status-card");
                 if (cloudOption) {
                     cloudOption.disabled = !uiFeatures.cloudEnabled;
                 }
-                settingsNavSecondSelectEl.value = normalizeNavSecondItemKey(navPreference.secondItem);
+                if (!isVerifiedUser) {
+                    settingsNavSecondSelectEl.value = "cloud";
+                    settingsNavSecondSelectEl.disabled = true;
+                } else {
+                    settingsNavSecondSelectEl.disabled = false;
+                    settingsNavSecondSelectEl.value = normalizeNavSecondItemKey(navPreference.secondItem);
+                }
             }
             const activeScreenId = getActiveScreenId();
             navButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.screen === activeScreenId));
@@ -1556,6 +1575,8 @@ const statusCard = document.getElementById("status-card");
             const me = data?.me;
             const service = data?.status?.services;
             const subscription = me?.subscription;
+            const userStatus = String(me?.user?.status || "verified").toLowerCase();
+            isVerifiedUser = userStatus === "verified";
             const subActive = isSubscriptionActive(subscription);
             const lifetimeSub = isSubscriptionLifetime(subscription);
             const subscriptionUntil = formatSubscriptionUntil(subscription, fmtDate);
@@ -1583,11 +1604,12 @@ const statusCard = document.getElementById("status-card");
             }
             renderTelegramId();
 
-            const showVlessCard = service?.vless?.visible_in_app !== false;
-            const showHttpCard = service?.http?.visible_in_app === true;
+            const showVlessCard = isVerifiedUser && service?.vless?.visible_in_app !== false;
+            const showHttpCard = isVerifiedUser && service?.http?.visible_in_app === true;
             const showMixedCard =
-                service?.mixed?.visible_in_app === true ||
-                (service?.mixed === undefined && service?.https_mixed?.visible_in_app !== false);
+                isVerifiedUser &&
+                (service?.mixed?.visible_in_app === true ||
+                    (service?.mixed === undefined && service?.https_mixed?.visible_in_app !== false));
             const vlessConnections = normalizeVlessConnections(vless);
             const httpConnections = normalizeHttpConnections(http);
             const mixedConnections = normalizeMixedConnections(mixed);
@@ -1608,6 +1630,21 @@ const statusCard = document.getElementById("status-card");
             }
 
             homeServerSub.textContent = service?.vless?.ok || service?.https_mixed?.ok ? "Сервисы доступны" : "Сервисы недоступны";
+            homeServerCardEl?.classList.toggle("hidden", !isVerifiedUser);
+            homeConnectionsBtnEl?.classList.toggle("hidden", !isVerifiedUser);
+            profileReferralCardEl?.classList.toggle("hidden", isVerifiedUser);
+            profileReferralInputCardEl?.classList.toggle("hidden", isVerifiedUser);
+            profileReferralStatusCardEl?.classList.toggle("hidden", isVerifiedUser);
+            if (!isVerifiedUser) {
+                if (!profileReferralStatusEl.textContent || profileReferralStatusEl.textContent === "...") {
+                    profileReferralStatusTitleEl.textContent = "Реферальный код";
+                    profileReferralStatusEl.textContent = "Введите код, если он у вас есть";
+                }
+            }
+            applyNavSecondButtonConfig();
+            if (!isVerifiedUser && getActiveScreenId() === "screen-connections") {
+                switchScreen("screen-home");
+            }
             if (subActive) {
                 homeSubTitle.textContent = "Подписка активна";
                 homeSubSub.textContent = "Доступ подтвержден";
@@ -4395,6 +4432,35 @@ const statusCard = document.getElementById("status-card");
         profileIdToggleEl?.addEventListener("click", () => {
             showFullTelegramId = !showFullTelegramId;
             renderTelegramId();
+        });
+
+        profileReferralApplyEl?.addEventListener("click", async () => {
+            const code = String(profileReferralCodeEl?.value || "").trim();
+            if (!code) {
+                profileReferralStatusTitleEl.textContent = "Ошибка";
+                profileReferralStatusEl.textContent = "Введите код";
+                profileReferralStatusCardEl?.classList.remove("hidden");
+                return;
+            }
+            profileReferralApplyEl.disabled = true;
+            const baseText = profileReferralApplyEl.textContent;
+            profileReferralApplyEl.textContent = "Проверяем...";
+            try {
+                await postJson(`${window.location.origin}/api/verify`, { code });
+                profileReferralStatusTitleEl.textContent = "Готово";
+                profileReferralStatusEl.textContent = "Доступ расширен";
+                profileReferralStatusCardEl?.classList.remove("hidden");
+                const runtime = await loadRuntimeData();
+                renderDashboard(runtime);
+                profileReferralCodeEl.value = "";
+            } catch (err) {
+                profileReferralStatusTitleEl.textContent = "Ошибка";
+                profileReferralStatusEl.textContent = err?.message || "Код неверный";
+                profileReferralStatusCardEl?.classList.remove("hidden");
+            } finally {
+                profileReferralApplyEl.disabled = false;
+                profileReferralApplyEl.textContent = baseText;
+            }
         });
 
         workSettingsRefreshBtnEl?.addEventListener("click", async () => {
