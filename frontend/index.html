@@ -166,6 +166,7 @@
                                     <div class="work-menu-buttons">
                                         <button type="button" class="work-menu-btn" data-work-nav="work-staff-page">Персонал</button>
                                         <button type="button" class="work-menu-btn" data-work-nav="work-clients-page">Клиенты</button>
+                                        <button type="button" class="work-menu-btn" id="work-verify-menu-btn" data-work-nav="work-verify-page">Коды подтверждения</button>
                                     </div>
                                 </section>
                                 <section class="work-menu-group">
@@ -196,6 +197,22 @@
                             </div>
                             <div id="work-client-cards" class="work-client-cards">
                                 <div class="work-empty">Загрузка списка клиентов...</div>
+                            </div>
+                        </section>
+
+                        <section id="work-verify-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
+                                <div class="work-page-title">Коды подтверждения</div>
+                            </div>
+                            <div class="work-bind">
+                                <input id="work-verify-count" type="number" min="1" max="50" step="1" placeholder="Количество (1–50)">
+                                <input id="work-verify-length" type="number" min="5" max="12" step="1" placeholder="Длина (5–12)">
+                                <button id="work-verify-generate" class="work-btn">Сгенерировать</button>
+                            </div>
+                            <div class="work-note" id="work-verify-status">Коды появятся ниже</div>
+                            <div class="work-links-list" id="work-verify-list">
+                                <div class="work-empty">Кодов пока нет</div>
                             </div>
                         </section>
 

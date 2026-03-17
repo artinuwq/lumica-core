@@ -42,9 +42,6 @@ const statusCard = document.getElementById("status-card");
         const adminSyncInboundsUrl = `${window.location.origin}/api/admin/sync-inbounds`;
         const adminBindClientUrl = `${window.location.origin}/api/admin/bind-client`;
         const adminUnbindClientUrl = `${window.location.origin}/api/admin/unbind-client`;
-        const adminPendingBindingsUrl = `${window.location.origin}/api/admin/pending-bindings`;
-        const adminCancelPendingBindingUrl = (pendingId) =>
-            `${window.location.origin}/api/admin/pending-bindings/${pendingId}/cancel`;
         const adminInboundVisibilityUrl = (panelInboundId) => `${window.location.origin}/api/admin/inbounds/${panelInboundId}/visibility`;
         const adminInboundClientsUrl = (panelInboundId) => `${window.location.origin}/api/admin/inbounds/${panelInboundId}/clients`;
         const adminUserBindingsUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/bindings`;
@@ -150,6 +147,12 @@ const statusCard = document.getElementById("status-card");
         const workInboundDetailAddStatusEl = document.getElementById("work-inbound-detail-add-status");
         const workClientCardsEl = document.getElementById("work-client-cards");
         const workClientSearchEl = document.getElementById("work-client-search");
+        const workVerifyMenuBtnEl = document.getElementById("work-verify-menu-btn");
+        const workVerifyCountEl = document.getElementById("work-verify-count");
+        const workVerifyLengthEl = document.getElementById("work-verify-length");
+        const workVerifyGenerateEl = document.getElementById("work-verify-generate");
+        const workVerifyStatusEl = document.getElementById("work-verify-status");
+        const workVerifyListEl = document.getElementById("work-verify-list");
         const workClientPageTitleEl = document.getElementById("work-client-page-title");
         const workClientNameEl = document.getElementById("work-client-name");
         const workClientMetaEl = document.getElementById("work-client-meta");
@@ -162,18 +165,6 @@ const statusCard = document.getElementById("status-card");
         const workClientSelectEl = document.getElementById("work-client-select");
         const workBindBtnEl = document.getElementById("work-bind-btn");
         const workRefreshInboundClientsBtnEl = document.getElementById("work-refresh-inbound-clients-btn");
-        const workPendingTelegramIdEl = document.getElementById("work-pending-telegram-id");
-        const workPendingInboundSelectEl = document.getElementById("work-pending-inbound-select");
-        const workPendingClientSelectEl = document.getElementById("work-pending-client-select");
-        const workPendingAddBtnEl = document.getElementById("work-pending-add-btn");
-        const workPendingListEl = document.getElementById("work-pending-list");
-        const workPendingSubStatusSelectEl = document.getElementById("work-pending-sub-status-select");
-        const workPendingSubPriceInputEl = document.getElementById("work-pending-sub-price-input");
-        const workPendingSubLimitInputEl = document.getElementById("work-pending-sub-limit-input");
-        const workPendingSubCreateWrapEl = document.getElementById("work-pending-sub-create-wrap");
-        const workPendingSubCreateDateEl = document.getElementById("work-pending-sub-create-date");
-        const workPendingSubSaveBtnEl = document.getElementById("work-pending-sub-save-btn");
-        const workPendingSubSaveStatusEl = document.getElementById("work-pending-sub-save-status");
         const workSubStatusSelectEl = document.getElementById("work-sub-status-select");
         const workSubPriceInputEl = document.getElementById("work-sub-price-input");
         const workSubLimitInputEl = document.getElementById("work-sub-limit-input");
@@ -217,9 +208,6 @@ const statusCard = document.getElementById("status-card");
             inbounds: [],
             clients: [],
             bindings: [],
-            pendingClients: [],
-            pendingBindings: [],
-            pendingOverview: null,
             settings: {},
             panels: [],
             selectedUserId: null,
@@ -295,6 +283,7 @@ const statusCard = document.getElementById("status-card");
         const workContextTitleByPage = new Map([
             ["work-staff-page", "Персонал"],
             ["work-clients-page", "Клиенты"],
+            ["work-verify-page", "Коды подтверждения"],
             ["work-inbounds-page", "Подключения"],
             ["work-inbound-detail-page", "Подключение"],
             ["work-system-settings-page", "Системные настройки"],
@@ -626,11 +615,6 @@ const statusCard = document.getElementById("status-card");
                     ];
                     if (workInboundSelectEl?.value) {
                         tasks.push(loadInboundClients(workInboundSelectEl.value));
-                    }
-                    const pendingTgId = workPendingTelegramIdEl?.value?.trim();
-                    if (pendingTgId) {
-                        tasks.push(loadPendingBindings(pendingTgId));
-                        tasks.push(loadPendingSubscriptionOverview(pendingTgId));
                     }
                     await Promise.all(tasks);
                 }
@@ -1592,6 +1576,8 @@ const statusCard = document.getElementById("status-card");
             workOwnerNameEl.textContent = me?.user?.name || me?.user?.first_name || me?.user?.username || "Панель управления";
             workOwnerRoleEl.textContent = userRole;
             navWorkBtn.classList.toggle("hidden", !isOwner);
+            const canVerify = ["owner", "admin", "support", "moderator"].includes(userRole);
+            workVerifyMenuBtnEl?.classList.toggle("hidden", !canVerify);
             bottomNavEl.classList.toggle("with-work", isOwner);
             if (!isOwner) {
                 const activeWork = navWorkBtn.classList.contains("active");
@@ -2517,45 +2503,8 @@ const statusCard = document.getElementById("status-card");
             renderWorkClientCards();
         }
 
-        function renderPendingSubscriptionControls(sub, options = {}) {
-            const preserveDate = Boolean(options?.preserveDate);
-            const selectedStatus = normalizeSubscriptionStatus(workPendingSubStatusSelectEl?.value || "active");
-            const lifetimeSelected = selectedStatus === "lifetime";
-
-            workPendingSubCreateWrapEl?.classList.toggle("hidden", lifetimeSelected);
-            if (workPendingSubSaveBtnEl) {
-                if (lifetimeSelected) {
-                    workPendingSubSaveBtnEl.textContent = sub ? "Сохранить бессрочную подписку" : "Создать бессрочную подписку";
-                } else {
-                    workPendingSubSaveBtnEl.textContent = sub ? "Сохранить подписку" : "Создать подписку";
-                }
-            }
-
-            if (!workPendingSubCreateDateEl) {
-                return;
-            }
-            if (lifetimeSelected) {
-                workPendingSubCreateDateEl.value = "";
-                return;
-            }
-            if (preserveDate) {
-                if (!workPendingSubCreateDateEl.value) {
-                    workPendingSubCreateDateEl.value = defaultSubscriptionDateValue(30);
-                }
-                return;
-            }
-            if (sub?.access_until) {
-                const accessUntil = new Date(sub.access_until);
-                if (!Number.isNaN(accessUntil.getTime())) {
-                    workPendingSubCreateDateEl.value = toInputDateValue(accessUntil);
-                    return;
-                }
-            }
-            workPendingSubCreateDateEl.value = defaultSubscriptionDateValue(30);
-        }
-
+        
         function renderPendingSubscriptionOverview(overview) {
-            workState.pendingOverview = overview || null;
             const sub = overview?.subscription || null;
             const conn = overview?.connections || null;
 
@@ -3744,86 +3693,7 @@ const statusCard = document.getElementById("status-card");
             return { panelInboundRefId: Number(panelInboundRefId), inbound, client };
         }
 
-        function renderPendingBindings(rows) {
-            if (!workPendingListEl) return;
-            workPendingListEl.innerHTML = "";
-
-            if (!Array.isArray(rows) || !rows.length) {
-                const empty = document.createElement("div");
-                empty.className = "work-empty";
-                empty.textContent = "Pending-привязок пока нет.";
-                workPendingListEl.appendChild(empty);
-                return;
-            }
-
-            rows.forEach((row) => {
-                const item = document.createElement("div");
-                item.className = "work-link-item";
-
-                const title = document.createElement("div");
-                title.className = "work-link-item-title";
-                title.textContent = row?.inbound_remark || row?.label || row?.identifier || `Inbound ${row?.panel_inbound_id ?? "—"}`;
-
-                const line1 = document.createElement("div");
-                line1.className = "work-link-item-sub";
-                line1.textContent = `TG: ${row?.telegram_id || "—"} • client: ${row?.label || row?.identifier || "—"}`;
-
-                const line2 = document.createElement("div");
-                line2.className = "work-link-item-sub";
-                line2.textContent = `панель: ${row?.panel_name || "—"} • status: ${row?.status || "—"} • protocol: ${row?.protocol || "—"}`;
-
-                item.appendChild(title);
-                item.appendChild(line1);
-                item.appendChild(line2);
-
-                if (String(row?.status || "").toLowerCase() === "pending") {
-                    const rowActions = document.createElement("div");
-                    rowActions.className = "work-link-clients";
-
-                    const rowActionWrap = document.createElement("div");
-                    rowActionWrap.className = "work-link-client";
-
-                    const rowActionName = document.createElement("div");
-                    rowActionName.className = "work-link-client-name";
-                    rowActionName.textContent = "Ожидает первого входа";
-
-                    const cancelBtn = document.createElement("button");
-                    cancelBtn.type = "button";
-                    cancelBtn.className = "work-link-client-remove";
-                    cancelBtn.textContent = "Отменить";
-                    cancelBtn.addEventListener("click", async (event) => {
-                        event.stopPropagation();
-                        await runWorkAction("Cancel Pending Binding", async () => {
-                            await postJson(adminCancelPendingBindingUrl(row.id));
-                            await loadPendingBindings(workPendingTelegramIdEl?.value);
-                            return { canceled: row.id };
-                        });
-                    });
-
-                    rowActionWrap.appendChild(rowActionName);
-                    rowActionWrap.appendChild(cancelBtn);
-                    rowActions.appendChild(rowActionWrap);
-                    item.appendChild(rowActions);
-                }
-
-                workPendingListEl.appendChild(item);
-            });
-        }
-
-        async function loadPendingBindings(telegramIdRaw) {
-            const telegramId = String(telegramIdRaw || "").trim();
-            if (!telegramId) {
-                workState.pendingBindings = [];
-                renderPendingBindings([]);
-                return { ok: true, pending_bindings: [] };
-            }
-            const url = `${adminPendingBindingsUrl}?telegram_id=${encodeURIComponent(telegramId)}&limit=200`;
-            const resp = await fetchJson(url, false);
-            workState.pendingBindings = Array.isArray(resp?.pending_bindings) ? resp.pending_bindings : [];
-            renderPendingBindings(workState.pendingBindings);
-            return resp;
-        }
-
+        
         function renderWorkClientOverview(overview) {
             workState.overview = overview || null;
             const sub = overview?.subscription || null;
@@ -3911,15 +3781,12 @@ const statusCard = document.getElementById("status-card");
                 "Select client from inbound"
             );
             workState.clients = [];
-            workState.pendingClients = [];
             if (workPendingInboundSelectEl?.value) {
                 await loadPendingInboundClients(workPendingInboundSelectEl.value);
             }
-            const pendingTgId = workPendingTelegramIdEl?.value?.trim();
-            if (pendingTgId) {
-                await Promise.all([loadPendingBindings(pendingTgId), loadPendingSubscriptionOverview(pendingTgId)]);
+            
+                
             } else {
-                workState.pendingBindings = [];
                 renderPendingBindings([]);
                 renderPendingSubscriptionOverview(null);
                 setPendingSubscriptionStatus("Укажи Telegram ID и сохрани параметры подписки.");
@@ -3966,12 +3833,12 @@ const statusCard = document.getElementById("status-card");
             if (workInboundSelectEl?.value) {
                 await loadInboundClients(workInboundSelectEl.value);
             }
-            const pendingTgId = workPendingTelegramIdEl?.value?.trim();
+            
             await Promise.all([
                 loadSelectedUserBindings(),
                 loadSelectedUserOverview(),
-                pendingTgId ? loadPendingBindings(pendingTgId) : Promise.resolve(),
-                pendingTgId ? loadPendingSubscriptionOverview(pendingTgId) : Promise.resolve(),
+                
+                
             ]);
         }
 
@@ -4024,23 +3891,7 @@ const statusCard = document.getElementById("status-card");
         }
 
 
-        async function loadPendingInboundClients(panelInboundId) {
-            if (!panelInboundId) {
-                workState.pendingClients = [];
-                fillSelect(workPendingClientSelectEl, [], () => "", () => "", "Select client from inbound");
-                return;
-            }
-            const resp = await fetchJson(adminInboundClientsUrl(panelInboundId), false);
-            workState.pendingClients = Array.isArray(resp?.clients) ? resp.clients : [];
-            fillSelect(
-                workPendingClientSelectEl,
-                workState.pendingClients,
-                (c, idx) => `${idx + 1}. ${c.label || "Client"}`,
-                (_, idx) => String(idx),
-                "Select client from inbound"
-            );
-        }
-
+        async 
         function switchWorkPage(target) {
             const next = target || "work-menu-page";
             const current = getActiveWorkPageId();
@@ -4456,6 +4307,65 @@ const statusCard = document.getElementById("status-card");
             renderWorkClientCards();
         });
 
+        workVerifyGenerateEl?.addEventListener("click", async () => {
+            const baseText = workVerifyGenerateEl?.textContent || "Сгенерировать";
+            if (workVerifyGenerateEl) {
+                workVerifyGenerateEl.disabled = true;
+                workVerifyGenerateEl.textContent = "Генерация...";
+            }
+            try {
+                const count = Number(workVerifyCountEl?.value || 1) || 1;
+                const length = Number(workVerifyLengthEl?.value || 5) || 5;
+                const payload = await postJson(`${window.location.origin}/api/admin/verification-codes`, {
+                    count,
+                    length,
+                });
+                const codes = Array.isArray(payload?.codes) ? payload.codes : [];
+                if (workVerifyStatusEl) {
+                    workVerifyStatusEl.textContent = codes.length ? `Сгенерировано: ${codes.length}` : "Коды не получены";
+                }
+                if (workVerifyListEl) {
+                    workVerifyListEl.innerHTML = "";
+                    if (!codes.length) {
+                        const empty = document.createElement("div");
+                        empty.className = "work-empty";
+                        empty.textContent = "Кодов нет";
+                        workVerifyListEl.appendChild(empty);
+                    } else {
+                        codes.forEach((code) => {
+                            const row = document.createElement("div");
+                            row.className = "work-link-row";
+                            row.textContent = String(code);
+                            row.addEventListener("click", async () => {
+                                try {
+                                    await copyToClipboard(String(code));
+                                    row.textContent = `${code} (скопировано)`;
+                                    setTimeout(() => {
+                                        row.textContent = String(code);
+                                    }, 900);
+                                } catch (_err) {
+                                    row.textContent = `${code} (ошибка)`;
+                                    setTimeout(() => {
+                                        row.textContent = String(code);
+                                    }, 900);
+                                }
+                            });
+                            workVerifyListEl.appendChild(row);
+                        });
+                    }
+                }
+            } catch (err) {
+                if (workVerifyStatusEl) {
+                    workVerifyStatusEl.textContent = err?.message || "Ошибка генерации";
+                }
+            } finally {
+                if (workVerifyGenerateEl) {
+                    workVerifyGenerateEl.disabled = false;
+                    workVerifyGenerateEl.textContent = baseText;
+                }
+            }
+        });
+
         profileReferralApplyEl?.addEventListener("click", async () => {
             const code = String(profileReferralCodeEl?.value || "").trim();
             if (!code) {
@@ -4624,7 +4534,6 @@ const statusCard = document.getElementById("status-card");
         });
 
         workPendingInboundSelectEl?.addEventListener("change", async () => {
-            workState.pendingClients = [];
             fillSelect(workPendingClientSelectEl, [], () => "", () => "", "Select client from inbound");
             if (!workPendingInboundSelectEl?.value) {
                 return;
@@ -4632,7 +4541,6 @@ const statusCard = document.getElementById("status-card");
             try {
                 await loadPendingInboundClients(workPendingInboundSelectEl.value);
             } catch (err) {
-                console.error("load pending inbound clients error:", err);
             }
         });
 
@@ -4643,12 +4551,10 @@ const statusCard = document.getElementById("status-card");
                     loadPendingSubscriptionOverview(workPendingTelegramIdEl.value),
                 ]);
             } catch (err) {
-                console.error("load pending data error:", err);
             }
         });
 
         workPendingSubStatusSelectEl?.addEventListener("change", () => {
-            renderPendingSubscriptionControls(workState.pendingOverview?.subscription || null, { preserveDate: true });
         });
 
         workPendingSubSaveBtnEl?.addEventListener("click", async () => {
@@ -4659,7 +4565,6 @@ const statusCard = document.getElementById("status-card");
                     throw new Error("Enter valid Telegram ID");
                 }
 
-                const hasSubscription = Boolean(workState.pendingOverview?.subscription);
                 const selectedStatus = normalizeSubscriptionStatus(workPendingSubStatusSelectEl?.value || "active");
                 const payload = {
                     telegram_id: telegramId,
@@ -4743,8 +4648,6 @@ const statusCard = document.getElementById("status-card");
                 const { panelInboundRefId, inbound, client } = resolveInboundClientSelection(
                     workPendingInboundSelectEl,
                     workPendingClientSelectEl,
-                    workState.pendingClients,
-                    "Select inbound and client for pending"
                 );
 
                 const payload = {
