@@ -61,6 +61,9 @@ const statusCard = document.getElementById("status-card");
         const cloudUploadUrl = `${window.location.origin}/api/cloud/upload`;
         const cloudDeleteNodeUrl = (nodeId) => `${window.location.origin}/api/cloud/nodes/${nodeId}`;
         const cloudDownloadFileUrl = (fileId) => `${window.location.origin}/api/cloud/files/${fileId}/download`;
+        const subscriptionOptionsUrl = `${window.location.origin}/api/subscription/options`;
+        const subscriptionDraftUrl = `${window.location.origin}/api/subscription/draft`;
+        const subscriptionConfirmUrl = `${window.location.origin}/api/subscription/confirm`;
         const homeServerSub = document.getElementById("home-server-sub");
         const homeSubTitle = document.getElementById("home-sub-title");
         const homeSubSub = document.getElementById("home-sub-sub");
@@ -98,6 +101,16 @@ const statusCard = document.getElementById("status-card");
         const profileReferralStatusCardEl = document.getElementById("profile-referral-status-card");
         const profileReferralStatusEl = document.getElementById("profile-referral-status");
         const profileReferralStatusTitleEl = document.getElementById("profile-referral-status-title");
+        const subscriptionBuilderEl = document.getElementById("subscription-builder");
+        const subscriptionBuilderSubEl = document.getElementById("subscription-builder-sub");
+        const subscriptionRegionListEl = document.getElementById("subscription-region-list");
+        const subscriptionTrafficListEl = document.getElementById("subscription-traffic-list");
+        const subscriptionExtraConnectionsEl = document.getElementById("subscription-extra-connections");
+        const subscriptionCloudGbEl = document.getElementById("subscription-cloud-gb");
+        const subscriptionPriceValueEl = document.getElementById("subscription-price-value");
+        const subscriptionBuilderStatusEl = document.getElementById("subscription-builder-status");
+        const subscriptionDraftBtnEl = document.getElementById("subscription-draft-btn");
+        const subscriptionConfirmBtnEl = document.getElementById("subscription-confirm-btn");
         const workOwnerNameEl = document.getElementById("work-owner-name");
         const workOwnerRoleEl = document.getElementById("work-owner-role");
         const workRolePillEl = document.getElementById("work-role-pill");
@@ -240,6 +253,27 @@ const statusCard = document.getElementById("status-card");
         };
         const uiFeatures = {
             cloudEnabled: true,
+        };
+        const subscriptionBuilderState = {
+            options: null,
+            plan: null,
+            itemsCatalog: [],
+            regions: [],
+            trafficOptions: [
+                { key: "vless", label: "VLESS" },
+                { key: "proxy", label: "Proxy" },
+                { key: "mixed", label: "Mixed" },
+            ],
+            selectedRegions: new Set(),
+            trafficType: "vless",
+            extraConnections: 0,
+            cloudGb: 0,
+            draft: null,
+            draftId: null,
+            loading: false,
+            optionsLoading: false,
+            draftTimer: null,
+            lastPayloadHash: "",
         };
         const NAV_SECOND_ITEM_KEY = "nav_second_item";
         const VLESS_GUIDE_HIDE_KEY = "vless_guide_hide";
@@ -1668,6 +1702,346 @@ const statusCard = document.getElementById("status-card");
             } else {
                 mixedStatusEl.textContent = "Не выдано";
                 mixedDetailEl.textContent = "—";
+            }
+
+            const showBuilder = isVerifiedUser;
+            subscriptionBuilderEl?.classList.toggle("hidden", !showBuilder);
+            if (showBuilder) {
+                ensureSubscriptionBuilderLoaded();
+            }
+        }
+
+        function normalizeItemType(value) {
+            return String(value || "").trim().toLowerCase();
+        }
+
+        function getPlanMetaItems(plan) {
+            const meta = plan?.meta || {};
+            const rawItems = [];
+            ["items", "addons", "options"].forEach((key) => {
+                if (Array.isArray(meta[key])) {
+                    rawItems.push(...meta[key]);
+                }
+            });
+            return rawItems.filter((item) => item && typeof item === "object");
+        }
+
+        function resolveItemDefinition(catalog, { typeHints = [], codeHints = [], fallbackType = null, fallbackCode = null }) {
+            const normalizedTypeHints = typeHints.map((value) => normalizeItemType(value));
+            const normalizedCodeHints = codeHints.map((value) => String(value || "").trim().toLowerCase());
+            const candidates = catalog.filter((item) => {
+                const itemType = normalizeItemType(item.item_type || item.type);
+                const code = String(item.code || "").trim().toLowerCase();
+                if (!code) return false;
+                if (normalizedTypeHints.length && !normalizedTypeHints.includes(itemType)) return false;
+                if (normalizedCodeHints.length && !normalizedCodeHints.includes(code)) return false;
+                return true;
+            });
+            const byType = catalog.filter((item) => {
+                const itemType = normalizeItemType(item.item_type || item.type);
+                return normalizedTypeHints.length && normalizedTypeHints.includes(itemType);
+            });
+            const byCode = catalog.filter((item) => {
+                const code = String(item.code || "").trim().toLowerCase();
+                return normalizedCodeHints.length && normalizedCodeHints.includes(code);
+            });
+            const pick = candidates[0] || byType[0] || byCode[0] || null;
+            if (!pick) {
+                return {
+                    itemType: fallbackType,
+                    code: fallbackCode,
+                };
+            }
+            return {
+                itemType: normalizeItemType(pick.item_type || pick.type) || fallbackType,
+                code: String(pick.code || "").trim() || fallbackCode,
+            };
+        }
+
+        function setSubscriptionBuilderStatus(message, tone = "") {
+            if (!subscriptionBuilderStatusEl) return;
+            if (!message) {
+                subscriptionBuilderStatusEl.textContent = "";
+                subscriptionBuilderStatusEl.classList.add("hidden");
+                subscriptionBuilderStatusEl.classList.remove("success", "error");
+                return;
+            }
+            subscriptionBuilderStatusEl.textContent = message;
+            subscriptionBuilderStatusEl.classList.remove("hidden");
+            subscriptionBuilderStatusEl.classList.toggle("success", tone === "success");
+            subscriptionBuilderStatusEl.classList.toggle("error", tone === "error");
+        }
+
+        function updateSubscriptionBuilderPrice(pricing) {
+            if (!subscriptionPriceValueEl) return;
+            subscriptionPriceValueEl.textContent = pricing?.total ? fmtMoney(pricing.total) : "—";
+        }
+
+        function renderSubscriptionRegionOptions() {
+            if (!subscriptionRegionListEl) return;
+            subscriptionRegionListEl.innerHTML = "";
+            const regions = subscriptionBuilderState.regions || [];
+            if (!regions.length) {
+                subscriptionRegionListEl.innerHTML = '<div class="work-note">Регионы не найдены</div>';
+                return;
+            }
+            regions.forEach((region) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "subscription-option-btn";
+                button.textContent = region.name || region.code || "—";
+                const code = String(region.code || "").trim();
+                const selected = subscriptionBuilderState.selectedRegions.has(code);
+                button.classList.toggle("active", selected);
+                button.addEventListener("click", () => {
+                    if (!code) return;
+                    const alreadySelected = subscriptionBuilderState.selectedRegions.has(code);
+                    if (alreadySelected && subscriptionBuilderState.selectedRegions.size === 1) {
+                        return;
+                    }
+                    if (alreadySelected) {
+                        subscriptionBuilderState.selectedRegions.delete(code);
+                    } else {
+                        subscriptionBuilderState.selectedRegions.add(code);
+                    }
+                    renderSubscriptionRegionOptions();
+                    scheduleSubscriptionDraft();
+                });
+                subscriptionRegionListEl.appendChild(button);
+            });
+        }
+
+        function renderSubscriptionTrafficOptions() {
+            if (!subscriptionTrafficListEl) return;
+            subscriptionTrafficListEl.innerHTML = "";
+            subscriptionBuilderState.trafficOptions.forEach((option) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "subscription-option-btn";
+                button.textContent = option.label;
+                const selected = subscriptionBuilderState.trafficType === option.key;
+                button.classList.toggle("active", selected);
+                button.addEventListener("click", () => {
+                    subscriptionBuilderState.trafficType = option.key;
+                    renderSubscriptionTrafficOptions();
+                    scheduleSubscriptionDraft();
+                });
+                subscriptionTrafficListEl.appendChild(button);
+            });
+        }
+
+        function buildSubscriptionDraftPayload() {
+            const plan = subscriptionBuilderState.plan;
+            if (!plan) return null;
+            const regions = subscriptionBuilderState.regions || [];
+            const selectedRegionCodes = Array.from(subscriptionBuilderState.selectedRegions);
+            const regionItems = [];
+            const catalog = subscriptionBuilderState.itemsCatalog || [];
+            const regionDef = resolveItemDefinition(catalog, {
+                typeHints: ["region", "regions"],
+                fallbackType: "region",
+            });
+            selectedRegionCodes.forEach((code) => {
+                const region = regions.find((item) => String(item.code) === code);
+                if (!code) return;
+                regionItems.push({
+                    item_type: regionDef.itemType || "region",
+                    code,
+                    quantity: 1,
+                    meta: region?.name ? { name: region.name } : {},
+                });
+            });
+
+            const trafficKey = subscriptionBuilderState.trafficType || "vless";
+            const trafficAliases = {
+                vless: ["vless"],
+                proxy: ["proxy", "http", "https", "http_proxy", "http-proxy"],
+                mixed: ["mixed", "socks", "socks5"],
+            };
+            const trafficDef = resolveItemDefinition(catalog, {
+                typeHints: ["traffic", "protocol", "type"],
+                codeHints: trafficAliases[trafficKey] || [trafficKey],
+                fallbackType: "traffic",
+                fallbackCode: trafficKey,
+            });
+            const items = [...regionItems];
+            items.push({
+                item_type: trafficDef.itemType || "traffic",
+                code: trafficDef.code || trafficKey,
+                quantity: 1,
+            });
+
+            const extraConnections = Math.max(0, Number(subscriptionBuilderState.extraConnections) || 0);
+            if (extraConnections > 0) {
+                const extraDef = resolveItemDefinition(catalog, {
+                    typeHints: ["connections", "connection", "extra_connection", "extra-connections", "extra"],
+                    codeHints: ["extra_connection", "extra_connections", "connections", "connection", "extra"],
+                    fallbackType: "connections",
+                    fallbackCode: "extra_connection",
+                });
+                items.push({
+                    item_type: extraDef.itemType || "connections",
+                    code: extraDef.code || "extra_connection",
+                    quantity: Math.round(extraConnections),
+                });
+            }
+
+            const cloudGb = Math.max(0, Number(subscriptionBuilderState.cloudGb) || 0);
+            const cloudUnits = Math.floor(cloudGb / 100);
+            if (cloudUnits > 0) {
+                const cloudDef = resolveItemDefinition(catalog, {
+                    typeHints: ["cloud", "storage", "drive"],
+                    codeHints: ["cloud", "cloud_100gb", "cloud_100", "storage", "drive"],
+                    fallbackType: "cloud",
+                    fallbackCode: "cloud_100gb",
+                });
+                items.push({
+                    item_type: cloudDef.itemType || "cloud",
+                    code: cloudDef.code || "cloud_100gb",
+                    quantity: cloudUnits,
+                    meta: { gb: cloudGb },
+                });
+            }
+
+            return {
+                plan_id: plan.id,
+                items,
+                region_code: selectedRegionCodes[0] || null,
+                connections_limit: extraConnections || null,
+                payload: {
+                    region_codes: selectedRegionCodes,
+                    traffic_type: trafficKey,
+                    extra_connections: extraConnections,
+                    cloud_gb: cloudGb,
+                },
+            };
+        }
+
+        async function loadSubscriptionOptions() {
+            if (subscriptionBuilderState.optionsLoading) return;
+            subscriptionBuilderState.optionsLoading = true;
+            setSubscriptionBuilderStatus("Загружаем опции...", "");
+            try {
+                const result = await fetchJson(subscriptionOptionsUrl, false);
+                subscriptionBuilderState.options = result;
+                const plans = Array.isArray(result?.plans) ? result.plans : [];
+                subscriptionBuilderState.plan = plans.find((plan) => plan?.is_active) || plans[0] || null;
+                subscriptionBuilderState.itemsCatalog = getPlanMetaItems(subscriptionBuilderState.plan);
+                subscriptionBuilderState.regions = Array.isArray(result?.regions) ? result.regions : [];
+                if (!subscriptionBuilderState.selectedRegions.size && subscriptionBuilderState.regions.length) {
+                    subscriptionBuilderState.selectedRegions.add(String(subscriptionBuilderState.regions[0].code || ""));
+                }
+                if (subscriptionBuilderSubEl) {
+                    subscriptionBuilderSubEl.textContent = subscriptionBuilderState.plan
+                        ? `План: ${subscriptionBuilderState.plan.name}`
+                        : "План не найден";
+                }
+                if (subscriptionExtraConnectionsEl) {
+                    subscriptionExtraConnectionsEl.value = subscriptionBuilderState.extraConnections || 0;
+                }
+                if (subscriptionCloudGbEl) {
+                    subscriptionCloudGbEl.value = subscriptionBuilderState.cloudGb || 0;
+                }
+                if (subscriptionConfirmBtnEl) {
+                    subscriptionConfirmBtnEl.disabled = true;
+                }
+                renderSubscriptionRegionOptions();
+                renderSubscriptionTrafficOptions();
+                setSubscriptionBuilderStatus("", "");
+                scheduleSubscriptionDraft();
+            } catch (err) {
+                console.error("subscription options error:", err);
+                setSubscriptionBuilderStatus(err?.message || "Не удалось загрузить опции", "error");
+            } finally {
+                subscriptionBuilderState.optionsLoading = false;
+            }
+        }
+
+        function ensureSubscriptionBuilderLoaded() {
+            if (!subscriptionBuilderEl || !isVerifiedUser) return;
+            if (!subscriptionBuilderState.options) {
+                loadSubscriptionOptions();
+            }
+        }
+
+        function scheduleSubscriptionDraft() {
+            if (subscriptionBuilderState.draftTimer) {
+                clearTimeout(subscriptionBuilderState.draftTimer);
+            }
+            subscriptionBuilderState.draftTimer = setTimeout(() => {
+                refreshSubscriptionDraft();
+            }, 450);
+        }
+
+        async function refreshSubscriptionDraft() {
+            if (subscriptionBuilderState.loading) return;
+            if (!subscriptionBuilderState.plan) return;
+            if (!subscriptionBuilderState.selectedRegions.size) {
+                setSubscriptionBuilderStatus("Выберите хотя бы один регион", "error");
+                updateSubscriptionBuilderPrice(null);
+                return;
+            }
+            const payload = buildSubscriptionDraftPayload();
+            if (!payload) return;
+            const payloadHash = JSON.stringify(payload);
+            if (payloadHash === subscriptionBuilderState.lastPayloadHash && subscriptionBuilderState.draft) {
+                return;
+            }
+            subscriptionBuilderState.lastPayloadHash = payloadHash;
+            subscriptionBuilderState.loading = true;
+            if (subscriptionDraftBtnEl) {
+                subscriptionDraftBtnEl.disabled = true;
+                subscriptionDraftBtnEl.textContent = "Считаем...";
+            }
+            if (subscriptionConfirmBtnEl) {
+                subscriptionConfirmBtnEl.disabled = true;
+            }
+            try {
+                const result = await postJson(subscriptionDraftUrl, payload);
+                subscriptionBuilderState.draft = result?.draft || null;
+                subscriptionBuilderState.draftId = result?.draft?.id || null;
+                updateSubscriptionBuilderPrice(result?.pricing || null);
+                setSubscriptionBuilderStatus("Расчет обновлен", "success");
+            } catch (err) {
+                console.error("subscription draft error:", err);
+                subscriptionBuilderState.draft = null;
+                subscriptionBuilderState.draftId = null;
+                setSubscriptionBuilderStatus(err?.message || "Не удалось рассчитать", "error");
+                updateSubscriptionBuilderPrice(null);
+            } finally {
+                subscriptionBuilderState.loading = false;
+                if (subscriptionDraftBtnEl) {
+                    subscriptionDraftBtnEl.disabled = false;
+                    subscriptionDraftBtnEl.textContent = "Рассчитать";
+                }
+                if (subscriptionConfirmBtnEl) {
+                    subscriptionConfirmBtnEl.disabled = !subscriptionBuilderState.draftId;
+                }
+            }
+        }
+
+        async function confirmSubscriptionDraft() {
+            const draftId = subscriptionBuilderState.draftId;
+            if (!draftId) {
+                setSubscriptionBuilderStatus("Сначала рассчитайте стоимость", "error");
+                return;
+            }
+            if (subscriptionConfirmBtnEl) {
+                subscriptionConfirmBtnEl.disabled = true;
+            }
+            setSubscriptionBuilderStatus("Подтверждаем...", "");
+            try {
+                await postJson(subscriptionConfirmUrl, { draft_id: draftId });
+                setSubscriptionBuilderStatus("Подписка создана", "success");
+                const runtime = await loadRuntimeData();
+                renderDashboard(runtime);
+            } catch (err) {
+                console.error("subscription confirm error:", err);
+                setSubscriptionBuilderStatus(err?.message || "Не удалось подтвердить", "error");
+            } finally {
+                if (subscriptionConfirmBtnEl) {
+                    subscriptionConfirmBtnEl.disabled = false;
+                }
             }
         }
 
@@ -4393,6 +4767,21 @@ const statusCard = document.getElementById("status-card");
                 profileReferralApplyEl.disabled = false;
                 profileReferralApplyEl.textContent = baseText;
             }
+        });
+
+        subscriptionExtraConnectionsEl?.addEventListener("input", () => {
+            subscriptionBuilderState.extraConnections = Math.max(0, Number(subscriptionExtraConnectionsEl?.value) || 0);
+            scheduleSubscriptionDraft();
+        });
+        subscriptionCloudGbEl?.addEventListener("input", () => {
+            subscriptionBuilderState.cloudGb = Math.max(0, Number(subscriptionCloudGbEl?.value) || 0);
+            scheduleSubscriptionDraft();
+        });
+        subscriptionDraftBtnEl?.addEventListener("click", async () => {
+            await refreshSubscriptionDraft();
+        });
+        subscriptionConfirmBtnEl?.addEventListener("click", async () => {
+            await confirmSubscriptionDraft();
         });
 
         workSettingsRefreshBtnEl?.addEventListener("click", async () => {

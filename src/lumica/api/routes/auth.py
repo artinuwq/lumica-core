@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
-from lumica.domain.models import PanelTemplate, Region, SubscriptionItem, SubscriptionPlan
+from lumica.domain.models import PanelTemplate, Region, SubscriptionItem, SubscriptionPlan, User
 
 def register_auth_routes(app, deps):
     # Transitional dependency injection while handlers are being migrated out
@@ -73,6 +73,15 @@ def register_auth_routes(app, deps):
         if not plan.is_active:
             return None, (jsonify({"ok": False, "error": "Plan is inactive"}), 400)
         return plan, None
+
+    def _require_verified_user(db, user_id: int):
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return None, (jsonify({"ok": False, "error": "Unauthorized"}), 401)
+        status = (user.status or "").strip().lower()
+        if status != "verified":
+            return None, (jsonify({"ok": False, "error": "Verification required"}), 403)
+        return user, None
 
     def _subscription_duration_months(plan: SubscriptionPlan, payload: dict):
         meta = _plan_meta(plan)
@@ -341,6 +350,10 @@ def register_auth_routes(app, deps):
             return err
 
         with SessionLocal() as db:
+            _, err = _require_verified_user(db, auth["user_id"])
+            if err:
+                return err
+
             plans = (
                 db.query(SubscriptionPlan)
                 .filter(SubscriptionPlan.is_active == 1)
@@ -375,6 +388,10 @@ def register_auth_routes(app, deps):
 
         body = request.get_json(silent=True) or {}
         with SessionLocal() as db:
+            _, err = _require_verified_user(db, auth["user_id"])
+            if err:
+                return err
+
             plan, err = _resolve_plan(db, body)
             if err:
                 return err
@@ -487,6 +504,10 @@ def register_auth_routes(app, deps):
             return jsonify({"ok": False, "error": "draft_id must be an integer"}), 400
 
         with SessionLocal() as db:
+            _, err = _require_verified_user(db, auth["user_id"])
+            if err:
+                return err
+
             draft = (
                 db.query(Subscription)
                 .filter(Subscription.id == draft_id, Subscription.user_id == auth["user_id"])

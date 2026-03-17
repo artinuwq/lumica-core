@@ -534,6 +534,32 @@
                             <div class="pill-soft" id="profile-role">user</div>
                         </div>
 
+                        <div id="subscription-builder" class="subscription-builder card hidden">
+                            <div class="subscription-builder-head">
+                                <div class="section-title">Конструктор подписки</div>
+                                <div class="card-sub" id="subscription-builder-sub">Укажите параметры и получите стоимость.</div>
+                            </div>
+                            <div class="work-bind">
+                                <label class="work-sub-create-label">Регионы</label>
+                                <div id="subscription-region-list" class="subscription-option-grid"></div>
+                                <label class="work-sub-create-label">Тип трафика</label>
+                                <div id="subscription-traffic-list" class="subscription-option-grid"></div>
+                                <label class="work-sub-create-label" for="subscription-extra-connections">Доп. подключения</label>
+                                <input id="subscription-extra-connections" type="number" min="0" step="1" placeholder="0">
+                                <label class="work-sub-create-label" for="subscription-cloud-gb">Облако (ГБ, шаг 100)</label>
+                                <input id="subscription-cloud-gb" type="number" min="0" step="100" placeholder="0">
+                                <div class="subscription-price">
+                                    <div class="subscription-price-label">Стоимость</div>
+                                    <div class="subscription-price-value" id="subscription-price-value">—</div>
+                                </div>
+                                <div id="subscription-builder-status" class="work-note hidden"></div>
+                                <div class="work-bind-actions">
+                                    <button id="subscription-draft-btn" type="button" class="work-btn">Рассчитать</button>
+                                    <button id="subscription-confirm-btn" type="button" class="work-btn">Подтвердить</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card" id="profile-referral-card">
                             <div class="left">
                                 <div class="badge">★</div>

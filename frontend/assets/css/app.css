@@ -908,6 +908,58 @@
                 grid-template-columns: 1fr;
             }
         }
+        .subscription-builder {
+            display: grid;
+            gap: 0.8rem;
+            align-items: stretch;
+            width: 100%;
+        }
+        .subscription-builder.card {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .subscription-builder-head {
+            display: grid;
+            gap: 0.2rem;
+        }
+        .subscription-option-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+        }
+        .subscription-option-btn {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(12, 20, 38, 0.9);
+            color: rgba(231, 240, 255, 0.85);
+            padding: 0.4rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.15s ease;
+        }
+        .subscription-option-btn.active {
+            border-color: rgba(86, 184, 255, 0.85);
+            color: #eff7ff;
+            background: linear-gradient(135deg, rgba(86, 184, 255, 0.32), rgba(56, 122, 255, 0.4));
+        }
+        .subscription-price {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.6rem;
+            padding: 0.6rem 0.75rem;
+            border-radius: 12px;
+            background: rgba(10, 18, 34, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .subscription-price-label {
+            color: rgba(207, 226, 255, 0.75);
+            font-size: 0.82rem;
+        }
+        .subscription-price-value {
+            font-weight: 700;
+            color: #eef6ff;
+        }
         .work-client-cards,
         .work-links-list {
             display: grid;
