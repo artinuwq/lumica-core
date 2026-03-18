@@ -4272,8 +4272,7 @@ const statusCard = document.getElementById("status-card");
         }
 
 
-        async 
-        function switchWorkPage(target) {
+        async function switchWorkPage(target) {
             const next = target || "work-menu-page";
             const current = getActiveWorkPageId();
             if (current === "work-inbound-detail-page" && next !== "work-inbound-detail-page") {
