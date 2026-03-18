@@ -4167,9 +4167,6 @@ const statusCard = document.getElementById("status-card");
             workState.clients = [];
             if (workPendingInboundSelectEl?.value) {
                 await loadPendingInboundClients(workPendingInboundSelectEl.value);
-            }
-            
-                
             } else {
                 renderPendingBindings([]);
                 renderPendingSubscriptionOverview(null);
