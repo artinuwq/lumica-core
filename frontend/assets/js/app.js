@@ -335,6 +335,7 @@ const statusCard = document.getElementById("status-card");
             ["screen-cloud", "Облако"],
             ["screen-work", "Работа"],
             ["screen-profile", "Профиль"],
+            ["screen-subscription", "Подписка"],
             ["screen-settings", "Настройки"],
         ]);
         const cloudAudioExtensions = new Set(["mp3", "m4a", "aac", "ogg", "opus", "wav", "flac", "alac", "wma", "amr", "mid", "midi"]);
@@ -476,6 +477,8 @@ const statusCard = document.getElementById("status-card");
                 title = menuContextTitleByScreen.get("screen-work") || "";
             } else if (screenId === "screen-profile") {
                 title = menuContextTitleByScreen.get("screen-profile") || "";
+            } else if (screenId === "screen-subscription") {
+                title = menuContextTitleByScreen.get("screen-subscription") || "";
             } else if (screenId === "screen-settings") {
                 title = menuContextTitleByScreen.get("screen-settings") || "";
             }
