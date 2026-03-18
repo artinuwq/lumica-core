@@ -71,6 +71,7 @@ const statusCard = document.getElementById("status-card");
         const homeSubRight = document.getElementById("home-sub-right");
         const homeCloudBtnEl = document.getElementById("home-cloud-btn");
         const homeServerCardEl = document.getElementById("home-server-card");
+        const homeSubscriptionCardEl = document.getElementById("home-subscription-card");
         const homeConnectionsBtnEl = document.getElementById("home-connections-btn");
         const settingsNavSecondSelectEl = document.getElementById("settings-nav-second-select");
         const connectionsMenuPageEl = document.getElementById("connections-menu-page");
