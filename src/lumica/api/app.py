@@ -30,6 +30,7 @@ from lumica.integrations.telegram_storage import (
 from lumica.infra.db import Base, SessionLocal, engine, ensure_db_schema
 from lumica.domain.models import (
     AppSetting,
+    AuthIdentity,
     AuthSession,
     CloudChunk,
     CloudFile,

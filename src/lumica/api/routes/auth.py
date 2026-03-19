@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
-from lumica.domain.models import PanelTemplate, Region, SubscriptionItem, SubscriptionPlan, User
+from lumica.domain.models import AuthIdentity, PanelTemplate, Region, SubscriptionItem, SubscriptionPlan, User
 
 def register_auth_routes(app, deps):
     # Transitional dependency injection while handlers are being migrated out
@@ -215,11 +215,34 @@ def register_auth_routes(app, deps):
         try:
             with SessionLocal() as db:
                 telegram_id = str(user_data.get("id", ""))
-                user = db.query(User).filter(User.telegram_id == telegram_id).first()
+                identity = (
+                    db.query(AuthIdentity)
+                    .filter(
+                        AuthIdentity.provider == "telegram",
+                        AuthIdentity.provider_user_id == telegram_id,
+                    )
+                    .first()
+                )
+                user = None
+                if identity:
+                    user = db.query(User).filter(User.id == identity.user_id).first()
+
                 if not user:
-                    user = User(telegram_id=telegram_id)
-                    db.add(user)
-                    db.flush()
+                    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+                    if not user:
+                        user = User(telegram_id=telegram_id)
+                        db.add(user)
+                        db.flush()
+                    elif not user.telegram_id:
+                        user.telegram_id = telegram_id
+
+                if not identity:
+                    identity = AuthIdentity(
+                        user_id=user.id,
+                        provider="telegram",
+                        provider_user_id=telegram_id,
+                    )
+                    db.add(identity)
 
                 user.username = user_data.get("username")
                 first_name = user_data.get("first_name")
@@ -577,6 +600,10 @@ def register_auth_routes(app, deps):
         if not code:
             return jsonify({"ok": False, "error": "code is required"}), 400
 
+        phone = str(body.get("phone") or body.get("phone_number") or "").strip()
+        if not phone:
+            phone = None
+
         with SessionLocal() as db:
             user = db.query(User).filter(User.id == auth["user_id"]).first()
             if not user:
@@ -603,6 +630,28 @@ def register_auth_routes(app, deps):
                     approved_by=None,
                 )
             )
+
+            if phone:
+                user.phone = phone
+                phone_identity = (
+                    db.query(AuthIdentity)
+                    .filter(
+                        AuthIdentity.provider == "phone",
+                        AuthIdentity.provider_user_id == phone,
+                    )
+                    .first()
+                )
+                if not phone_identity:
+                    db.add(
+                        AuthIdentity(
+                            user_id=user.id,
+                            provider="phone",
+                            provider_user_id=phone,
+                        )
+                    )
+                elif phone_identity.user_id != user.id:
+                    phone_identity.user_id = user.id
+
             db.commit()
 
             return jsonify({"ok": True, "status": user.status})

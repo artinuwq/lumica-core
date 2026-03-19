@@ -1,8 +1,8 @@
 """Add staff.user_id and backfill via auth identities
 
-Revision ID: 20260319_1214
-Revises: 20260316_2352
-Create Date: 2026-03-19 12:14:00
+Revision ID: 20260319_1240
+Revises: 20260319_1235
+Create Date: 2026-03-19 12:40:00
 
 """
 from __future__ import annotations
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
-revision = "20260319_1214"
-down_revision = "20260316_2352"
+revision = "20260319_1240"
+down_revision = "20260319_1235"
 branch_labels = None
 depends_on = None
 

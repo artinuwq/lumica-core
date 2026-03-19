@@ -9,7 +9,8 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
-    telegram_id = Column(String, unique=True, nullable=False)
+    telegram_id = Column(String, unique=True, nullable=True)
+    phone = Column(String, nullable=True)
     username = Column(String, nullable=True)
     name = Column(String, nullable=True)
     profile_data = Column(JSON, nullable=True)
@@ -18,6 +19,12 @@ class User(Base):
 
     auth_sessions = relationship(
         "AuthSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    auth_identities = relationship(
+        "AuthIdentity",
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -66,13 +73,16 @@ class TimestampMixin:
 
 class AuthIdentity(Base, TimestampMixin):
     __tablename__ = "auth_identities"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_auth_identities_provider_user_id"),
+    )
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     provider = Column(String, nullable=False)
     provider_user_id = Column(String, nullable=False)
 
-    user = relationship("User")
+    user = relationship("User", back_populates="auth_identities")
 
 
 class Staff(Base, TimestampMixin):
