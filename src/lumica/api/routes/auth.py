@@ -198,6 +198,50 @@ def register_auth_routes(app, deps):
             "notes": subscription.notes,
         }
 
+    def _find_identity(db, provider: str, provider_user_id: str) -> AuthIdentity | None:
+        return (
+            db.query(AuthIdentity)
+            .filter(AuthIdentity.provider == provider, AuthIdentity.provider_user_id == provider_user_id)
+            .first()
+        )
+
+    def _ensure_identity(db, user: User, provider: str, provider_user_id: str) -> tuple[AuthIdentity, bool] | tuple[None, tuple]:
+        existing = _find_identity(db, provider, provider_user_id)
+        if existing:
+            if existing.user_id != user.id:
+                return None, (jsonify({"ok": False, "error": "Identity already linked"}), 409)
+            return existing, False
+        identity = AuthIdentity(user_id=user.id, provider=provider, provider_user_id=provider_user_id)
+        db.add(identity)
+        db.flush()
+        return identity, True
+
+    def _get_or_create_user_by_identity(db, provider: str, provider_user_id: str) -> tuple[User, bool]:
+        identity = _find_identity(db, provider, provider_user_id)
+        if identity:
+            user = db.query(User).filter(User.id == identity.user_id).first()
+            if user:
+                return user, False
+            user = User()
+            db.add(user)
+            db.flush()
+            identity.user_id = user.id
+            return user, True
+
+        user = None
+        if provider == "telegram":
+            user = db.query(User).filter(User.telegram_id == provider_user_id).first()
+        elif provider == "phone":
+            user = db.query(User).filter(User.phone == provider_user_id).first()
+
+        if not user:
+            user = User()
+            db.add(user)
+            db.flush()
+
+        _ensure_identity(db, user, provider, provider_user_id)
+        return user, True
+
     @app.post("/api/tg/auth")
     def tg_auth():
         body = request.get_json(silent=True) or {}
@@ -215,35 +259,9 @@ def register_auth_routes(app, deps):
         try:
             with SessionLocal() as db:
                 telegram_id = str(user_data.get("id", ""))
-                identity = (
-                    db.query(AuthIdentity)
-                    .filter(
-                        AuthIdentity.provider == "telegram",
-                        AuthIdentity.provider_user_id == telegram_id,
-                    )
-                    .first()
-                )
-                user = None
-                if identity:
-                    user = db.query(User).filter(User.id == identity.user_id).first()
+                user, _ = _get_or_create_user_by_identity(db, "telegram", telegram_id)
 
-                if not user:
-                    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-                    if not user:
-                        user = User(telegram_id=telegram_id)
-                        db.add(user)
-                        db.flush()
-                    elif not user.telegram_id:
-                        user.telegram_id = telegram_id
-
-                if not identity:
-                    identity = AuthIdentity(
-                        user_id=user.id,
-                        provider="telegram",
-                        provider_user_id=telegram_id,
-                    )
-                    db.add(identity)
-
+                user.telegram_id = telegram_id
                 user.username = user_data.get("username")
                 first_name = user_data.get("first_name")
                 last_name = user_data.get("last_name")
@@ -633,24 +651,9 @@ def register_auth_routes(app, deps):
 
             if phone:
                 user.phone = phone
-                phone_identity = (
-                    db.query(AuthIdentity)
-                    .filter(
-                        AuthIdentity.provider == "phone",
-                        AuthIdentity.provider_user_id == phone,
-                    )
-                    .first()
-                )
-                if not phone_identity:
-                    db.add(
-                        AuthIdentity(
-                            user_id=user.id,
-                            provider="phone",
-                            provider_user_id=phone,
-                        )
-                    )
-                elif phone_identity.user_id != user.id:
-                    phone_identity.user_id = user.id
+                _, err = _ensure_identity(db, user, "phone", phone)
+                if err:
+                    return err
 
             db.commit()
 
