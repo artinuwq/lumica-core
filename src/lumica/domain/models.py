@@ -64,6 +64,27 @@ class TimestampMixin:
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class AuthIdentity(Base, TimestampMixin):
+    __tablename__ = "auth_identities"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String, nullable=False)
+    provider_user_id = Column(String, nullable=False)
+
+    user = relationship("User")
+
+
+class Staff(Base, TimestampMixin):
+    __tablename__ = "staff"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    telegram_id = Column(String, nullable=True)
+
+    user = relationship("User")
+
+
 class AuthSession(Base, TimestampMixin):
     __tablename__ = "auth_sessions"
 
