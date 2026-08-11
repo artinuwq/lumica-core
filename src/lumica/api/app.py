@@ -60,11 +60,13 @@ from lumica.services.settings import (
     to_bool,
 )
 from lumica.integrations.telegram_auth import validate_init_data
+from lumica.services.roles import ROLE_PRIORITY, load_role_bindings, normalize_role, role_allows
 from .routes import (
     register_admin_routes,
     register_auth_routes,
     register_cloud_routes,
     register_status_routes,
+    register_update_routes,
     register_vpn_routes,
 )
 from .helpers import (
@@ -78,7 +80,6 @@ from .helpers import (
 # src/lumica/api/app.py -> project root is 3 levels above
 BASE_DIR = Path(__file__).resolve().parents[3]
 FRONTEND_DIR = BASE_DIR / "frontend"
-ROLE_PRIORITY = {"user": 10, "support": 20, "admin": 30, "owner": 40}
 
 
 def utcnow() -> datetime:
@@ -122,91 +123,12 @@ def _safe_json(value):
     return {}
 
 
-def _normalize_role(role: str | None) -> str:
-    if not role:
-        return "user"
-    value = str(role).strip().lower()
-    return value if value in ROLE_PRIORITY else "user"
-
-
-def _role_allows(current_role: str | None, required_role: str | None) -> bool:
-    if not required_role:
-        return True
-    current = _normalize_role(current_role)
-    required = _normalize_role(required_role)
-    return ROLE_PRIORITY[current] >= ROLE_PRIORITY[required]
-
-
-def _to_id_list(value) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, (int, float)):
-        return [str(int(value))]
-    if isinstance(value, str):
-        raw = value.strip()
-        if not raw:
-            return []
-        if "," in raw:
-            return [part.strip() for part in raw.split(",") if part.strip()]
-        return [raw]
-    if isinstance(value, list):
-        out = []
-        for item in value:
-            out.extend(_to_id_list(item))
-        return out
-    return []
-
-
-def _load_role_bindings() -> dict[str, str]:
-    bindings: dict[str, str] = {}
-    raw = os.getenv("ROLE_BINDINGS", "").strip()
-
-    def set_role(tg_id: str, role: str):
-        if tg_id:
-            bindings[str(tg_id)] = _normalize_role(role)
-
-    if raw:
-        parsed = None
-        if raw.startswith("{") or raw.startswith("["):
-            try:
-                parsed = json.loads(raw)
-            except ValueError:
-                parsed = None
-
-        if isinstance(parsed, dict):
-            for role, ids in parsed.items():
-                for tg_id in _to_id_list(ids):
-                    set_role(tg_id, role)
-        elif isinstance(parsed, list):
-            for item in parsed:
-                if isinstance(item, dict):
-                    tg_id = item.get("telegram_id") or item.get("id")
-                    role = item.get("role")
-                    if tg_id and role:
-                        set_role(str(tg_id), str(role))
-                elif isinstance(item, str) and ":" in item:
-                    tg_id, role = item.split(":", 1)
-                    set_role(tg_id.strip(), role.strip())
-        else:
-            # csv-style: "123:owner,456:admin"
-            for token in raw.split(","):
-                token = token.strip()
-                if not token or ":" not in token:
-                    continue
-                tg_id, role = token.split(":", 1)
-                set_role(tg_id.strip(), role.strip())
-
-    # optional legacy env compatibility
-    legacy = {
-        "OWNER_TELEGRAM_IDS": "owner",
-        "ADMIN_TELEGRAM_IDS": "admin",
-        "SUPPORT_TELEGRAM_IDS": "support",
-    }
-    for env_name, role in legacy.items():
-        for tg_id in _to_id_list(os.getenv(env_name, "")):
-            set_role(tg_id, role)
-
-    return bindings
+# Backward-compatible local aliases: role logic now lives in
+# lumica.services.roles so the HTTP API and the Telegram chat-ops bot share
+# one implementation instead of two copies drifting apart.
+_normalize_role = normalize_role
+_role_allows = role_allows
+_load_role_bindings = load_role_bindings
 
 
 def _serialize_app_setting(row: AppSetting) -> dict:
@@ -285,6 +207,7 @@ def create_app():
     register_admin_routes(app, route_deps)
     register_auth_routes(app, route_deps)
     register_vpn_routes(app, route_deps)
+    register_update_routes(app, route_deps)
 
     return app
 

@@ -5,6 +5,8 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
+from .chatops import router as chatops_router
+
 
 def build_keyboard():
     webapp_url = os.getenv("WEBAPP_URL", "https://example.com")
@@ -15,13 +17,16 @@ def build_keyboard():
 
 async def handle_start(message: types.Message) -> None:
     await message.answer(
-        "Добро пожаловать в экосистему Lumica Services! \n Вы можете открыть Mini app по кнопке ниже.",
+        "Добро пожаловать в экосистему Lumica Services! \n"
+        "Вы можете открыть Mini app по кнопке ниже.\n\n"
+        "Команды: /ping, /status, /update, /restart, /config (для администраторов).",
         reply_markup=build_keyboard(),
     )
 
 
 def register_handlers(dp: Dispatcher) -> None:
     dp.message(CommandStart())(handle_start)
+    dp.include_router(chatops_router)
 
 
 async def start_bot():

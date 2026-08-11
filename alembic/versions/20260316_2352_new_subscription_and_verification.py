@@ -23,6 +23,19 @@ def upgrade() -> None:
     inspector = inspect(conn)
     existing_tables = set(inspector.get_table_names())
 
+    if "users" not in existing_tables:
+        # Fresh install: this revision was written as an incremental patch
+        # on top of an already-existing schema (every check below is
+        # "if table in existing_tables: ..."), so on a brand new database
+        # it silently did nothing and left `users`/`subscriptions`/etc
+        # missing entirely. Bootstrap the full schema from the current
+        # models instead and stop here - the baseline already includes
+        # every column/table this revision would otherwise add.
+        from lumica.infra.db import Base
+
+        Base.metadata.create_all(bind=conn)
+        return
+
     def _column_names(table: str) -> set[str]:
         if table not in existing_tables:
             return set()
