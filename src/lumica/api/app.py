@@ -63,6 +63,7 @@ from lumica.integrations.telegram_auth import validate_init_data
 from lumica.services.roles import ROLE_PRIORITY, load_role_bindings, normalize_role, role_allows
 from .routes import (
     register_admin_routes,
+    register_application_routes,
     register_auth_routes,
     register_cloud_routes,
     register_status_routes,
@@ -208,6 +209,7 @@ def create_app():
     register_auth_routes(app, route_deps)
     register_vpn_routes(app, route_deps)
     register_update_routes(app, route_deps)
+    register_application_routes(app, route_deps)
 
     return app
 

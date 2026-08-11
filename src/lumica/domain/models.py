@@ -421,3 +421,28 @@ class CloudChunk(Base, TimestampMixin):
 
     file = relationship("CloudFile", back_populates="chunks")
     owner = relationship("User", back_populates="cloud_chunks")
+
+
+class Application(Base, TimestampMixin):
+    """Заявка на подключение (ТЗ п.4-7). Заявка и клиент - разные сущности:
+    user_id ссылается на уже существующего User (создаётся автоматически при
+    первом входе через /api/tg/auth), а APPROVED-заявка лишь помечает, что
+    администратор одобрил создание клиента с этим тарифом."""
+
+    __tablename__ = "applications"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    full_name = Column(String, nullable=False)
+    tariff_id = Column(Integer, ForeignKey("subscription_plans.id", ondelete="SET NULL"), nullable=True)
+    needs_proxy = Column(Integer, nullable=False, default=0, server_default="0")
+    extra_info = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="new", server_default=text("'new'"))
+    reviewed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_note = Column(String, nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    tariff = relationship("SubscriptionPlan")
+
