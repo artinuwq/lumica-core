@@ -66,6 +66,7 @@ from .routes import (
     register_application_routes,
     register_auth_routes,
     register_cloud_routes,
+    register_group_routes,
     register_payment_routes,
     register_status_routes,
     register_update_routes,
@@ -212,6 +213,7 @@ def create_app():
     register_update_routes(app, route_deps)
     register_application_routes(app, route_deps)
     register_payment_routes(app, route_deps)
+    register_group_routes(app, route_deps)
 
     return app
 

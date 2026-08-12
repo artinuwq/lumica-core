@@ -16,6 +16,9 @@ class User(Base):
     profile_data = Column(JSON, nullable=True)
     status = Column(String, nullable=False, default="unverified", server_default=text("'unverified'"))
     role = Column(String, nullable=False, default="user", server_default=text("'user'"))
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True)
+
+    group = relationship("Group", back_populates="members", foreign_keys=[group_id])
 
     auth_sessions = relationship(
         "AuthSession",
@@ -130,8 +133,10 @@ class Subscription(Base, TimestampMixin):
     total_price = Column(Numeric(10, 2), nullable=True)
     payload = Column(JSON, nullable=True)
     notes = Column(String, nullable=True)
+    payment_id = Column(Integer, ForeignKey("payments.id", ondelete="SET NULL"), nullable=True)
 
     user = relationship("User", back_populates="subscriptions")
+    payment = relationship("Payment", back_populates="subscriptions")
 
 
 class VpnAccount(Base, TimestampMixin):
@@ -447,15 +452,37 @@ class Application(Base, TimestampMixin):
     tariff = relationship("SubscriptionPlan")
 
 
+class Group(Base, TimestampMixin):
+    """Группа (не только «семья» - объединение пользователей вообще, для
+    будущих сценариев: команды поддержки, реселлеры, корп. аккаунты).
+    Создаётся/переименовывается/удаляется только системным админом -
+    состав формируется вручную, без self-service приглашений."""
+
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=True)
+    admin_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL", use_alter=True, name="fk_groups_admin_user_id"), nullable=True
+    )
+
+    admin = relationship("User", foreign_keys=[admin_user_id])
+    members = relationship("User", back_populates="group", foreign_keys="User.group_id")
+
+
 class Payment(Base, TimestampMixin):
-    """Ручной платёж (перевод на карту), ТЗ п.9. Привязан к draft-подписке -
-    подтверждение платежа активирует её (см. services/payments.py)."""
+    """Ручной платёж (перевод на карту), ТЗ п.9. Может покрывать одну
+    подписку (обычный клиент) или несколько сразу (групповой платёж -
+    платит только администратор группы за всех участников разом). Какие
+    именно подписки покрывает платёж - определяется через
+    Subscription.payment_id, а не наоборот, поэтому 1 платёж <-> N
+    подписок работает без отдельной M:N таблицы."""
 
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True)
     amount = Column(Numeric(10, 2), nullable=False)
     status = Column(String, nullable=False, default="pending", server_default=text("'pending'"))
     confirmed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -463,7 +490,8 @@ class Payment(Base, TimestampMixin):
     reject_reason = Column(String, nullable=True)
 
     user = relationship("User", foreign_keys=[user_id])
+    group = relationship("Group")
     confirmer = relationship("User", foreign_keys=[confirmed_by])
-    subscription = relationship("Subscription")
+    subscriptions = relationship("Subscription", back_populates="payment")
 
 

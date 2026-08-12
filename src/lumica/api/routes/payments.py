@@ -7,7 +7,8 @@ def register_payment_routes(app, deps):
     # Transitional dependency injection, same pattern as the other route modules.
     globals().update(deps)
 
-    from lumica.domain.models import Payment, Subscription
+    from lumica.domain.models import Group, Payment, Subscription
+    from lumica.services import groups as group_service
     from lumica.services import payments as payment_service
     from lumica.services.settings import SettingsManager
 
@@ -15,25 +16,27 @@ def register_payment_routes(app, deps):
         return {
             "id": payment.id,
             "user_id": payment.user_id,
-            "subscription_id": payment.subscription_id,
+            "group_id": payment.group_id,
             "amount": str(payment.amount) if payment.amount is not None else None,
             "status": payment.status,
             "confirmed_by": payment.confirmed_by,
             "confirmed_at": payment.confirmed_at.isoformat() if payment.confirmed_at else None,
             "reject_reason": payment.reject_reason,
             "created_at": payment.created_at.isoformat() if payment.created_at else None,
+            "subscription_ids": [s.id for s in payment.subscriptions],
         }
 
     def _serialize_subscription(subscription: Subscription) -> dict:
         return {
             "id": subscription.id,
+            "user_id": subscription.user_id,
             "status": subscription.status,
             "access_until": subscription.access_until.isoformat() if subscription.access_until else None,
             "price_amount": str(subscription.price_amount) if subscription.price_amount is not None else None,
             "total_price": str(subscription.total_price) if subscription.total_price is not None else None,
         }
 
-    def _find(db, payment_id: int):
+    def _find_payment(db, payment_id: int):
         payment = db.query(Payment).filter(Payment.id == payment_id).first()
         if not payment:
             return None, (jsonify({"ok": False, "error": "Платёж не найден"}), 404)
@@ -89,6 +92,34 @@ def register_payment_routes(app, deps):
                 return jsonify({"ok": False, "error": str(exc)}), 400
             return jsonify({"ok": True, "data": _serialize(payment)}), 201
 
+    @app.post("/api/groups/<int:group_id>/payments")
+    def create_group_payment_route(group_id):
+        """Групповой платёж: платит только администратор группы (тот же
+        пользователь, что вызывает эндпоинт), сразу за несколько подписок
+        участников группы."""
+        auth, err = _auth_context()
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        raw_ids = body.get("subscription_ids")
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return jsonify({"ok": False, "error": "subscription_ids must be a non-empty list"}), 400
+        try:
+            subscription_ids = [int(x) for x in raw_ids]
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "subscription_ids must be integers"}), 400
+
+        with SessionLocal() as db:
+            try:
+                payment = payment_service.create_group_payment(
+                    db, admin_user_id=auth["user_id"], group_id=group_id, subscription_ids=subscription_ids
+                )
+                db.commit()
+            except payment_service.PaymentError as exc:
+                db.rollback()
+                return jsonify({"ok": False, "error": str(exc)}), 400
+            return jsonify({"ok": True, "data": _serialize(payment)}), 201
+
     @app.get("/api/payments/mine")
     def my_payments_route():
         auth, err = _auth_context()
@@ -122,17 +153,23 @@ def register_payment_routes(app, deps):
         if err:
             return err
         with SessionLocal() as db:
-            payment, err = _find(db, payment_id)
+            payment, err = _find_payment(db, payment_id)
             if err:
                 return err
             try:
-                subscription = payment_service.confirm_payment(db, payment, staff_user_id=auth["user_id"])
+                subscriptions = payment_service.confirm_payment(db, payment, staff_user_id=auth["user_id"])
                 db.commit()
             except payment_service.PaymentError as exc:
                 db.rollback()
                 return jsonify({"ok": False, "error": str(exc)}), 400
             return jsonify(
-                {"ok": True, "data": {"payment": _serialize(payment), "subscription": _serialize_subscription(subscription)}}
+                {
+                    "ok": True,
+                    "data": {
+                        "payment": _serialize(payment),
+                        "subscriptions": [_serialize_subscription(s) for s in subscriptions],
+                    },
+                }
             )
 
     @app.post("/api/payments/<int:payment_id>/reject")
@@ -142,7 +179,7 @@ def register_payment_routes(app, deps):
             return err
         body = request.get_json(silent=True) or {}
         with SessionLocal() as db:
-            payment, err = _find(db, payment_id)
+            payment, err = _find_payment(db, payment_id)
             if err:
                 return err
             try:
@@ -161,7 +198,7 @@ def register_payment_routes(app, deps):
         if err:
             return err
         with SessionLocal() as db:
-            payment, err = _find(db, payment_id)
+            payment, err = _find_payment(db, payment_id)
             if err:
                 return err
             is_owner = payment.user_id == auth["user_id"]
