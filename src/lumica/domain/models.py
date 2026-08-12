@@ -446,3 +446,24 @@ class Application(Base, TimestampMixin):
     reviewer = relationship("User", foreign_keys=[reviewed_by])
     tariff = relationship("SubscriptionPlan")
 
+
+class Payment(Base, TimestampMixin):
+    """Ручной платёж (перевод на карту), ТЗ п.9. Привязан к draft-подписке -
+    подтверждение платежа активирует её (см. services/payments.py)."""
+
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
+    amount = Column(Numeric(10, 2), nullable=False)
+    status = Column(String, nullable=False, default="pending", server_default=text("'pending'"))
+    confirmed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    reject_reason = Column(String, nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+    confirmer = relationship("User", foreign_keys=[confirmed_by])
+    subscription = relationship("Subscription")
+
+

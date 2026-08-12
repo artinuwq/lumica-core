@@ -4,6 +4,7 @@ from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from lumica.domain.models import AuthIdentity, PanelTemplate, Region, SubscriptionItem, SubscriptionPlan, User
+from lumica.services import subscriptions as subscriptions_service
 
 def register_auth_routes(app, deps):
     # Transitional dependency injection while handlers are being migrated out
@@ -22,57 +23,19 @@ def register_auth_routes(app, deps):
         return out, None
 
     def _plan_meta(plan: SubscriptionPlan) -> dict:
-        return plan.meta_json if isinstance(plan.meta_json, dict) else {}
+        return subscriptions_service.plan_meta(plan)
 
     def _plan_item_price_map(plan: SubscriptionPlan) -> dict[tuple[str | None, str], Decimal]:
-        meta = _plan_meta(plan)
-        raw_items = []
-        for key in ("items", "addons", "options"):
-            value = meta.get(key)
-            if isinstance(value, list):
-                raw_items.extend(value)
-        prices: dict[tuple[str | None, str], Decimal] = {}
-        for item in raw_items:
-            if not isinstance(item, dict):
-                continue
-            code = str(item.get("code") or "").strip()
-            if not code:
-                continue
-            item_type = str(item.get("item_type") or item.get("type") or "").strip().lower()
-            item_type = item_type or None
-            raw_price = item.get("price") or item.get("amount") or item.get("cost")
-            try:
-                price = Decimal(str(raw_price)) if raw_price not in (None, "") else None
-            except (InvalidOperation, ValueError):
-                price = None
-            if price is None:
-                continue
-            prices[(item_type, code)] = price
-            if item_type is not None:
-                prices[(None, code)] = price
-        return prices
+        return subscriptions_service.plan_item_price_map(plan)
+
+    def _pricing_error_response(exc: subscriptions_service.PricingError):
+        return jsonify({"ok": False, "error": str(exc)}), exc.status_code
 
     def _resolve_plan(db, payload: dict):
-        plan_id_raw = payload.get("plan_id") or payload.get("plan") or payload.get("planId")
-        plan_name_raw = payload.get("plan_name") or payload.get("planName") or payload.get("plan_code") or payload.get("planCode")
-
-        plan = None
-        if plan_id_raw not in (None, ""):
-            try:
-                plan_id = int(plan_id_raw)
-            except (TypeError, ValueError):
-                return None, (jsonify({"ok": False, "error": "plan_id must be an integer"}), 400)
-            plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == plan_id).first()
-        elif plan_name_raw:
-            name = str(plan_name_raw).strip()
-            if name:
-                plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == name).first()
-
-        if not plan:
-            return None, (jsonify({"ok": False, "error": "Plan not found"}), 404)
-        if not plan.is_active:
-            return None, (jsonify({"ok": False, "error": "Plan is inactive"}), 400)
-        return plan, None
+        try:
+            return subscriptions_service.resolve_plan(db, payload), None
+        except subscriptions_service.PricingError as exc:
+            return None, _pricing_error_response(exc)
 
     def _require_verified_user(db, user_id: int):
         user = db.query(User).filter(User.id == user_id).first()
@@ -84,82 +47,16 @@ def register_auth_routes(app, deps):
         return user, None
 
     def _subscription_duration_months(plan: SubscriptionPlan, payload: dict):
-        meta = _plan_meta(plan)
-        raw_duration = (
-            payload.get("duration_months")
-            or payload.get("durationMonths")
-            or payload.get("months")
-            or payload.get("period_months")
-            or payload.get("periodMonths")
-            or meta.get("duration_months")
-            or meta.get("months")
-        )
-        duration, err = _int_or_error(raw_duration, "duration_months", default=1, min_value=0)
-        if err:
-            return None, err
-        return duration, None
+        try:
+            return subscriptions_service.subscription_duration_months(plan, payload), None
+        except subscriptions_service.PricingError as exc:
+            return None, _pricing_error_response(exc)
 
     def _calculate_subscription_pricing(plan: SubscriptionPlan, payload: dict):
-        duration_months, err = _subscription_duration_months(plan, payload)
-        if err:
-            return None, err
-        base_price = plan.base_price or Decimal("0")
         try:
-            base_price = Decimal(str(base_price))
-        except (InvalidOperation, ValueError):
-            base_price = Decimal("0")
-
-        meta = _plan_meta(plan)
-        is_lifetime = bool(payload.get("lifetime") or meta.get("lifetime"))
-        if duration_months == 0 and is_lifetime is False:
-            is_lifetime = True
-
-        items_payload = payload.get("items") or payload.get("addons") or []
-        if items_payload in (None, ""):
-            items_payload = []
-        if not isinstance(items_payload, list):
-            return None, (jsonify({"ok": False, "error": "items must be a list"}), 400)
-
-        price_map = _plan_item_price_map(plan)
-        items = []
-        items_total = Decimal("0")
-        for raw_item in items_payload:
-            if not isinstance(raw_item, dict):
-                return None, (jsonify({"ok": False, "error": "items must contain objects"}), 400)
-            code = str(raw_item.get("code") or "").strip()
-            if not code:
-                return None, (jsonify({"ok": False, "error": "item code is required"}), 400)
-            item_type = str(raw_item.get("item_type") or raw_item.get("type") or "addon").strip().lower() or "addon"
-            quantity, err = _int_or_error(raw_item.get("quantity"), "item quantity", default=1, min_value=1)
-            if err:
-                return None, err
-            price = price_map.get((item_type, code)) or price_map.get((None, code))
-            if price is None:
-                return None, (jsonify({"ok": False, "error": f"Unknown price for item {code}"}), 400)
-            item_total = price * Decimal(quantity)
-            items_total += item_total
-            items.append(
-                {
-                    "item_type": item_type,
-                    "code": code,
-                    "price": price,
-                    "quantity": quantity,
-                    "total": item_total,
-                    "meta": raw_item.get("meta") if isinstance(raw_item.get("meta"), dict) else {},
-                }
-            )
-
-        total = base_price if is_lifetime else base_price * Decimal(max(duration_months, 1))
-        total += items_total
-        pricing = {
-            "duration_months": duration_months,
-            "is_lifetime": is_lifetime,
-            "base_price": base_price,
-            "items_total": items_total,
-            "total": total,
-            "items": items,
-        }
-        return pricing, None
+            return subscriptions_service.calculate_subscription_pricing(plan, payload), None
+        except subscriptions_service.PricingError as exc:
+            return None, _pricing_error_response(exc)
 
     def _serialize_plan(plan: SubscriptionPlan) -> dict:
         return {
