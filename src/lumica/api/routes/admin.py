@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
+from lumica.services import user_provisioning
+
+
 def register_admin_routes(app, deps):
     # Transitional dependency injection while handlers are being migrated out
     # of shared app helper closures.
@@ -525,6 +528,47 @@ def register_admin_routes(app, deps):
                         for u in rows
                     ],
                 }
+            )
+
+    @app.post("/api/admin/users")
+    def admin_users_create():
+        """Ручное создание пользователя ДО его первого захода в бот (по
+        username или телефону) - см. services/user_provisioning.py.
+        Когда человек напишет боту, запись свяжется с его telegram_id
+        автоматически, дубликат не создастся."""
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+
+        body = request.get_json(silent=True) or {}
+        with SessionLocal() as db:
+            try:
+                user = user_provisioning.create_preprovisioned_user(
+                    db,
+                    username=body.get("username"),
+                    phone=body.get("phone"),
+                    name=body.get("name"),
+                    role=(body.get("role") or "user").strip().lower(),
+                )
+                db.commit()
+            except user_provisioning.UserProvisioningError as exc:
+                db.rollback()
+                return jsonify({"ok": False, "error": str(exc)}), 400
+            return (
+                jsonify(
+                    {
+                        "ok": True,
+                        "user": {
+                            "id": user.id,
+                            "telegram_id": user.telegram_id,
+                            "username": user.username,
+                            "phone": user.phone,
+                            "name": user.name,
+                            "role": user.role,
+                        },
+                    }
+                ),
+                201,
             )
 
     @app.post("/api/admin/users/<int:user_id>/role")

@@ -1,31 +1,17 @@
 import asyncio
 import os
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from aiogram import Bot, Dispatcher
 
 from .chatops import router as chatops_router
-
-
-def build_keyboard():
-    webapp_url = os.getenv("WEBAPP_URL", "https://example.com")
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Открыть mini app", web_app=WebAppInfo(url=webapp_url))]]
-    )
-
-
-async def handle_start(message: types.Message) -> None:
-    await message.answer(
-        "Добро пожаловать в экосистему Lumica Services! \n"
-        "Вы можете открыть Mini app по кнопке ниже.\n\n"
-        "Команды: /ping, /status, /update, /restart, /config (для администраторов).",
-        reply_markup=build_keyboard(),
-    )
+from .onboarding import router as onboarding_router
+from .subscriptions import router as subscriptions_router
 
 
 def register_handlers(dp: Dispatcher) -> None:
-    dp.message(CommandStart())(handle_start)
+    # onboarding owns /start (registration + application FSM for new users)
+    dp.include_router(onboarding_router)
+    dp.include_router(subscriptions_router)
     dp.include_router(chatops_router)
 
 

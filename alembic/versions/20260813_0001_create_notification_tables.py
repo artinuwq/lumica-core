@@ -1,27 +1,30 @@
 """create notification system tables
 
 Revision ID: 20260813_0001
-Revises:
+Revises: 20260811_0300
 Create Date: 2026-08-13
-
-Integration note: set `down_revision` below to whatever the current head
-revision is in the real lumica-core alembic history before applying.
 """
 
 from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "20260813_0001"
-down_revision = None  # TODO: set to current head revision in lumica-core
+down_revision = "20260811_0300"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    from sqlalchemy import inspect
+
+    inspector = inspect(conn)
+    if "notification" in set(inspector.get_table_names()):
+        return
+
     op.create_table(
         "notification",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
@@ -31,9 +34,7 @@ def upgrade() -> None:
         sa.Column("recipient_id", sa.BigInteger(), nullable=False),
         sa.Column("status", sa.String(16), nullable=False, server_default="pending"),
         sa.Column("dedup_key", sa.String(255), nullable=False),
-        sa.Column(
-            "context", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default="{}"
-        ),
+        sa.Column("context", sa.JSON(), nullable=False, server_default="{}"),
         sa.Column("related_entity_type", sa.String(64), nullable=True),
         sa.Column("related_entity_id", sa.BigInteger(), nullable=True),
         sa.Column("not_before", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),

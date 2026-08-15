@@ -495,3 +495,20 @@ class Payment(Base, TimestampMixin):
     subscriptions = relationship("Subscription", back_populates="payment")
 
 
+class NotificationLog(Base, TimestampMixin):
+    """Простой лог отправленных напоминаний - только для идемпотентности
+    (не слать одно и то же дважды за день). Без очередей/ретраев - прямая
+    синхронная отправка через services/notifications.py."""
+
+    __tablename__ = "notification_log"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    key = Column(String, nullable=False)
+    success = Column(Integer, nullable=False, default=1, server_default="1")
+
+    user = relationship("User")
+
+    __table_args__ = (UniqueConstraint("user_id", "key", name="uq_notification_log_user_key"),)
+
+

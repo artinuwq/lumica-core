@@ -7,6 +7,7 @@ from lumica.infra.bootstrap import _bootstrap_multi_panel_state
 from lumica.infra.bootstrap import bootstrap_runtime
 from lumica.infra.db import SessionLocal
 from lumica.jobs.expire_subscriptions import run_expire_subscriptions
+from lumica.jobs.subscription_reminders import run_subscription_reminders
 from lumica.services.panels import PanelRegistry, sync_all_panels, sync_group_members_from_inbounds
 
 
@@ -17,9 +18,11 @@ def run_scheduler_forever() -> None:
 
     sync_interval = max(30, int(os.getenv("PANEL_SYNC_INTERVAL_SEC", "300")))
     expire_interval = max(60, int(os.getenv("EXPIRE_SUBSCRIPTIONS_INTERVAL_SEC", "3600")))
+    reminders_interval = max(300, int(os.getenv("REMINDERS_INTERVAL_SEC", "3600")))
     registry = PanelRegistry()
     next_sync = 0.0
     next_expire = 0.0
+    next_reminders = 0.0
 
     bootstrap_runtime(with_multi_panel_state=True)
 
@@ -43,6 +46,13 @@ def run_scheduler_forever() -> None:
             except Exception:
                 pass
             next_expire = now + expire_interval
+
+        if now >= next_reminders:
+            try:
+                run_subscription_reminders()
+            except Exception:
+                pass
+            next_reminders = now + reminders_interval
 
         time.sleep(3)
 
