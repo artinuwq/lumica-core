@@ -1,4 +1,4 @@
-"""Post-checkout steps: install dependencies, run an optional migration hook.
+"""Post-checkout steps: install dependencies, optional migration hook, source sanity check.
 
 No-op (with a clear message) if requirements.txt is missing, so this stays
 safe to call even for stacks that later drop it.
@@ -27,7 +27,7 @@ def install(repo_dir: Path) -> tuple[bool, str]:
     python_bin = resolve_python_bin(repo_dir)
     try:
         result = subprocess.run(
-            [python_bin, "-m", "pip", "install", "-r", str(requirements)],
+            [python_bin, "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "-r", str(requirements)],
             capture_output=True,
             text=True,
             cwd=str(repo_dir),
@@ -36,7 +36,7 @@ def install(repo_dir: Path) -> tuple[bool, str]:
     except FileNotFoundError:
         return False, f"python-интерпретатор не найден: {python_bin}"
     except subprocess.TimeoutExpired:
-        return False, "установка зависимостей превысила таймаут"
+        return False, "установка зависимостей превысила таймаут (нет интернета/PyPI?)"
 
     if result.returncode != 0:
         return False, f"pip install завершился с ошибкой: {result.stderr.strip()[-1500:]}"
@@ -61,4 +61,25 @@ def install(repo_dir: Path) -> tuple[bool, str]:
     return True, "зависимости установлены"
 
 
-__all__ = ["install", "resolve_python_bin"]
+def verify_sources(repo_dir: Path) -> tuple[bool, str]:
+    """Cheap pre-restart check: the new code must at least compile."""
+    python_bin = resolve_python_bin(repo_dir)
+    targets = [str(p) for p in (repo_dir / "src", repo_dir / "scripts") if p.is_dir()]
+    if not targets:
+        return True, "нечего проверять"
+    try:
+        result = subprocess.run(
+            [python_bin, "-m", "compileall", "-q", *targets],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_dir),
+            timeout=120,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return False, f"не удалось проверить исходники: {exc}"
+    if result.returncode != 0:
+        return False, f"в новой версии синтаксическая ошибка: {(result.stdout + result.stderr).strip()[-800:]}"
+    return True, "исходники проверены"
+
+
+__all__ = ["install", "verify_sources", "resolve_python_bin"]

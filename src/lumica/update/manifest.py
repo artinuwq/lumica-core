@@ -11,6 +11,9 @@ class UpdateStatus:
     up_to_date: bool
     dirty: bool
     message: str
+    local_version: str = ""
+    remote_version: str = ""
+    network_error: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -23,6 +26,9 @@ class UpdateResult:
     previous_sha: str | None = None
     current_sha: str | None = None
     restarted: bool = False
+    rolled_back: bool = False
+    started: bool = False  # update was handed to a background unit; outcome comes later
+    noop: bool = False  # already up to date, nothing was done
 
     def to_dict(self) -> dict:
         return asdict(self)

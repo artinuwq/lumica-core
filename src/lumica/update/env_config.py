@@ -40,6 +40,7 @@ REGISTRY: dict[str, ConfigSpec] = {
         ConfigSpec("DATABASE_FILE", "text", "Имя файла sqlite внутри database/"),
         ConfigSpec("UPDATE_BRANCH", "text", "Ветка git, используемая /update"),
         ConfigSpec("UPDATE_SERVICE_NAME", "text", "Имя systemd unit, который перезапускает /restart"),
+        ConfigSpec("UPDATE_HEALTH_URL", "text", "URL проверки после обновления (по умолчанию http://127.0.0.1:FLASK_PORT/health; off - отключить)", allow_empty=True),
     ]
 }
 
@@ -89,6 +90,19 @@ def validate_value(spec: ConfigSpec, raw_value: str) -> str:
         return value
 
     return value
+
+
+def load_env_file(env_path: Path) -> None:
+    """Dependency-free .env loader (real environment variables win)."""
+    if not env_path.is_file():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        key, sep, value = stripped.partition("=")
+        if sep == "=":
+            os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
 def read_env_value(env_path: Path, key: str) -> str | None:
@@ -156,6 +170,7 @@ __all__ = [
     "REGISTRY",
     "get_spec",
     "validate_value",
+    "load_env_file",
     "read_env_value",
     "write_env_value",
     "delete_env_value",

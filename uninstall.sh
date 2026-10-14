@@ -10,6 +10,7 @@ set -Eeuo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/lumica-core}"
 SERVICE_NAME="${SERVICE_NAME:-lumica}"
 SERVICE_USER="${SERVICE_USER:-lumica}"
+CLI_PATH="${CLI_PATH:-/usr/local/bin/lumica}"
 KEEP_DATA="0"
 ASSUME_YES="0"
 
@@ -20,7 +21,7 @@ Usage: uninstall.sh [options]
   --install-dir PATH   target directory to remove (default: /opt/lumica-core)
   --service NAME         systemd service name (default: lumica)
   --service-user NAME     system user to remove (default: lumica)
-  --keep-data              keep database/ and .env, remove everything else
+  --keep-data              keep database/ (incl. backups) and .env, remove everything else
   --yes, -y                 skip confirmation prompt
   -h, --help                 show this help
 EOF
@@ -52,10 +53,16 @@ if [[ "$ASSUME_YES" != "1" ]]; then
 fi
 
 stop_unit() {
+    systemctl stop "${SERVICE_NAME}-update" 2>/dev/null || true
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
     systemctl disable "$SERVICE_NAME" 2>/dev/null || true
     rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+    rm -f "/etc/systemd/system/${SERVICE_NAME}-update.service"
     rm -f "/etc/sudoers.d/${SERVICE_NAME}-restart"
+    # Команду `lumica` удаляем, только если она создана для этого каталога установки.
+    if [[ -f "$CLI_PATH" ]] && grep -qF "$INSTALL_DIR" "$CLI_PATH" 2>/dev/null; then
+        rm -f "$CLI_PATH"
+    fi
     systemctl daemon-reload 2>/dev/null || true
 }
 

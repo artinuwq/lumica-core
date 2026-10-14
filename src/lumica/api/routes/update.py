@@ -12,8 +12,10 @@ def register_update_routes(app, deps):
         auth, err = _auth_context(require_role="admin")
         if err:
             return err
-        status = UpdateManager().check()
-        return jsonify({"ok": True, "data": status.to_dict()})
+        manager = UpdateManager()
+        data = manager.check().to_dict()
+        data["last_result"] = manager.last_result()
+        return jsonify({"ok": True, "data": data})
 
     @app.post("/api/update")
     def update_apply():
@@ -21,8 +23,10 @@ def register_update_routes(app, deps):
         if err:
             return err
         force = bool((request.get_json(silent=True) or {}).get("force"))
-        result = UpdateManager().apply(force=force)
-        status_code = 200 if result.success else 500
+        # The restart would kill this very process mid-request, so the update
+        # runs in the separate lumica-update.service unit (see UpdateManager).
+        result = UpdateManager().apply_background(force=force)
+        status_code = 202 if result.started else (200 if result.success else 500)
         return jsonify({"ok": result.success, "data": result.to_dict()}), status_code
 
     @app.post("/api/restart")

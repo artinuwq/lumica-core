@@ -1,20 +1,23 @@
-"""Best-effort rollback bookkeeping.
+"""Rollback bookkeeping: previous commit SHA + the outcome of the last update.
 
-Stores the previous commit SHA before a hard reset so an operator can
-manually roll back (`git reset --hard <sha>` + restart). This is not a
-schema-migration rollback - see the update/README note in manager.py.
+Both files live in `database/` (git-ignored, preserved by updates and by
+`uninstall.sh --keep-data`).
 """
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 STATE_FILE_NAME = ".update_previous_sha"
+RESULT_FILE_NAME = ".update_last_result.json"
+FORCE_MARKER_NAME = ".update_force"
 
 
-def _state_file(state_dir: Path) -> Path:
+def _state_file(state_dir: Path, name: str = STATE_FILE_NAME) -> Path:
     state_dir.mkdir(parents=True, exist_ok=True)
-    return state_dir / STATE_FILE_NAME
+    return state_dir / name
 
 
 def save_previous_sha(state_dir: Path, sha: str) -> None:
@@ -32,4 +35,42 @@ def load_previous_sha(state_dir: Path) -> str | None:
     return value or None
 
 
-__all__ = ["save_previous_sha", "load_previous_sha", "STATE_FILE_NAME"]
+def save_last_result(state_dir: Path, result: dict) -> None:
+    payload = {**result, "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    try:
+        _state_file(state_dir, RESULT_FILE_NAME).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except OSError:
+        pass  # bookkeeping must never fail an update
+
+
+def load_last_result(state_dir: Path) -> dict | None:
+    path = state_dir / RESULT_FILE_NAME
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def set_force_marker(state_dir: Path) -> None:
+    _state_file(state_dir, FORCE_MARKER_NAME).write_text("1\n", encoding="utf-8")
+
+
+def pop_force_marker(state_dir: Path) -> bool:
+    path = state_dir / FORCE_MARKER_NAME
+    if path.is_file():
+        path.unlink(missing_ok=True)
+        return True
+    return False
+
+
+__all__ = [
+    "save_previous_sha",
+    "load_previous_sha",
+    "save_last_result",
+    "load_last_result",
+    "set_force_marker",
+    "pop_force_marker",
+    "STATE_FILE_NAME",
+]

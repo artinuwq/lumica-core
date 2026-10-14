@@ -7,6 +7,8 @@ lumica/api/routes/update.py.
 
 from __future__ import annotations
 
+import asyncio
+
 from aiogram import Router, types
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
@@ -50,8 +52,14 @@ async def cmd_status(message: types.Message) -> None:
     if not _require_admin(message):
         await _deny(message)
         return
-    status = UpdateManager().check()
-    await message.answer(f"ℹ️ {status.message}")
+    manager = UpdateManager()
+    status = manager.check()
+    text = f"ℹ️ {status.message}"
+    last = manager.last_result()
+    if last:
+        icon = "✅" if last.get("success") else "❌"
+        text += f"\n\nПоследняя операция ({last.get('kind')}, {last.get('finished_at')}):\n{icon} {last.get('message')}"
+    await message.answer(text)
 
 
 @router.message(Command("update"))
@@ -60,7 +68,9 @@ async def cmd_update(message: types.Message) -> None:
         await _deny(message)
         return
     await message.answer("⏳ Проверяю и применяю обновление...")
-    result = UpdateManager().apply()
+    # Restart kills this bot process, so the heavy lifting runs in a separate unit;
+    # the outcome (incl. automatic rollback) is shown by /status afterwards.
+    result = await asyncio.to_thread(UpdateManager().apply_background)
     icon = "✅" if result.success else "❌"
     await message.answer(f"{icon} {result.message}")
 
