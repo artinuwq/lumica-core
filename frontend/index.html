@@ -698,7 +698,7 @@
                         </div>
                     </div>
 
-                <nav class="bottom-nav">
+                <nav class="bottom-nav" id="user-bottom-nav">
                     <button class="nav-btn active" data-screen="screen-home">
                         <span class="icon">🏠</span>
                         <span>Главная</span>
@@ -714,6 +714,16 @@
                     <button class="nav-btn" data-screen="screen-profile">
                         <span class="icon">👤</span>
                         <span>Профиль</span>
+                    </button>
+                </nav>
+                <nav class="bottom-nav admin-bottom-nav hidden" id="admin-bottom-nav" aria-label="Админ-разделы">
+                    <button class="nav-btn active" type="button" data-admin-page="work-clients-page">
+                        <span class="icon">👥</span>
+                        <span>Пользователи</span>
+                    </button>
+                    <button class="nav-btn" type="button" data-admin-page="work-panels-page">
+                        <span class="icon">▤</span>
+                        <span>Сервера</span>
                     </button>
                 </nav>
             </div>

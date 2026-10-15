@@ -23,6 +23,9 @@ const statusCard = document.getElementById("status-card");
         const screenMenuContextEl = document.getElementById("screen-menu-context");
         const screenMenuContextPillEl = document.getElementById("screen-menu-context-pill");
         const bottomNavEl = document.querySelector(".bottom-nav");
+        const userBottomNavEl = document.getElementById("user-bottom-nav");
+        const adminBottomNavEl = document.getElementById("admin-bottom-nav");
+        const adminPageButtons = document.querySelectorAll("[data-admin-page]");
         const navSecondBtnEl = document.getElementById("nav-second-btn");
         const navSecondIconEl = document.getElementById("nav-second-icon");
         const navSecondLabelEl = document.getElementById("nav-second-label");
@@ -271,6 +274,7 @@ const statusCard = document.getElementById("status-card");
             selectedInboundPanelId: null,
             selectedPanelId: null,
         };
+        let adminOnlyMode = false;
         const FORCE_HIDE_TOPBAR = true;
         const FULLSCREEN_TOP_RESERVE_PX = 28;
         const FULLSCREEN_BOTTOM_RESERVE_PX = 2;
@@ -1649,19 +1653,30 @@ const statusCard = document.getElementById("status-card");
             applyCloudVisibility(me);
             lastUserPayload = me || null;
             const userRole = me?.user?.role || "user";
-            const isOwner = userRole === "owner";
+            const hasWorkAccess = ["owner", "admin"].includes(userRole);
+            adminOnlyMode = hasWorkAccess;
             profileRoleEl.textContent = userRole;
             workRolePillEl.textContent = userRole;
             workOwnerNameEl.textContent = me?.user?.name || me?.user?.first_name || me?.user?.username || "Панель управления";
             workOwnerRoleEl.textContent = userRole;
-            navWorkBtn.classList.toggle("hidden", !isOwner);
+            navWorkBtn.classList.toggle("hidden", !hasWorkAccess);
             const canVerify = ["owner", "admin", "support", "moderator"].includes(userRole);
             workVerifyMenuBtnEl?.classList.toggle("hidden", !canVerify);
-            bottomNavEl.classList.toggle("with-work", isOwner);
-            if (!isOwner) {
+            bottomNavEl.classList.toggle("with-work", hasWorkAccess);
+            if (!hasWorkAccess) {
+                document.body.classList.remove("admin-only-mode");
+                userBottomNavEl?.classList.remove("hidden");
+                adminBottomNavEl?.classList.add("hidden");
                 const activeWork = navWorkBtn.classList.contains("active");
                 if (activeWork) switchScreen("screen-home");
             } else {
+                document.body.classList.add("admin-only-mode");
+                userBottomNavEl?.classList.add("hidden");
+                adminBottomNavEl?.classList.remove("hidden");
+                screens.forEach((screen) => screen.classList.toggle("hidden", screen.id !== "screen-work"));
+                heroCardEl?.classList.add("hidden");
+                switchScreen("screen-work");
+                switchWorkPage("work-clients-page");
                 loadWorkClientsData().catch((err) => {
                     console.error("load clients error:", err);
                 });
@@ -4444,7 +4459,10 @@ const statusCard = document.getElementById("status-card");
 
 
         async function switchWorkPage(target) {
-            const next = target || "work-menu-page";
+            let next = target || "work-menu-page";
+            if (adminOnlyMode && next === "work-menu-page") {
+                next = "work-clients-page";
+            }
             const current = getActiveWorkPageId();
             if (current === "work-inbound-detail-page" && next !== "work-inbound-detail-page") {
                 workState.selectedInboundPanelId = null;
@@ -4461,6 +4479,14 @@ const statusCard = document.getElementById("status-card");
                 clearWorkPanelDetail();
             }
             workPages.forEach((page) => page.classList.toggle("hidden", page.id !== next));
+            if (adminOnlyMode) {
+                const activeTab = next.includes("panel") || next.includes("inbound")
+                    ? "work-panels-page"
+                    : "work-clients-page";
+                adminPageButtons.forEach((button) => {
+                    button.classList.toggle("active", button.dataset.adminPage === activeTab);
+                });
+            }
             const hideWorkHeaders = next !== "work-menu-page";
             setTopbarVisibility(hideWorkHeaders);
             workSectionTitleEl?.classList.toggle("hidden", hideWorkHeaders);
@@ -4485,6 +4511,9 @@ const statusCard = document.getElementById("status-card");
         }
 
         function switchScreen(target) {
+            if (adminOnlyMode && target !== "screen-work") {
+                target = "screen-work";
+            }
             const previousScreen = getActiveScreenId();
             if (target === "screen-cloud" && !uiFeatures.cloudEnabled) {
                 target = "screen-home";
@@ -4497,7 +4526,9 @@ const statusCard = document.getElementById("status-card");
                 workSectionTitleEl?.classList.remove("hidden");
             }
             if (target === "screen-work") {
-                switchWorkPage("work-menu-page");
+                if (!adminOnlyMode) {
+                    switchWorkPage("work-menu-page");
+                }
             }
             if (target !== "screen-connections") {
                 openConnectionsMenu();

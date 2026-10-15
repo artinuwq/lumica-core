@@ -376,6 +376,9 @@
         .bottom-nav.with-work.cloud-hidden {
             grid-template-columns: repeat(4, 1fr);
         }
+        .bottom-nav.admin-bottom-nav {
+            grid-template-columns: repeat(2, 1fr);
+        }
 
         .nav-btn {
             border: none;
