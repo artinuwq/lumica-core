@@ -77,6 +77,12 @@ def build_auth_helpers(deps):
                 "username": user.username,
                 "name": user.name,
                 "role": user.role,
+                "group_id": user.group_id,
+                "subscription_type": (
+                    user.profile_data.get("subscription_type")
+                    if isinstance(user.profile_data, dict)
+                    else None
+                ),
             },
             "subscription": None
             if not subscription
@@ -85,6 +91,11 @@ def build_auth_helpers(deps):
                 "status": subscription.status,
                 "access_until": subscription.access_until.isoformat() if subscription.access_until else None,
                 "price_amount": str(subscription.price_amount) if subscription.price_amount is not None else None,
+                "billing_day": subscription.billing_day,
+                "billing_details": subscription.billing_details,
+                "notes": subscription.notes,
+                "is_frozen": bool(subscription.is_frozen),
+                "vpn_account_ids": [link.vpn_account_id for link in subscription.vpn_account_links],
             },
             "connections": {
                 "active": len(active_connections),

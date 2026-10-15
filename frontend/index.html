@@ -165,7 +165,7 @@
                                     <div class="work-menu-group-title">Работа с людьми</div>
                                     <div class="work-menu-buttons">
                                         <button type="button" class="work-menu-btn" data-work-nav="work-staff-page">Персонал</button>
-                                        <button type="button" class="work-menu-btn" data-work-nav="work-clients-page">Клиенты</button>
+                                        <button type="button" class="work-menu-btn" data-work-nav="work-clients-page">Пользователи</button>
                                         <button type="button" class="work-menu-btn" id="work-verify-menu-btn" data-work-nav="work-verify-page">Коды подтверждения</button>
                                     </div>
                                 </section>
@@ -173,7 +173,7 @@
                                     <div class="work-menu-group-title">Панели и система</div>
                                     <div class="work-menu-buttons">
                                         <button type="button" class="work-menu-btn" data-work-nav="work-system-settings-page">Системные настройки</button>
-                                        <button type="button" class="work-menu-btn" data-work-nav="work-panels-page">Панели</button>
+                                        <button type="button" class="work-menu-btn" data-work-nav="work-panels-page">Сервера</button>
                                     </div>
                                 </section>
                             </div>
@@ -190,7 +190,45 @@
                         <section id="work-clients-page" class="work-page hidden">
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
-                                <div class="work-page-title">Клиенты</div>
+                                <div class="work-page-title">Пользователи</div>
+                            </div>
+                            <div class="work-bind">
+                                <button id="work-user-create-toggle" type="button" class="work-btn">Создать пользователя</button>
+                                <div id="work-user-create-form" class="work-bind hidden">
+                                    <select id="work-user-create-mode">
+                                        <option value="existing">Уже есть</option>
+                                        <option value="new">Новый</option>
+                                        <option value="placeholder">Пустое место</option>
+                                    </select>
+                                    <div id="work-user-existing-wrap">
+                                        <input id="work-user-existing-search" type="search" placeholder="Найти пользователя">
+                                        <select id="work-user-existing-select">
+                                            <option value="">Выберите пользователя</option>
+                                        </select>
+                                    </div>
+                                    <div id="work-user-identity-wrap" class="hidden">
+                                        <input id="work-user-name" type="text" placeholder="Имя пользователя">
+                                        <input id="work-user-telegram-id" type="text" inputmode="numeric" placeholder="Telegram ID (цифры)">
+                                        <input id="work-user-username" type="text" placeholder="Username с @">
+                                    </div>
+                                    <input id="work-user-month-price" type="number" min="0" step="0.01" placeholder="Оплата за месяц">
+                                    <label class="work-sub-create-label" for="work-user-payment-date">Дата следующей оплаты</label>
+                                    <input id="work-user-payment-date" type="date">
+                                    <textarea id="work-user-payment-details" rows="2" placeholder="Реквизиты"></textarea>
+                                    <select id="work-user-subscription-type">
+                                        <option value="personal">Личная подписка</option>
+                                        <option value="family_admin">Администратор семьи</option>
+                                        <option value="family_member">Участник группы</option>
+                                    </select>
+                                    <div id="work-user-group-wrap" class="hidden">
+                                        <label class="work-sub-create-label" for="work-user-group-select">Семья</label>
+                                        <select id="work-user-group-select">
+                                            <option value="">Выберите семью</option>
+                                        </select>
+                                    </div>
+                                    <button id="work-user-create-submit" type="button" class="work-btn">Сохранить пользователя</button>
+                                    <div id="work-user-create-status" class="work-note hidden"></div>
+                                </div>
                             </div>
                             <div class="work-bind">
                                 <input id="work-client-search" type="text" placeholder="Поиск по имени / username / Telegram ID">
@@ -285,11 +323,11 @@
                         <section id="work-panels-page" class="work-page hidden">
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
-                                <div class="work-page-title">Панели</div>
+                                <div class="work-page-title">Сервера</div>
                             </div>
-                            <div class="work-note">Список панелей. Открой карточку, чтобы управлять конкретной панелью.</div>
+                            <div class="work-note">Список серверов. Открой карточку, чтобы увидеть метрики и подключённые inbound.</div>
                             <div class="work-bind">
-                                <button type="button" class="work-btn" data-work-nav="work-panel-create-page">Добавить панель</button>
+                                <button type="button" class="work-btn" data-work-nav="work-panel-create-page">Добавить сервер</button>
                             </div>
                             <div id="work-panels-list" class="work-links-list">
                                 <div class="work-empty">Панели еще не загружены.</div>
@@ -299,7 +337,7 @@
                         <section id="work-panel-create-page" class="work-page hidden">
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-panels-page">← Назад</button>
-                                <div class="work-page-title">Новая панель</div>
+                                <div class="work-page-title">Новый сервер</div>
                             </div>
                             <div class="work-note">Заполни данные панели и сохрани. URL и доступ можно поменять позже в карточке панели.</div>
                             <div class="work-bind">
@@ -309,9 +347,15 @@
                                     <option value="marzban">marzban</option>
                                 </select>
                                 <input id="work-panel-base-url" type="url" placeholder="https://host:port/panel/api">
-                                <input id="work-panel-region" type="text" maxlength="16" placeholder="region (de, ru)">
-                                <input id="work-panel-username" type="text" placeholder="login">
-                                <input id="work-panel-password" type="password" placeholder="password">
+                                <input id="work-panel-region" type="text" maxlength="2" placeholder="Локация (de)">
+                                <input id="work-panel-token" type="password" autocomplete="new-password" placeholder="API-токен (или login/password)">
+                                <select id="work-panel-token-header">
+                                    <option value="Authorization">Authorization</option>
+                                    <option value="X-API-Key">X-API-Key</option>
+                                </select>
+                                <input id="work-panel-token-prefix" type="text" value="Bearer" placeholder="Префикс (например Bearer)">
+                                <input id="work-panel-username" type="text" placeholder="login (если без API-токена)">
+                                <input id="work-panel-password" type="password" placeholder="password (если без API-токена)">
                                 <div class="work-bind-actions">
                                     <button id="work-panel-test-btn" class="work-btn" type="button">Проверить подключение</button>
                                     <button id="work-panel-save-btn" class="work-btn" type="button">Сохранить панель</button>
@@ -330,6 +374,7 @@
                             <div id="work-panel-detail-summary" class="work-links-list">
                                 <div class="work-empty">Выбери панель в списке.</div>
                             </div>
+                            <div id="work-panel-detail-metrics" class="work-note work-panel-metrics">Метрики появятся после обновления мониторинга.</div>
                             <div class="work-bind-actions">
                                 <button id="work-panel-detail-activate-btn" type="button" class="work-btn">Активировать</button>
                                 <button id="work-panel-detail-sync-btn" type="button" class="work-btn">Синхронизировать inbound</button>
@@ -343,13 +388,19 @@
                             </div>
                             <div id="work-panel-detail-access-wrap" class="work-bind hidden">
                                 <input id="work-panel-detail-base-url" type="url" placeholder="https://host:port/panel/api">
-                                <input id="work-panel-detail-username" type="text" placeholder="login (оставь пустым, если без изменений)">
-                                <input id="work-panel-detail-password" type="password" placeholder="password (оставь пустым, если без изменений)">
+                                <input id="work-panel-detail-token" type="password" autocomplete="new-password" placeholder="Новый API-токен (не показываем сохранённый)">
+                                <select id="work-panel-detail-token-header">
+                                    <option value="Authorization">Authorization</option>
+                                    <option value="X-API-Key">X-API-Key</option>
+                                </select>
+                                <input id="work-panel-detail-token-prefix" type="text" value="Bearer" placeholder="Префикс (например Bearer)">
+                                <input id="work-panel-detail-username" type="text" placeholder="login (если меняется доступ)">
+                                <input id="work-panel-detail-password" type="password" placeholder="password (если меняется доступ)">
                                 <div class="work-bind-actions">
                                     <button id="work-panel-detail-test-btn" class="work-btn" type="button">Проверить доступ</button>
                                     <button id="work-panel-detail-save-btn" class="work-btn" type="button">Сохранить доступ</button>
                                 </div>
-                                <div class="work-note">Данные логина/пароля применяются только при явном сохранении.</div>
+                                <div class="work-note">Новый API-токен или login/password применятся только при сохранении.</div>
                             </div>
                             <div id="work-panel-detail-status" class="work-note hidden"></div>
                             <div class="work-page-title work-inbound-detail-section-title">Подключения панели</div>
@@ -392,6 +443,11 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="work-bind-actions">
+                                <button id="work-client-freeze-btn" type="button" class="work-btn">Заморозить пользователя</button>
+                                <button id="work-client-manual-extend-btn" type="button" class="work-btn">Продлить на месяц</button>
+                            </div>
+                            <div id="work-client-action-status" class="work-note hidden"></div>
                             <div class="work-bind" id="work-client-role-wrap">
                                 <label class="work-sub-create-label" for="work-client-role-select">Роль клиента</label>
                                 <select id="work-client-role-select">
@@ -455,6 +511,21 @@
                                 </select>
                                 <input id="work-sub-price-input" type="number" min="0" step="0.01" placeholder="Цена (₽)">
                                 <input id="work-sub-limit-input" type="number" min="0" step="1" placeholder="Лимит подключений">
+                                <label class="work-sub-create-label" for="work-sub-billing-day">День оплаты</label>
+                                <input id="work-sub-billing-day" type="number" min="1" max="31" step="1" placeholder="1–31">
+                                <textarea id="work-sub-billing-details" rows="2" placeholder="Реквизиты"></textarea>
+                                <textarea id="work-sub-notes" rows="3" placeholder="Ссылки прокси и заметки, по одной на строку"></textarea>
+                                <select id="work-subscription-type-select">
+                                    <option value="personal">Личная подписка</option>
+                                    <option value="family_admin">Администратор семьи</option>
+                                    <option value="family_member">Участник группы</option>
+                                </select>
+                                <div id="work-sub-group-wrap" class="hidden">
+                                    <label class="work-sub-create-label" for="work-sub-group-select">Семья</label>
+                                    <select id="work-sub-group-select">
+                                        <option value="">Выберите семью</option>
+                                    </select>
+                                </div>
                                 <button id="work-sub-save-btn" class="work-btn">Сохранить параметры</button>
                             </div>
                             <div class="work-bind">

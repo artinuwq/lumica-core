@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -7,12 +8,28 @@ import json
 
 
 class XUIClient:
-    def __init__(self, base_url: str | None = None, username: str | None = None, password: str | None = None):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        token: str | None = None,
+        token_header: str = "Authorization",
+        token_prefix: str = "Bearer",
+    ):
         self.base_url = (base_url or os.getenv("PANEL_BASE_URL", "http://127.0.0.1:2053/panel/api")).rstrip("/")
         self.username = username or os.getenv("PANEL_USER")
         self.password = password or os.getenv("PANEL_PASS")
         self.session = requests.Session()
         self._active_prefix: str = ""
+        self.token = str(token or "").strip()
+        if self.token:
+            if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", token_header):
+                raise ValueError("invalid API token header name")
+            if "\r" in token_prefix or "\n" in token_prefix:
+                raise ValueError("invalid API token prefix")
+            value = f"{token_prefix.strip()} {self.token}".strip()
+            self.session.headers[token_header] = value
 
     def _url_parts(self) -> tuple[str, str]:
         base = self.base_url.rstrip("/")
@@ -45,7 +62,7 @@ class XUIClient:
         suffix = suffix if suffix.startswith("/") else f"/{suffix}"
         return f"{root}{prefix}{suffix}"
 
-    def _extract_inbounds_from_payload(self, payload: Any) -> list[dict[str, Any]]:
+    def _extract_inbounds_from_payload(self, payload: Any) -> list[dict[str, Any]] | None:
         if isinstance(payload, list):
             return [item for item in payload if isinstance(item, dict)]
 
@@ -62,18 +79,14 @@ class XUIClient:
 
         for value in candidates:
             if isinstance(value, list):
-                rows = [item for item in value if isinstance(item, dict)]
-                if rows:
-                    return rows
+                return [item for item in value if isinstance(item, dict)]
             if isinstance(value, str):
                 try:
                     parsed = json.loads(value)
                 except ValueError:
                     continue
                 if isinstance(parsed, list):
-                    rows = [item for item in parsed if isinstance(item, dict)]
-                    if rows:
-                        return rows
+                    return [item for item in parsed if isinstance(item, dict)]
 
         # last-resort: find first list-of-dicts in top-level dict values
         for value in payload.values():
@@ -82,9 +95,12 @@ class XUIClient:
                 if rows:
                     return rows
 
-        return []
+        return None
 
     def login(self) -> None:
+        if self.token:
+            self._active_prefix = ""
+            return
         if not self.username or not self.password:
             raise RuntimeError("PANEL_USER or PANEL_PASS not set")
         last_error: Exception | None = None
@@ -137,14 +153,97 @@ class XUIClient:
                     response.raise_for_status()
                     payload = response.json()
                     items = self._extract_inbounds_from_payload(payload)
-                    if items:
+                    if items is not None:
                         return items
                 except requests.RequestException as exc:
                     errors.append(f"{url}: {exc}")
                     continue
         raise RuntimeError(f"Failed to load inbounds: {' | '.join(errors)}")
 
-    def disable_client(self, inbound_id: int, client_identifier: str) -> bool:
+    def _get_first_json(self, suffixes: list[str]) -> Any:
+        self.login()
+        errors: list[str] = []
+        prefixes = [self._active_prefix] + [p for p in self._candidate_prefixes() if p != self._active_prefix]
+        for prefix in prefixes:
+            for suffix in suffixes:
+                url = self._build_url(prefix, suffix)
+                try:
+                    response = self.session.get(url, timeout=8)
+                    response.raise_for_status()
+                    return response.json()
+                except (requests.RequestException, ValueError) as exc:
+                    errors.append(f"{url}: {exc}")
+        raise RuntimeError(f"Failed to fetch 3X-UI endpoint: {' | '.join(errors)}")
+
+    def _post_first_json(self, suffixes: list[str]) -> Any:
+        self.login()
+        errors: list[str] = []
+        prefixes = [self._active_prefix] + [p for p in self._candidate_prefixes() if p != self._active_prefix]
+        for prefix in prefixes:
+            for suffix in suffixes:
+                url = self._build_url(prefix, suffix)
+                try:
+                    response = self.session.post(url, json={}, timeout=8)
+                    response.raise_for_status()
+                    return response.json()
+                except (requests.RequestException, ValueError) as exc:
+                    errors.append(f"{url}: {exc}")
+        raise RuntimeError(f"Failed to fetch 3X-UI endpoint: {' | '.join(errors)}")
+
+    def get_status(self) -> Any:
+        return self._get_first_json([
+            "/panel/api/server/status",
+            "/api/server/status",
+            "/panel/api/status",
+            "/api/status",
+            "/status",
+        ])
+
+    def get_xray_version(self) -> Any:
+        return self._get_first_json([
+            "/panel/api/server/getXrayVersion",
+            "/panel/api/getXrayVersion",
+            "/api/server/getXrayVersion",
+            "/api/getXrayVersion",
+            "/getXrayVersion",
+        ])
+
+    def get_online_clients(self) -> Any:
+        return self._post_first_json([
+            "/panel/api/clients/onlines",
+            "/api/clients/onlines",
+            "/clients/onlines",
+            "/panel/api/online/clients",
+            "/api/online/clients",
+            "/online/clients",
+        ])
+
+    def get_cpu_history(self, bucket: int = 60) -> Any:
+        safe_bucket = str(bucket)
+        if safe_bucket not in {"2", "30", "60", "120", "180", "300"}:
+            raise ValueError("invalid CPU history bucket")
+        return self._get_first_json([
+            f"/panel/api/server/history/cpu/{safe_bucket}",
+            f"/api/server/history/cpu/{safe_bucket}",
+            f"/panel/api/server/cpuHistory/{safe_bucket}",
+            f"/panel/api/cpuHistory/{safe_bucket}",
+            f"/api/cpuHistory/{safe_bucket}",
+            f"/cpuHistory/{safe_bucket}",
+        ])
+
+    def get_xray_observatory(self) -> Any:
+        return self._get_first_json([
+            "/panel/api/server/xrayObservatory",
+            "/api/server/xrayObservatory",
+        ])
+
+    def get_update_status(self) -> Any:
+        return self._get_first_json([
+            "/panel/api/server/getUpdateStatus",
+            "/api/server/getUpdateStatus",
+        ])
+
+    def set_client_enabled(self, inbound_id: int, client_identifier: str, enabled: bool) -> bool:
         self.login()
         prefix_candidates = [self._active_prefix] + [p for p in self._candidate_prefixes() if p != self._active_prefix]
         for prefix in prefix_candidates:
@@ -161,7 +260,7 @@ class XUIClient:
                 try:
                     response = self.session.post(
                         url,
-                        json={"id": inbound_id, "settings": {"clients": [{"id": client_identifier, "enable": False}]}},
+                        json={"id": inbound_id, "settings": {"clients": [{"id": client_identifier, "enable": bool(enabled)}]}},
                         timeout=8,
                     )
                     if response.status_code >= 400:
@@ -176,6 +275,12 @@ class XUIClient:
                 except requests.RequestException:
                     continue
         return False
+
+    def disable_client(self, inbound_id: int, client_identifier: str) -> bool:
+        return self.set_client_enabled(inbound_id, client_identifier, False)
+
+    def enable_client(self, inbound_id: int, client_identifier: str) -> bool:
+        return self.set_client_enabled(inbound_id, client_identifier, True)
 
     def add_client(self, inbound_id: int, client: dict[str, Any]) -> dict[str, Any]:
         self.login()

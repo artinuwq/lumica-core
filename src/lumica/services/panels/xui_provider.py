@@ -54,12 +54,31 @@ def _extract_clients_from_settings(protocol: str | None, settings: Any) -> list[
     return clients
 
 
+def _api_object(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        if "obj" in payload:
+            return payload.get("obj")
+        if "data" in payload:
+            return payload.get("data")
+    return payload
+
+
 class XuiProvider(PanelProvider):
     provider_name = "3xui"
 
     def _client(self, panel: Panel, auth: dict) -> XUIClient:
         username = str(auth.get("username") or auth.get("login") or "").strip() or None
         password = str(auth.get("password") or "").strip() or None
+        token = str(auth.get("token") or auth.get("api_token") or "").strip() or None
+        if panel.auth_type == "api_token":
+            if not token:
+                raise RuntimeError("API token is required for this panel")
+            return XUIClient(
+                base_url=panel.base_url,
+                token=token,
+                token_header=str(auth.get("token_header") or "Authorization"),
+                token_prefix=str(auth.get("token_prefix") or "Bearer"),
+            )
         return XUIClient(base_url=panel.base_url, username=username, password=password)
 
     def health_check(self, panel: Panel, auth: dict) -> dict:
@@ -70,6 +89,27 @@ class XuiProvider(PanelProvider):
             "version": None,
             "inbounds_count": len(inbounds),
         }
+
+    def monitoring_snapshot(self, panel: Panel, auth: dict) -> dict[str, Any]:
+        client = self._client(panel, auth)
+        try:
+            status = _api_object(client.get_status())
+        except Exception:
+            status = None
+        snapshot: dict[str, Any] = {"status": status}
+        xray = status.get("xray") if isinstance(status, dict) else None
+        snapshot["xray_version"] = xray.get("version") if isinstance(xray, dict) else None
+        snapshot["panel_version"] = status.get("panelVersion") if isinstance(status, dict) else None
+        for key, getter in (
+            ("online_clients", client.get_online_clients),
+            ("update_status", client.get_update_status),
+            ("xray_observatory", client.get_xray_observatory),
+        ):
+            try:
+                snapshot[key] = _api_object(getter())
+            except Exception:
+                snapshot[key] = None
+        return snapshot
 
     def list_inbounds(self, panel: Panel, auth: dict) -> list[dict]:
         return self._client(panel, auth).get_inbounds()
@@ -85,7 +125,8 @@ class XuiProvider(PanelProvider):
         inbound_id = payload.get("inbound_id")
         if inbound_id is None:
             raise RuntimeError("inbound_id is required for XUI update_client")
-        ok = self._client(panel, auth).disable_client(int(inbound_id), str(client_id))
+        enabled = bool(payload.get("enabled", False))
+        ok = self._client(panel, auth).set_client_enabled(int(inbound_id), str(client_id), enabled)
         return {"ok": bool(ok)}
 
     def delete_client(self, panel: Panel, client_id: str, auth: dict) -> dict:

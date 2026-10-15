@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
+from lumica.domain.models import MiniAppLaunch, SubscriptionVpnAccount
 from lumica.services import user_provisioning
+from lumica.services.notifications import send_raw
+from lumica.services.user_audit import record_user_event
 
 
 def register_admin_routes(app, deps):
@@ -530,25 +533,72 @@ def register_admin_routes(app, deps):
                 }
             )
 
+    @app.get("/api/admin/users/known")
+    def admin_known_users():
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            rows = (
+                db.query(User)
+                .join(MiniAppLaunch, MiniAppLaunch.user_id == User.id)
+                .distinct()
+                .order_by(User.name.asc(), User.id.asc())
+                .all()
+            )
+            return jsonify({
+                "ok": True,
+                "users": [
+                    {
+                        "id": user.id,
+                        "telegram_id": user.telegram_id,
+                        "username": user.username,
+                        "name": user.name,
+                    }
+                    for user in rows
+                ],
+            })
+
     @app.post("/api/admin/users")
     def admin_users_create():
         """Ручное создание пользователя ДО его первого захода в бот (по
         username или телефону) - см. services/user_provisioning.py.
         Когда человек напишет боту, запись свяжется с его telegram_id
         автоматически, дубликат не создастся."""
-        _, err = _auth_context(require_role="admin")
+        auth, err = _auth_context(require_role="admin")
         if err:
             return err
 
         body = request.get_json(silent=True) or {}
         with SessionLocal() as db:
+            raw_username = body.get("username")
+            if raw_username not in (None, "") and not str(raw_username).strip().startswith("@"):
+                return jsonify({"ok": False, "error": "username должен начинаться с @"}), 400
             try:
                 user = user_provisioning.create_preprovisioned_user(
                     db,
+                    telegram_id=body.get("telegram_id"),
                     username=body.get("username"),
                     phone=body.get("phone"),
                     name=body.get("name"),
-                    role=(body.get("role") or "user").strip().lower(),
+                    role=str(body.get("role") or "user").strip().lower(),
+                    allow_placeholder=bool(body.get("allow_placeholder", False)),
+                )
+                payload_err = _apply_admin_subscription_payload(db, user, body)
+                if payload_err:
+                    db.rollback()
+                    return payload_err
+                record_user_event(
+                    db,
+                    actor_user_id=auth["user_id"],
+                    subject_user_id=user.id,
+                    action="user_created",
+                    changes={
+                        "telegram_id": user.telegram_id,
+                        "username": user.username,
+                        "name": user.name,
+                        "subscription_type": body.get("subscription_type", "personal"),
+                    },
                 )
                 db.commit()
             except user_provisioning.UserProvisioningError as exc:
@@ -573,7 +623,7 @@ def register_admin_routes(app, deps):
 
     @app.post("/api/admin/users/<int:user_id>/role")
     def admin_user_role_update(user_id: int):
-        _, err = _auth_context(require_role="admin")
+        auth, err = _auth_context(require_role="admin")
         if err:
             return err
 
@@ -591,7 +641,15 @@ def register_admin_routes(app, deps):
             if not user:
                 return jsonify({"ok": False, "error": "User not found"}), 404
 
+            previous_role = user.role
             user.role = role
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=user.id,
+                action="user_role_changed",
+                changes={"from": previous_role, "to": role},
+            )
             db.commit()
             db.refresh(user)
             return jsonify(
@@ -716,7 +774,7 @@ def register_admin_routes(app, deps):
 
     @app.post("/api/admin/users/<int:user_id>/subscription")
     def admin_user_subscription_update(user_id: int):
-        _, err = _auth_context(require_role="admin")
+        auth, err = _auth_context(require_role="admin")
         if err:
             return err
 
@@ -730,6 +788,22 @@ def register_admin_routes(app, deps):
             payload_err = _apply_admin_subscription_payload(db, user, body)
             if payload_err:
                 return payload_err
+
+            changes = {
+                key: ("updated" if key == "billing_details" else body.get(key))
+                for key in (
+                    "status", "price_amount", "access_until", "billing_day", "billing_details",
+                    "notes", "subscription_type", "vpn_account_ids",
+                )
+                if key in body
+            }
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=user.id,
+                action="subscription_updated",
+                changes=changes,
+            )
 
             db.commit()
             db.refresh(user)
@@ -931,7 +1005,7 @@ def register_admin_routes(app, deps):
 
     @app.post("/api/admin/bind-client")
     def admin_bind_client():
-        _, err = _auth_context(require_role="admin")
+        auth, err = _auth_context(require_role="admin")
         if err:
             return err
 
@@ -971,6 +1045,46 @@ def register_admin_routes(app, deps):
                 label=label,
                 secret=secret,
                 sub_id=sub_id,
+            )
+            subscription_id_raw = body.get("subscription_id")
+            if subscription_id_raw not in (None, ""):
+                try:
+                    subscription_id = int(subscription_id_raw)
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "subscription_id must be an integer"}), 400
+                subscription = db.query(Subscription).filter(
+                    Subscription.id == subscription_id,
+                    Subscription.user_id == user.id,
+                ).first()
+                if not subscription:
+                    db.rollback()
+                    return jsonify({"ok": False, "error": "subscription does not belong to this user"}), 400
+            else:
+                subscription = (
+                    db.query(Subscription)
+                    .filter(Subscription.user_id == user.id)
+                    .order_by(Subscription.id.desc())
+                    .first()
+                )
+            if subscription:
+                linked = db.query(SubscriptionVpnAccount).filter(
+                    SubscriptionVpnAccount.subscription_id == subscription.id,
+                    SubscriptionVpnAccount.vpn_account_id == account.id,
+                ).first()
+                if not linked:
+                    db.add(SubscriptionVpnAccount(subscription_id=subscription.id, vpn_account_id=account.id))
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=user.id,
+                action="vpn_account_bound",
+                changes={
+                    "vpn_account_id": account.id,
+                    "panel_inbound_ref_id": panel_inbound_ref_id,
+                    "protocol": protocol,
+                    "label": account.label,
+                    "subscription_id": subscription.id if subscription else None,
+                },
             )
             db.commit()
 
@@ -1169,6 +1283,26 @@ def register_admin_routes(app, deps):
             rows = db.query(Panel).order_by(Panel.created_at.asc()).all()
             return jsonify({"ok": True, "panels": [_serialize_panel(row) for row in rows]})
 
+    @app.get("/api/admin/panels/<panel_id>/metrics")
+    def admin_panel_metrics(panel_id: str):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            panel = db.query(Panel).filter(Panel.id == panel_id).first()
+            if not panel:
+                return jsonify({"ok": False, "error": "Panel not found"}), 404
+            row = db.query(AppSetting).filter(AppSetting.key == "telegram.panel_monitor_state").first()
+            state = row.value_json if row and isinstance(row.value_json, dict) else {}
+            metrics = state.get(panel.id) if isinstance(state.get(panel.id), dict) else {}
+            return jsonify({
+                "ok": True,
+                "panel_id": panel.id,
+                "health_status": panel.health_status,
+                "updated_at": metrics.get("updated_at"),
+                "text": metrics.get("text") or "Метрики появятся после следующего обновления мониторинга.",
+            })
+
     @app.post("/api/admin/verification-codes")
     def admin_verification_codes_create():
         auth, err = _auth_context(require_role="support")
@@ -1243,10 +1377,15 @@ def register_admin_routes(app, deps):
         auth_type = str(body.get("auth_type") or "login_password").strip().lower() or "login_password"
         if not base_url:
             return jsonify({"ok": False, "error": "base_url is required"}), 400
+        region = str(body.get("region") or "").strip()
+        if len(region) != 2 or not region.isascii() or not region.isalpha():
+            return jsonify({"ok": False, "error": "region must be a two-letter location code"}), 400
         auth_payload = {
             "username": str(body.get("username") or body.get("login") or "").strip(),
             "password": str(body.get("password") or "").strip(),
-            "token": str(body.get("token") or "").strip(),
+            "token": str(body.get("token") or body.get("api_token") or "").strip(),
+            "token_header": str(body.get("token_header") or "Authorization").strip(),
+            "token_prefix": str(body.get("token_prefix") or "Bearer").strip(),
         }
         panel_stub = Panel(
             id=str(uuid4()),
@@ -1278,12 +1417,33 @@ def register_admin_routes(app, deps):
             return jsonify({"ok": False, "error": "name is required"}), 400
         if not base_url:
             return jsonify({"ok": False, "error": "base_url is required"}), 400
+        region = str(body.get("region") or "").strip()
+        if len(region) != 2 or not region.isascii() or not region.isalpha():
+            return jsonify({"ok": False, "error": "region must be a two-letter location code"}), 400
+        if auth_type not in {"login_password", "api_token"}:
+            return jsonify({"ok": False, "error": "unsupported auth_type"}), 400
 
         secret_payload = {
             "username": str(body.get("username") or body.get("login") or "").strip(),
             "password": str(body.get("password") or "").strip(),
-            "token": str(body.get("token") or "").strip(),
+            "token": str(body.get("token") or body.get("api_token") or "").strip(),
+            "token_header": str(body.get("token_header") or "Authorization").strip(),
+            "token_prefix": str(body.get("token_prefix") or "Bearer").strip(),
         }
+        panel_stub = Panel(
+            id=str(uuid4()),
+            name=name[:120],
+            provider=provider,
+            base_url=base_url,
+            auth_type=auth_type,
+            auth_secret_ref=str(uuid4()),
+            is_active=1,
+            is_default=0,
+        )
+        try:
+            panel_registry.get_provider(provider).health_check(panel_stub, secret_payload)
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 502
         with SessionLocal() as db:
             secret = PanelSecret(
                 id=str(uuid4()),
@@ -1303,8 +1463,9 @@ def register_admin_routes(app, deps):
                 auth_secret_ref=secret.id,
                 is_active=1 if body.get("is_active", True) else 0,
                 is_default=0,
-                region=(str(body.get("region") or "").strip()[:16] or None),
-                health_status="unknown",
+                region=region.lower(),
+                health_status="green",
+                last_ok_at=utcnow(),
             )
             db.add(row)
             db.commit()
@@ -1352,7 +1513,9 @@ def register_admin_routes(app, deps):
             payload = {
                 "username": str(body.get("username") or body.get("login") or "").strip(),
                 "password": str(body.get("password") or "").strip(),
-                "token": str(body.get("token") or "").strip(),
+                "token": str(body.get("token") or body.get("api_token") or "").strip(),
+                "token_header": str(body.get("token_header") or "Authorization").strip(),
+                "token_prefix": str(body.get("token_prefix") or "Bearer").strip(),
             }
             secret.auth_type = str(body.get("auth_type") or panel.auth_type).strip().lower() or panel.auth_type
             secret.ciphertext = encrypt_payload(payload)
@@ -1696,5 +1859,97 @@ def register_admin_routes(app, deps):
             db.delete(row)
             db.commit()
             return jsonify({"ok": True, "deleted": True})
+
+    @app.post("/api/admin/users/<int:user_id>/freeze")
+    def admin_user_freeze(user_id: int):
+        auth, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        frozen = bool(body.get("frozen", True))
+        failures = []
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return jsonify({"ok": False, "error": "User not found"}), 404
+            subscriptions = db.query(Subscription).filter(Subscription.user_id == user.id).all()
+            for subscription in subscriptions:
+                subscription.is_frozen = frozen
+            accounts = db.query(VpnAccount).filter(VpnAccount.user_id == user.id).all()
+            for account in accounts:
+                if frozen and account.status != "active":
+                    continue
+                if not frozen and account.status != "frozen":
+                    continue
+                inbound = db.query(PanelInbound).filter(PanelInbound.id == account.panel_inbound_ref_id).first()
+                if not inbound or not account.identifier:
+                    continue
+                panel = db.query(Panel).filter(Panel.id == inbound.panel_id).first()
+                if not panel:
+                    continue
+                try:
+                    provider = panel_registry.get_provider(panel.provider)
+                    result = provider.update_client(
+                        panel,
+                        account.identifier,
+                        {"inbound_id": inbound.external_inbound_id, "enabled": not frozen},
+                        panel_registry.get_auth_payload(db, panel),
+                    )
+                    if isinstance(result, dict) and not result.get("ok", True):
+                        failures.append({"account_id": account.id, "error": "panel rejected status change"})
+                        continue
+                    account.status = "frozen" if frozen else "active"
+                except Exception as exc:
+                    failures.append({"account_id": account.id, "error": str(exc)})
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=user.id,
+                action="user_frozen" if frozen else "user_unfrozen",
+                changes={"frozen": frozen, "failed_connections": len(failures)},
+            )
+            db.commit()
+        return jsonify({"ok": not failures, "frozen": frozen, "failures": failures})
+
+    @app.post("/api/admin/users/<int:user_id>/manual-extend")
+    def admin_user_manual_extend(user_id: int):
+        auth, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        if body.get("confirmed") is not True:
+            return jsonify({"ok": False, "confirmation_required": True, "error": "Repeat with confirmed=true to extend"}), 409
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return jsonify({"ok": False, "error": "User not found"}), 404
+            result = _apply_admin_subscription_payload(db, user, {"extend_months": body.get("months", 1)})
+            if result:
+                db.rollback()
+                return result
+            subscription = _admin_latest_subscription(db, user.id)
+            if not subscription:
+                db.rollback()
+                return jsonify({"ok": False, "error": "Subscription not found"}), 404
+            next_payment = subscription.access_until
+            telegram_id = user.telegram_id
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=user.id,
+                action="subscription_manually_extended",
+                changes={"months": body.get("months", 1), "access_until": next_payment.isoformat() if next_payment else None},
+            )
+            db.commit()
+            overview = _serialize_admin_user_overview(db, user)
+        notification_sent = False
+        if telegram_id:
+            notification_sent = send_raw(
+                telegram_id,
+                "Администратор подтвердил продление подписки, спасибо большое 💜\n\n"
+                + "Следующая оплата: "
+                + (next_payment.strftime("%d.%m.%Y") if next_payment else "не указана"),
+            )
+        return jsonify({"ok": True, "overview": overview, "notification_sent": notification_sent})
 
 __all__ = ["register_admin_routes"]

@@ -6,6 +6,7 @@ from aiogram import Bot, Dispatcher
 from .chatops import router as chatops_router
 from .onboarding import router as onboarding_router
 from .subscriptions import router as subscriptions_router
+from .workspace import router as workspace_router
 
 
 def register_handlers(dp: Dispatcher) -> None:
@@ -13,6 +14,7 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.include_router(onboarding_router)
     dp.include_router(subscriptions_router)
     dp.include_router(chatops_router)
+    dp.include_router(workspace_router)
 
 
 async def start_bot():

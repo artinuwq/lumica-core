@@ -18,14 +18,14 @@ TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/sendMessage"
 REQUEST_TIMEOUT_SECONDS = 10
 
 
-def send_raw(telegram_id: str | None, text: str) -> bool:
+def send_raw(telegram_id: str | None, text: str, *, reply_markup: dict | None = None) -> bool:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token or not telegram_id:
         return False
     try:
         response = requests.post(
             TELEGRAM_API_URL.format(token=token),
-            json={"chat_id": telegram_id, "text": text},
+            json={"chat_id": telegram_id, "text": text, **({"reply_markup": reply_markup} if reply_markup else {})},
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
         return response.ok

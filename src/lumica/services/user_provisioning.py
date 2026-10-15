@@ -48,18 +48,25 @@ def link_telegram_identity(db, user: User, *, telegram_id: str, username: str | 
 def create_preprovisioned_user(
     db,
     *,
+    telegram_id: str | None = None,
     username: str | None = None,
     phone: str | None = None,
     name: str | None = None,
     role: str = "user",
+    allow_placeholder: bool = False,
 ) -> User:
-    """Создаёт пользователя вручную (админ), до его первого захода в бот.
-    Нужен хотя бы один из username/phone, чтобы потом было по чему
-    связать запись с реальным Telegram-аккаунтом."""
+    """Создаёт известного или placeholder-пользователя из админского потока."""
+    telegram_id = (str(telegram_id).strip() if telegram_id not in (None, "") else None)
     username = (username or "").strip().lstrip("@") or None
     phone = (phone or "").strip() or None
-    if not username and not phone:
-        raise UserProvisioningError("нужно указать хотя бы username или телефон")
+    name = (name or "").strip() or None
+    if telegram_id and not telegram_id.isdigit():
+        raise UserProvisioningError("telegram_id должен состоять из цифр")
+    if not telegram_id and not username and not phone and not (allow_placeholder and name):
+        raise UserProvisioningError("укажите Telegram ID, username или имя пустого места")
+
+    if telegram_id and db.query(User).filter(User.telegram_id == telegram_id).first():
+        raise UserProvisioningError(f"пользователь с Telegram ID {telegram_id} уже существует")
 
     if username:
         existing = db.query(User).filter(func.lower(User.username) == username.lower()).first()
@@ -71,9 +78,10 @@ def create_preprovisioned_user(
             raise UserProvisioningError(f"пользователь с телефоном {phone} уже существует")
 
     user = User(
+        telegram_id=telegram_id,
         username=username,
         phone=phone,
-        name=(name or "").strip() or None,
+        name=name,
         role=role,
         status="unverified",
     )

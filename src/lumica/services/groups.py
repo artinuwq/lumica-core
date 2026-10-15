@@ -43,6 +43,9 @@ def add_member(db, group: Group, user_id: int) -> User:
     if user.group_id is not None and user.group_id != group.id:
         raise GroupError("пользователь уже состоит в другой группе")
     user.group_id = group.id
+    profile = dict(user.profile_data) if isinstance(user.profile_data, dict) else {}
+    profile["subscription_type"] = "family_member"
+    user.profile_data = profile
     return user
 
 
@@ -53,6 +56,9 @@ def remove_member(db, group: Group, user_id: int) -> None:
     if group.admin_user_id == user_id:
         raise GroupError("нельзя удалить администратора группы - сначала назначьте нового или удалите группу")
     user.group_id = None
+    profile = dict(user.profile_data) if isinstance(user.profile_data, dict) else {}
+    profile["subscription_type"] = "personal"
+    user.profile_data = profile
 
 
 def set_admin(db, group: Group, user_id: int) -> User:
@@ -63,6 +69,9 @@ def set_admin(db, group: Group, user_id: int) -> User:
         raise GroupError("пользователь уже состоит в другой группе")
     user.group_id = group.id
     group.admin_user_id = user_id
+    profile = dict(user.profile_data) if isinstance(user.profile_data, dict) else {}
+    profile["subscription_type"] = "family_admin"
+    user.profile_data = profile
     return user
 
 

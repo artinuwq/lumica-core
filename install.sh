@@ -26,6 +26,7 @@ TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 ADMIN_IDS=()
 OWNER_IDS=()
 WEBAPP_URL="${WEBAPP_URL:-}"
+OPERATOR_GROUP_READY=""
 FLASK_HOST="${FLASK_HOST:-}"              # пусто = не менять (по умолчанию 0.0.0.0 только при первой установке)
 FLASK_PORT="${FLASK_PORT:-}"              # пусто = не менять (по умолчанию 8000 только при первой установке)
 NON_INTERACTIVE="0"
@@ -285,6 +286,7 @@ configure_env() {
     # Секреты генерируются один раз и никогда не перезаписываются.
     env_has SESSION_PEPPER || env_set SESSION_PEPPER "$(random_secret)"
     env_has CSRF_PEPPER || env_set CSRF_PEPPER "$(random_secret)"
+    env_has PANEL_SECRET_KEY || env_set PANEL_SECRET_KEY "$(random_secret)"
 }
 
 fresh_install() {
@@ -304,6 +306,15 @@ fresh_install() {
         else
             warn "--admin-id не передан: команды /update, /restart, /config будут недоступны никому, пока ADMIN_TELEGRAM_IDS не задан в .env"
         fi
+    fi
+    if [[ "$NON_INTERACTIVE" != "1" ]] && have_tty; then
+        local group_reply=""
+        read -r -p "Операторская Telegram-группа уже создана как супергруппа-форум? [y/N]: " group_reply < /dev/tty || true
+        case "${group_reply,,}" in
+            y|yes|да) OPERATOR_GROUP_READY="yes" ;;
+            n|no|нет|"") OPERATOR_GROUP_READY="no" ;;
+            *) warn "Ответ не распознан; после установки проверьте настройку operator-группы вручную" ;;
+        esac
     fi
     local id
     for id in ${ADMIN_IDS[@]+"${ADMIN_IDS[@]}"} ${OWNER_IDS[@]+"${OWNER_IDS[@]}"}; do
@@ -417,6 +428,18 @@ Lumica Core установлен: $INSTALL_DIR
   Логи:                 journalctl -u $SERVICE_NAME -f
   Конфигурация:         $INSTALL_DIR/.env (секреты не перезаписываются при повторной установке)
 DONE
+    if [[ "$OPERATOR_GROUP_READY" == "yes" ]]; then
+        cat <<DONE
+  Operator-группа:      добавьте бота администратором с правом управления темами,
+                        затем отправьте /setup_group в этой супергруппе.
+DONE
+    elif [[ "$OPERATOR_GROUP_READY" == "no" ]]; then
+        cat <<DONE
+  Operator-группа:      создайте Telegram-супергруппу-форум, добавьте бота
+                        администратором с правом управления темами и отправьте
+                        /setup_group в группе. Bot API не может создать группу сам.
+DONE
+    fi
     rm -f "$LOG_FILE"
 }
 

@@ -38,6 +38,8 @@ const statusCard = document.getElementById("status-card");
         const vpnMixedUrl = `${window.location.origin}/api/vpn/mixed`;
         const vpnSelectServerUrl = `${window.location.origin}/api/vpn/select-server`;
         const adminUsersUrl = `${window.location.origin}/api/admin/users`;
+        const adminKnownUsersUrl = `${adminUsersUrl}/known`;
+        const adminGroupsUrl = `${window.location.origin}/api/groups`;
         const adminInboundsUrl = `${window.location.origin}/api/admin/inbounds`;
         const adminSyncInboundsUrl = `${window.location.origin}/api/admin/sync-inbounds`;
         const adminBindClientUrl = `${window.location.origin}/api/admin/bind-client`;
@@ -56,6 +58,7 @@ const statusCard = document.getElementById("status-card");
         const adminPanelsUrl = `${window.location.origin}/api/admin/panels`;
         const adminPanelsTestUrl = `${window.location.origin}/api/admin/panels/test-connection`;
         const adminPanelUpdateUrl = (panelId) => `${adminPanelsUrl}/${encodeURIComponent(panelId)}`;
+        const adminPanelMetricsUrl = (panelId) => `${adminPanelsUrl}/${encodeURIComponent(panelId)}/metrics`;
         const adminPanelActionUrl = (panelId, action) => `${adminPanelsUrl}/${encodeURIComponent(panelId)}/${action}`;
         const cloudListUrl = `${window.location.origin}/api/cloud/list`;
         const cloudMkdirUrl = `${window.location.origin}/api/cloud/mkdir`;
@@ -130,6 +133,9 @@ const statusCard = document.getElementById("status-card");
         const workPanelRegionEl = document.getElementById("work-panel-region");
         const workPanelUsernameEl = document.getElementById("work-panel-username");
         const workPanelPasswordEl = document.getElementById("work-panel-password");
+        const workPanelTokenEl = document.getElementById("work-panel-token");
+        const workPanelTokenHeaderEl = document.getElementById("work-panel-token-header");
+        const workPanelTokenPrefixEl = document.getElementById("work-panel-token-prefix");
         const workPanelTestBtnEl = document.getElementById("work-panel-test-btn");
         const workPanelSaveBtnEl = document.getElementById("work-panel-save-btn");
         const workPanelStatusEl = document.getElementById("work-panel-status");
@@ -137,6 +143,7 @@ const statusCard = document.getElementById("status-card");
         const workPanelDetailMetaEl = document.getElementById("work-panel-detail-meta");
         const workPanelDetailBadgesEl = document.getElementById("work-panel-detail-badges");
         const workPanelDetailSummaryEl = document.getElementById("work-panel-detail-summary");
+        const workPanelDetailMetricsEl = document.getElementById("work-panel-detail-metrics");
         const workPanelDetailActivateBtnEl = document.getElementById("work-panel-detail-activate-btn");
         const workPanelDetailSyncBtnEl = document.getElementById("work-panel-detail-sync-btn");
         const workPanelDetailAccessBtnEl = document.getElementById("work-panel-detail-access-btn");
@@ -144,6 +151,9 @@ const statusCard = document.getElementById("status-card");
         const workPanelDetailBaseUrlEl = document.getElementById("work-panel-detail-base-url");
         const workPanelDetailUsernameEl = document.getElementById("work-panel-detail-username");
         const workPanelDetailPasswordEl = document.getElementById("work-panel-detail-password");
+        const workPanelDetailTokenEl = document.getElementById("work-panel-detail-token");
+        const workPanelDetailTokenHeaderEl = document.getElementById("work-panel-detail-token-header");
+        const workPanelDetailTokenPrefixEl = document.getElementById("work-panel-detail-token-prefix");
         const workPanelDetailTestBtnEl = document.getElementById("work-panel-detail-test-btn");
         const workPanelDetailSaveBtnEl = document.getElementById("work-panel-detail-save-btn");
         const workPanelDetailDeleteBtnEl = document.getElementById("work-panel-detail-delete-btn");
@@ -161,6 +171,24 @@ const statusCard = document.getElementById("status-card");
         const workInboundDetailAddStatusEl = document.getElementById("work-inbound-detail-add-status");
         const workClientCardsEl = document.getElementById("work-client-cards");
         const workClientSearchEl = document.getElementById("work-client-search");
+        const workUserCreateToggleEl = document.getElementById("work-user-create-toggle");
+        const workUserCreateFormEl = document.getElementById("work-user-create-form");
+        const workUserCreateModeEl = document.getElementById("work-user-create-mode");
+        const workUserExistingWrapEl = document.getElementById("work-user-existing-wrap");
+        const workUserExistingSearchEl = document.getElementById("work-user-existing-search");
+        const workUserExistingSelectEl = document.getElementById("work-user-existing-select");
+        const workUserIdentityWrapEl = document.getElementById("work-user-identity-wrap");
+        const workUserNameEl = document.getElementById("work-user-name");
+        const workUserTelegramIdEl = document.getElementById("work-user-telegram-id");
+        const workUserUsernameEl = document.getElementById("work-user-username");
+        const workUserMonthPriceEl = document.getElementById("work-user-month-price");
+        const workUserPaymentDateEl = document.getElementById("work-user-payment-date");
+        const workUserPaymentDetailsEl = document.getElementById("work-user-payment-details");
+        const workUserSubscriptionTypeEl = document.getElementById("work-user-subscription-type");
+        const workUserGroupWrapEl = document.getElementById("work-user-group-wrap");
+        const workUserGroupSelectEl = document.getElementById("work-user-group-select");
+        const workUserCreateSubmitEl = document.getElementById("work-user-create-submit");
+        const workUserCreateStatusEl = document.getElementById("work-user-create-status");
         const workVerifyMenuBtnEl = document.getElementById("work-verify-menu-btn");
         const workVerifyCountEl = document.getElementById("work-verify-count");
         const workVerifyLengthEl = document.getElementById("work-verify-length");
@@ -174,6 +202,9 @@ const statusCard = document.getElementById("status-card");
         const workClientSubUntilEl = document.getElementById("work-client-sub-until");
         const workClientSubPriceEl = document.getElementById("work-client-sub-price");
         const workClientConnectionsAvailableEl = document.getElementById("work-client-connections-available");
+        const workClientFreezeBtnEl = document.getElementById("work-client-freeze-btn");
+        const workClientManualExtendBtnEl = document.getElementById("work-client-manual-extend-btn");
+        const workClientActionStatusEl = document.getElementById("work-client-action-status");
         const workClientRoleSelectEl = document.getElementById("work-client-role-select");
         const workClientRoleSaveBtnEl = document.getElementById("work-client-role-save-btn");
         const workClientRoleStatusEl = document.getElementById("work-client-role-status");
@@ -185,6 +216,12 @@ const statusCard = document.getElementById("status-card");
         const workSubStatusSelectEl = document.getElementById("work-sub-status-select");
         const workSubPriceInputEl = document.getElementById("work-sub-price-input");
         const workSubLimitInputEl = document.getElementById("work-sub-limit-input");
+        const workSubBillingDayEl = document.getElementById("work-sub-billing-day");
+        const workSubBillingDetailsEl = document.getElementById("work-sub-billing-details");
+        const workSubNotesEl = document.getElementById("work-sub-notes");
+        const workSubscriptionTypeSelectEl = document.getElementById("work-subscription-type-select");
+        const workSubGroupWrapEl = document.getElementById("work-sub-group-wrap");
+        const workSubGroupSelectEl = document.getElementById("work-sub-group-select");
         const workSubSaveBtnEl = document.getElementById("work-sub-save-btn");
         const workSubExtendWrapEl = document.getElementById("work-sub-extend-wrap");
         const workSubCreateWrapEl = document.getElementById("work-sub-create-wrap");
@@ -222,6 +259,8 @@ const statusCard = document.getElementById("status-card");
         };
         const workState = {
             users: [],
+            knownUsers: [],
+            groups: [],
             inbounds: [],
             clients: [],
             bindings: [],
@@ -2974,6 +3013,61 @@ const statusCard = document.getElementById("status-card");
             });
         }
 
+        function renderUserCreateOptions() {
+            if (!workUserExistingSelectEl) return;
+            const query = String(workUserExistingSearchEl?.value || "").trim().toLowerCase();
+            const users = (Array.isArray(workState.knownUsers) ? workState.knownUsers : []).filter((user) => {
+                const values = [user?.name, user?.username, user?.telegram_id, user?.id]
+                    .map((value) => String(value || "").toLowerCase());
+                return !query || values.some((value) => value.includes(query));
+            });
+            const selectedId = workUserExistingSelectEl.value;
+            workUserExistingSelectEl.innerHTML = '<option value="">Выберите пользователя</option>';
+            users.forEach((user) => {
+                const option = document.createElement("option");
+                option.value = String(user.id);
+                option.textContent = `${user.name || user.username || `Пользователь #${user.id}`} · ${user.username ? `@${user.username}` : "без username"} · ID ${user.telegram_id || "—"}`;
+                workUserExistingSelectEl.appendChild(option);
+            });
+            if (users.some((user) => String(user.id) === selectedId)) {
+                workUserExistingSelectEl.value = selectedId;
+            }
+        }
+
+        function updateUserCreateMode() {
+            const mode = String(workUserCreateModeEl?.value || "existing");
+            workUserExistingWrapEl?.classList.toggle("hidden", mode !== "existing");
+            workUserIdentityWrapEl?.classList.toggle("hidden", mode === "existing");
+            workUserTelegramIdEl?.classList.toggle("hidden", mode === "placeholder");
+            workUserUsernameEl?.classList.toggle("hidden", mode === "placeholder");
+            updateUserCreateGroupVisibility();
+            renderUserCreateOptions();
+        }
+
+        function updateUserCreateGroupVisibility() {
+            workUserGroupWrapEl?.classList.toggle(
+                "hidden",
+                workUserSubscriptionTypeEl?.value !== "family_member"
+            );
+        }
+
+        function renderUserCreateGroups() {
+            [workUserGroupSelectEl, workSubGroupSelectEl].forEach((select) => {
+                if (!select) return;
+                const selectedId = select.value;
+                select.innerHTML = '<option value="">Выберите семью</option>';
+                (Array.isArray(workState.groups) ? workState.groups : []).forEach((group) => {
+                    const option = document.createElement("option");
+                    option.value = String(group.id);
+                    option.textContent = group.name || `Семья #${group.id}`;
+                    select.appendChild(option);
+                });
+                if (workState.groups.some((group) => String(group.id) === selectedId)) {
+                    select.value = selectedId;
+                }
+            });
+        }
+
         function createWorkInboundStatusBadge(kind, enabled, mode = "icon") {
             const isOn = Boolean(enabled);
             const badge = document.createElement("span");
@@ -3453,20 +3547,36 @@ const statusCard = document.getElementById("status-card");
         }
 
         function collectWorkPanelPayload() {
+            const token = String(workPanelTokenEl?.value || "").trim();
             return {
                 name: String(workPanelNameEl?.value || "").trim(),
                 provider: String(workPanelProviderEl?.value || "3xui").trim(),
                 base_url: String(workPanelBaseUrlEl?.value || "").trim(),
                 region: String(workPanelRegionEl?.value || "").trim() || null,
-                auth_type: "login_password",
+                auth_type: token ? "api_token" : "login_password",
+                token,
+                token_header: String(workPanelTokenHeaderEl?.value || "Authorization").trim(),
+                token_prefix: String(workPanelTokenPrefixEl?.value || "").trim(),
                 username: String(workPanelUsernameEl?.value || "").trim(),
                 password: String(workPanelPasswordEl?.value || "").trim(),
             };
         }
 
+        function syncPanelTokenPrefix(headerEl, prefixEl) {
+            if (!headerEl || !prefixEl) return;
+            if (headerEl.value === "X-API-Key" && prefixEl.value.trim() === "Bearer") {
+                prefixEl.value = "";
+            } else if (headerEl.value === "Authorization" && !prefixEl.value.trim()) {
+                prefixEl.value = "Bearer";
+            }
+        }
+
         function collectWorkPanelDetailAccessPayload() {
             return {
                 base_url: String(workPanelDetailBaseUrlEl?.value || "").trim(),
+                token: String(workPanelDetailTokenEl?.value || "").trim(),
+                token_header: String(workPanelDetailTokenHeaderEl?.value || "Authorization").trim(),
+                token_prefix: String(workPanelDetailTokenPrefixEl?.value || "").trim(),
                 username: String(workPanelDetailUsernameEl?.value || "").trim(),
                 password: String(workPanelDetailPasswordEl?.value || "").trim(),
             };
@@ -3584,6 +3694,9 @@ const statusCard = document.getElementById("status-card");
                 empty.textContent = note;
                 workPanelDetailSummaryEl.appendChild(empty);
             }
+            if (workPanelDetailMetricsEl) {
+                workPanelDetailMetricsEl.textContent = "Метрики появятся после обновления мониторинга.";
+            }
             if (workPanelDetailActivateBtnEl) {
                 workPanelDetailActivateBtnEl.removeAttribute("data-panel-id");
                 workPanelDetailActivateBtnEl.textContent = "Активировать панель";
@@ -3636,6 +3749,9 @@ const statusCard = document.getElementById("status-card");
             const provider = String(panel?.provider || "").trim() || "provider";
             const health = String(panel?.health_status || "unknown").trim().toLowerCase() || "unknown";
             const panelInbounds = getWorkPanelInbounds(panel.id);
+            loadWorkPanelMetrics(panel.id).catch((err) => {
+                if (workPanelDetailMetricsEl) workPanelDetailMetricsEl.textContent = err?.message || "Не удалось загрузить метрики";
+            });
 
             if (workPanelDetailTitleEl) {
                 workPanelDetailTitleEl.textContent = `${panelName}${region ? ` (${region})` : ""}`;
@@ -3714,6 +3830,12 @@ const statusCard = document.getElementById("status-card");
             setWorkPanelDetailStatus("");
         }
 
+        async function loadWorkPanelMetrics(panelId) {
+            if (!workPanelDetailMetricsEl) return;
+            const response = await fetchJson(adminPanelMetricsUrl(panelId), false);
+            workPanelDetailMetricsEl.textContent = String(response?.text || "Метрики недоступны.");
+        }
+
         async function openWorkPanelDetail(panelIdRaw) {
             const panelId = String(panelIdRaw || "").trim();
             if (!panelId) return;
@@ -3745,14 +3867,17 @@ const statusCard = document.getElementById("status-card");
             if (!baseUrl) {
                 throw new Error("Укажи URL панели");
             }
-            if (!payload.username || !payload.password) {
+            if (!payload.token && (!payload.username || !payload.password)) {
                 throw new Error("Для проверки укажи login и password");
             }
             return postJson(adminPanelsTestUrl, {
                 name: String(panel?.name || "Panel").trim() || "Panel",
                 provider: String(panel?.provider || "3xui").trim() || "3xui",
                 base_url: baseUrl,
-                auth_type: "login_password",
+                auth_type: payload.token ? "api_token" : "login_password",
+                token: payload.token,
+                token_header: payload.token_header,
+                token_prefix: payload.token_prefix,
                 username: payload.username,
                 password: payload.password,
             });
@@ -3771,13 +3896,21 @@ const statusCard = document.getElementById("status-card");
                 updated = true;
             }
 
+            const hasToken = Boolean(payload.token);
             const hasUsername = Boolean(payload.username);
             const hasPassword = Boolean(payload.password);
+            if (hasToken && (hasUsername || hasPassword)) {
+                throw new Error("Укажи API-токен или пару login/password");
+            }
             if (hasUsername !== hasPassword) {
                 throw new Error("Укажи и login, и password");
             }
-            if (hasUsername && hasPassword) {
+            if (hasToken || (hasUsername && hasPassword)) {
                 await postJson(adminPanelActionUrl(panel.id, "rotate-secret"), {
+                    auth_type: hasToken ? "api_token" : "login_password",
+                    token: payload.token,
+                    token_header: payload.token_header,
+                    token_prefix: payload.token_prefix,
                     username: payload.username,
                     password: payload.password,
                 });
@@ -3930,6 +4063,10 @@ const statusCard = document.getElementById("status-card");
             if (!payload.base_url) {
                 throw new Error("Укажи URL панели");
             }
+            if (!/^[a-z]{2}$/i.test(payload.region || "")) {
+                throw new Error("Укажи двухбуквенный код локации, например de");
+            }
+            await postJson(adminPanelsTestUrl, payload);
             const result = await postJson(adminPanelsUrl, payload);
             await loadWorkPanels();
             return result;
@@ -4085,6 +4222,25 @@ const statusCard = document.getElementById("status-card");
                 workSubLimitInputEl.value =
                     conn?.limit === null || conn?.limit === undefined ? "" : String(conn.limit);
             }
+            if (workSubBillingDayEl) {
+                workSubBillingDayEl.value = sub?.billing_day ?? "";
+            }
+            if (workSubBillingDetailsEl) {
+                workSubBillingDetailsEl.value = sub?.billing_details ?? "";
+            }
+            if (workSubNotesEl) {
+                workSubNotesEl.value = sub?.notes ?? "";
+            }
+            if (workSubscriptionTypeSelectEl) {
+                workSubscriptionTypeSelectEl.value = overview?.user?.subscription_type || "personal";
+            }
+            if (workSubGroupSelectEl) {
+                workSubGroupSelectEl.value = overview?.user?.group_id ? String(overview.user.group_id) : "";
+            }
+            workSubGroupWrapEl?.classList.toggle(
+                "hidden",
+                workSubscriptionTypeSelectEl?.value !== "family_member"
+            );
             if (workClientRoleSelectEl) {
                 workClientRoleSelectEl.value = role || "user";
             }
@@ -4140,17 +4296,28 @@ const statusCard = document.getElementById("status-card");
             if (workClientRoleSelectEl) {
                 workClientRoleSelectEl.value = String(user.role || "user").toLowerCase();
             }
+            if (workClientFreezeBtnEl) {
+                workClientFreezeBtnEl.textContent = workState.overview?.subscription?.is_frozen
+                    ? "Разморозить пользователя"
+                    : "Заморозить пользователя";
+            }
             setWorkClientRoleStatus("");
         }
 
         async function loadWorkClientsData() {
-            const [usersResp, inboundsResp] = await Promise.all([
+            const [usersResp, inboundsResp, groupsResp, knownUsersResp] = await Promise.all([
                 fetchJson(adminUsersUrl, false),
                 fetchJson(adminInboundsUrl, false),
+                fetchJson(adminGroupsUrl, false),
+                fetchJson(adminKnownUsersUrl, false),
             ]);
             workState.users = Array.isArray(usersResp?.users) ? usersResp.users : [];
             workState.inbounds = Array.isArray(inboundsResp?.inbounds) ? inboundsResp.inbounds : [];
+            workState.groups = Array.isArray(groupsResp?.data) ? groupsResp.data : [];
+            workState.knownUsers = Array.isArray(knownUsersResp?.users) ? knownUsersResp.users : [];
             renderWorkClientCards();
+            renderUserCreateOptions();
+            renderUserCreateGroups();
             renderWorkInboundsManager();
             renderWorkInboundSelectOptions();
             renderWorkPendingInboundSelectOptions();
@@ -4486,7 +4653,10 @@ const statusCard = document.getElementById("status-card");
             }
 
             if (!response.ok || !payload.ok) {
-                throw new Error(payload.error || "Телеграм не подтвердил данные пользователя.");
+                const message = payload.error === "Invalid initData"
+                    ? "Telegram не подтвердил запуск Mini App. Откройте его через кнопку в боте и попробуйте снова."
+                    : payload.error || "Телеграм не подтвердил данные пользователя.";
+                throw new Error(message);
             }
 
             csrfToken = typeof payload?.csrf_token === "string" ? payload.csrf_token : "";
@@ -4691,6 +4861,121 @@ const statusCard = document.getElementById("status-card");
             renderWorkClientCards();
         });
 
+        workClientFreezeBtnEl?.addEventListener("click", async () => {
+            const userId = Number(workState.selectedUserId || 0);
+            if (!userId) return;
+            const frozen = Boolean(workState.overview?.subscription?.is_frozen);
+            const action = frozen ? "разморозить" : "заморозить";
+            if (!window.confirm(`Подтвердить: ${action} пользователя?`)) return;
+            workClientFreezeBtnEl.disabled = true;
+            try {
+                const response = await postJson(`${adminUsersUrl}/${userId}/freeze`, { frozen: !frozen });
+                const failures = Array.isArray(response?.failures) ? response.failures : [];
+                if (workClientActionStatusEl) {
+                    workClientActionStatusEl.classList.remove("hidden");
+                    workClientActionStatusEl.textContent = failures.length
+                        ? `Обновлено не всё: ${failures.length} подключений не изменены.`
+                        : frozen ? "Пользователь разморожен" : "Подписки пользователя заморожены";
+                }
+                await loadSelectedUserOverview();
+                await loadSelectedUserBindings();
+            } catch (err) {
+                if (workClientActionStatusEl) {
+                    workClientActionStatusEl.classList.remove("hidden");
+                    workClientActionStatusEl.textContent = err?.message || "Не удалось изменить состояние пользователя";
+                }
+            } finally {
+                workClientFreezeBtnEl.disabled = false;
+            }
+        });
+
+        workClientManualExtendBtnEl?.addEventListener("click", async () => {
+            const userId = Number(workState.selectedUserId || 0);
+            if (!userId) return;
+            if (!window.confirm("Продлить подписку пользователя на один месяц?")) return;
+            if (!window.confirm("Подтвердите продление ещё раз. Пользователю отправится уведомление.")) return;
+            workClientManualExtendBtnEl.disabled = true;
+            try {
+                await postJson(`${adminUsersUrl}/${userId}/manual-extend`, { confirmed: true, months: 1 });
+                if (workClientActionStatusEl) {
+                    workClientActionStatusEl.classList.remove("hidden");
+                    workClientActionStatusEl.textContent = "Подписка продлена";
+                }
+                await loadSelectedUserOverview();
+            } catch (err) {
+                if (workClientActionStatusEl) {
+                    workClientActionStatusEl.classList.remove("hidden");
+                    workClientActionStatusEl.textContent = err?.message || "Не удалось продлить подписку";
+                }
+            } finally {
+                workClientManualExtendBtnEl.disabled = false;
+            }
+        });
+
+        workUserCreateToggleEl?.addEventListener("click", () => {
+            workUserCreateFormEl?.classList.toggle("hidden");
+            updateUserCreateMode();
+        });
+        workUserCreateModeEl?.addEventListener("change", updateUserCreateMode);
+        workUserSubscriptionTypeEl?.addEventListener("change", updateUserCreateGroupVisibility);
+        workUserExistingSearchEl?.addEventListener("input", renderUserCreateOptions);
+        workUserCreateSubmitEl?.addEventListener("click", async () => {
+            if (!workUserCreateSubmitEl) return;
+            workUserCreateSubmitEl.disabled = true;
+            if (workUserCreateStatusEl) {
+                workUserCreateStatusEl.classList.remove("hidden");
+                workUserCreateStatusEl.textContent = "Сохраняем пользователя...";
+            }
+            try {
+                const mode = String(workUserCreateModeEl?.value || "existing");
+                const date = String(workUserPaymentDateEl?.value || "").trim();
+                const billingDay = date ? Number(date.slice(-2)) : null;
+                const payload = {
+                    price_amount: String(workUserMonthPriceEl?.value || "").trim() || null,
+                    billing_day: billingDay,
+                    billing_details: String(workUserPaymentDetailsEl?.value || "").trim() || null,
+                    subscription_type: String(workUserSubscriptionTypeEl?.value || "personal"),
+                };
+                if (payload.subscription_type === "family_member") {
+                    const groupId = Number(workUserGroupSelectEl?.value || 0);
+                    if (!groupId) throw new Error("Выбери семью для участника");
+                    payload.group_id = groupId;
+                }
+                if (date) payload.access_until = `${date}T00:00:00+00:00`;
+                let userId;
+                if (mode === "existing") {
+                    userId = Number(workUserExistingSelectEl?.value || 0);
+                    if (!userId) throw new Error("Выбери пользователя из списка");
+                    await postJson(adminUserSubscriptionUrl(userId), payload);
+                } else {
+                    const name = String(workUserNameEl?.value || "").trim();
+                    const telegramId = String(workUserTelegramIdEl?.value || "").trim();
+                    const username = String(workUserUsernameEl?.value || "").trim();
+                    if (mode === "placeholder" && !name) throw new Error("Укажи имя пустого места");
+                    if (mode === "new") {
+                        const hasId = /^\d+$/.test(telegramId);
+                        const hasUsername = /^@[A-Za-z0-9_]{5,32}$/.test(username);
+                        if (hasId === hasUsername) throw new Error("Укажи либо числовой Telegram ID, либо username с @");
+                    }
+                    const result = await postJson(adminUsersUrl, {
+                        ...payload,
+                        name,
+                        telegram_id: telegramId || null,
+                        username: username || null,
+                        allow_placeholder: mode === "placeholder",
+                    });
+                    userId = result?.user?.id;
+                }
+                await loadWorkClientsData();
+                if (userId) await openWorkClientPage(userId);
+                if (workUserCreateStatusEl) workUserCreateStatusEl.textContent = "Пользователь сохранён";
+            } catch (err) {
+                if (workUserCreateStatusEl) workUserCreateStatusEl.textContent = err?.message || "Не удалось сохранить пользователя";
+            } finally {
+                workUserCreateSubmitEl.disabled = false;
+            }
+        });
+
         workVerifyGenerateEl?.addEventListener("click", async () => {
             const baseText = workVerifyGenerateEl?.textContent || "Сгенерировать";
             if (workVerifyGenerateEl) {
@@ -4808,6 +5093,13 @@ const statusCard = document.getElementById("status-card");
                 console.error("save system settings error:", err);
                 setWorkSettingsStatus(err?.message || "Не удалось сохранить настройки", "error");
             }
+        });
+
+        workPanelTokenHeaderEl?.addEventListener("change", () => {
+            syncPanelTokenPrefix(workPanelTokenHeaderEl, workPanelTokenPrefixEl);
+        });
+        workPanelDetailTokenHeaderEl?.addEventListener("change", () => {
+            syncPanelTokenPrefix(workPanelDetailTokenHeaderEl, workPanelDetailTokenPrefixEl);
         });
 
         workPanelTestBtnEl?.addEventListener("click", async () => {
@@ -5111,7 +5403,16 @@ const statusCard = document.getElementById("status-card");
                     status: selectedStatus || "active",
                     price_amount: workSubPriceInputEl?.value?.trim() || null,
                     connections_limit: workSubLimitInputEl?.value?.trim() || null,
+                    billing_day: workSubBillingDayEl?.value?.trim() || null,
+                    billing_details: workSubBillingDetailsEl?.value?.trim() || null,
+                    notes: workSubNotesEl?.value?.trim() || null,
+                    subscription_type: String(workSubscriptionTypeSelectEl?.value || "personal"),
                 };
+                if (payload.subscription_type === "family_member") {
+                    const groupId = Number(workSubGroupSelectEl?.value || 0);
+                    if (!groupId) throw new Error("Выбери семью для участника");
+                    payload.group_id = groupId;
+                }
                 if (selectedStatus === "lifetime") {
                     payload.access_until = null;
                 } else if (creatingSubscription || switchingLifetimeToActive) {
@@ -5161,6 +5462,12 @@ const statusCard = document.getElementById("status-card");
         });
         workSubStatusSelectEl?.addEventListener("change", () => {
             renderWorkSubscriptionControls(workState.overview?.subscription || null);
+        });
+        workSubscriptionTypeSelectEl?.addEventListener("change", () => {
+            workSubGroupWrapEl?.classList.toggle(
+                "hidden",
+                workSubscriptionTypeSelectEl.value !== "family_member"
+            );
         });
         renderWorkSubExtendValue();
         updateCloudPageContext(cloudState.path);

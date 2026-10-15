@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from cryptography.fernet import Fernet, InvalidToken
+
 from lumica.domain.models import Panel, PanelSecret
 from .provider import PanelProvider
 from .xui_provider import XuiProvider
@@ -37,29 +39,57 @@ def _xor_stream_crypt(raw: bytes, key_material: bytes, nonce: bytes) -> bytes:
     return bytes(a ^ b for a, b in zip(raw, out))
 
 
-def _key_material() -> bytes:
-    raw = os.getenv("PANEL_SECRET_KEY", "").strip()
-    if not raw:
-        raw = os.getenv("SESSION_PEPPER", "lumica-default-panel-secret")
-    return hashlib.sha256(raw.encode("utf-8")).digest()
+def _fernet(raw: str) -> Fernet:
+    key = base64.urlsafe_b64encode(hashlib.sha256(raw.encode("utf-8")).digest())
+    return Fernet(key)
+
+
+def _configured_secret_keys() -> list[str]:
+    keys = [
+        os.getenv("PANEL_SECRET_KEY", "").strip(),
+        os.getenv("SESSION_PEPPER", "").strip(),
+    ]
+    return list(dict.fromkeys(key for key in keys if key))
 
 
 def encrypt_payload(payload: dict[str, Any]) -> str:
+    keys = _configured_secret_keys()
+    if not keys:
+        raise RuntimeError("PANEL_SECRET_KEY must be configured before storing panel credentials")
     serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    nonce = os.urandom(16)
-    encrypted = _xor_stream_crypt(serialized, _key_material(), nonce)
-    return base64.urlsafe_b64encode(nonce + encrypted).decode("ascii")
+    return "fernet:" + _fernet(keys[0]).encrypt(serialized).decode("ascii")
 
 
 def decrypt_payload(ciphertext: str) -> dict[str, Any]:
-    blob = base64.urlsafe_b64decode((ciphertext or "").encode("ascii"))
+    raw = (ciphertext or "").strip()
+    if raw.startswith("fernet:"):
+        token = raw.removeprefix("fernet:").encode("ascii")
+        for key in _configured_secret_keys():
+            try:
+                payload = json.loads(_fernet(key).decrypt(token).decode("utf-8"))
+                return payload if isinstance(payload, dict) else {}
+            except (InvalidToken, UnicodeDecodeError, json.JSONDecodeError):
+                continue
+        raise ValueError("Unable to decrypt panel credentials with configured keys")
+
+    # Existing installations used this unauthenticated format; keep it read-only
+    # during migration while all newly stored credentials use Fernet.
+    try:
+        blob = base64.urlsafe_b64decode(raw.encode("ascii"))
+    except (ValueError, UnicodeEncodeError) as exc:
+        raise ValueError("Invalid secret payload") from exc
     if len(blob) < 16:
         raise ValueError("Invalid secret payload")
-    nonce = blob[:16]
-    encrypted = blob[16:]
-    decoded = _xor_stream_crypt(encrypted, _key_material(), nonce).decode("utf-8")
-    payload = json.loads(decoded)
-    return payload if isinstance(payload, dict) else {}
+    nonce, encrypted = blob[:16], blob[16:]
+    legacy_keys = [*_configured_secret_keys(), "lumica-default-panel-secret"]
+    for key in dict.fromkeys(legacy_keys):
+        decoded = _xor_stream_crypt(encrypted, hashlib.sha256(key.encode("utf-8")).digest(), nonce)
+        try:
+            payload = json.loads(decoded.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        return payload if isinstance(payload, dict) else {}
+    raise ValueError("Unable to decrypt legacy panel credentials")
 
 
 class _MarzbanProviderStub(PanelProvider):

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from lumica.domain.models import Group, SubscriptionVpnAccount
+from lumica.services.payments import add_calendar_month
+from lumica.services import groups as group_service
+
 def build_admin_helpers(deps):
     # Transitional dependency injection: helpers still depend on
     # legacy names while extraction to service classes continues.
@@ -432,7 +436,11 @@ def build_admin_helpers(deps):
         }
     def _apply_admin_subscription_payload(db, user: User, body: dict):
         touches_subscription = any(
-            key in body for key in ("extend_months", "status", "price_amount", "access_until")
+            key in body
+            for key in (
+                "extend_months", "status", "price_amount", "access_until", "billing_day",
+                "billing_details", "notes", "vpn_account_ids",
+            )
         )
         sub = _admin_latest_subscription(db, user.id)
         if touches_subscription and not sub:
@@ -451,7 +459,7 @@ def build_admin_helpers(deps):
             now = utcnow()
             current_until = _as_utc(sub.access_until)
             base = current_until if current_until and current_until > now else now
-            sub.access_until = base + timedelta(days=30 * months)
+            sub.access_until = add_calendar_month(base, months)
             sub.status = "active"
 
         if sub and "status" in body and body.get("status") not in (None, ""):
@@ -470,6 +478,31 @@ def build_admin_helpers(deps):
                     sub.price_amount = Decimal(str(raw_price))
                 except (InvalidOperation, ValueError):
                     return jsonify({"ok": False, "error": "price_amount must be a number"}), 400
+
+        if sub and "billing_day" in body:
+            raw_billing_day = body.get("billing_day")
+            if raw_billing_day in (None, ""):
+                sub.billing_day = None
+            else:
+                try:
+                    billing_day = int(raw_billing_day)
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "billing_day must be an integer from 1 to 31"}), 400
+                if billing_day < 1 or billing_day > 31:
+                    return jsonify({"ok": False, "error": "billing_day must be from 1 to 31"}), 400
+                sub.billing_day = billing_day
+
+        if sub and "billing_details" in body:
+            raw_details = body.get("billing_details")
+            if raw_details is not None and not isinstance(raw_details, str):
+                return jsonify({"ok": False, "error": "billing_details must be text"}), 400
+            sub.billing_details = (raw_details or "").strip() or None
+
+        if sub and "notes" in body:
+            raw_notes = body.get("notes")
+            if raw_notes is not None and not isinstance(raw_notes, str):
+                return jsonify({"ok": False, "error": "notes must be text"}), 400
+            sub.notes = (raw_notes or "").strip() or None
 
         if sub and "access_until" in body:
             raw_access_until = body.get("access_until")
@@ -500,6 +533,69 @@ def build_admin_helpers(deps):
                 profile["connections_limit"] = limit
             user.profile_data = profile
 
+        if "vpn_account_ids" in body:
+            raw_account_ids = body.get("vpn_account_ids")
+            if not isinstance(raw_account_ids, list):
+                return jsonify({"ok": False, "error": "vpn_account_ids must be a list"}), 400
+            try:
+                account_ids = sorted({int(value) for value in raw_account_ids})
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": "vpn_account_ids must contain integers"}), 400
+            accounts = db.query(VpnAccount).filter(
+                VpnAccount.id.in_(account_ids),
+                VpnAccount.user_id == user.id,
+            ).all() if account_ids else []
+            if len(accounts) != len(account_ids):
+                return jsonify({"ok": False, "error": "one or more VPN accounts do not belong to this user"}), 400
+            db.query(SubscriptionVpnAccount).filter(
+                SubscriptionVpnAccount.subscription_id == sub.id,
+            ).delete(synchronize_session=False)
+            db.add_all(
+                SubscriptionVpnAccount(subscription_id=sub.id, vpn_account_id=account_id)
+                for account_id in account_ids
+            )
+
+        if "subscription_type" in body:
+            subscription_type = str(body.get("subscription_type") or "").strip().lower()
+            if subscription_type not in {"personal", "family_admin", "family_member"}:
+                return jsonify({"ok": False, "error": "subscription_type is invalid"}), 400
+            group = db.query(Group).filter(Group.id == user.group_id).first() if user.group_id else None
+            if subscription_type == "family_admin":
+                if group and group.admin_user_id not in (None, user.id):
+                    try:
+                        group_service.remove_member(db, group, user.id)
+                    except group_service.GroupError as exc:
+                        return jsonify({"ok": False, "error": str(exc)}), 409
+                    group = None
+                if not group:
+                    group_service.create_group(db, name=user.name, admin_user_id=user.id)
+                elif group.admin_user_id is None:
+                    group_service.set_admin(db, group, user.id)
+            elif subscription_type == "family_member":
+                try:
+                    group_id = int(body.get("group_id"))
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "group_id is required for family_member"}), 400
+                target_group = db.query(Group).filter(Group.id == group_id).first()
+                if not target_group:
+                    return jsonify({"ok": False, "error": "family group not found"}), 404
+                if target_group.admin_user_id == user.id:
+                    return jsonify({"ok": False, "error": "family administrator cannot be a member"}), 400
+                try:
+                    group_service.add_member(db, target_group, user.id)
+                except group_service.GroupError as exc:
+                    return jsonify({"ok": False, "error": str(exc)}), 409
+            elif group:
+                if group.admin_user_id == user.id:
+                    return jsonify({"ok": False, "error": "assign another family administrator before switching to personal"}), 409
+                try:
+                    group_service.remove_member(db, group, user.id)
+                except group_service.GroupError as exc:
+                    return jsonify({"ok": False, "error": str(exc)}), 409
+            profile = dict(user.profile_data) if isinstance(user.profile_data, dict) else {}
+            profile["subscription_type"] = subscription_type
+            user.profile_data = profile
+
         return None
 
     def _serialize_panel(panel: Panel) -> dict:
@@ -509,7 +605,6 @@ def build_admin_helpers(deps):
             "provider": panel.provider,
             "base_url": panel.base_url,
             "auth_type": panel.auth_type,
-            "auth_secret_ref": panel.auth_secret_ref,
             "is_active": bool(panel.is_active),
             "is_default": False,
             "region": panel.region,

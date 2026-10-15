@@ -17,7 +17,9 @@ from lumica.domain.models import User
 from lumica.infra.db import SessionLocal
 from lumica.services import applications as application_service
 from lumica.services import notifications
+from lumica.services.roles import is_authorized, load_role_bindings, role_allows
 from lumica.services import user_provisioning
+from .workspace import user_menu
 
 router = Router(name="onboarding")
 
@@ -77,6 +79,12 @@ def _find_or_link_user(tg_user: types.User) -> User | None:
     return None
 
 
+def _has_admin_mini_app_access(user: User, telegram_id: int) -> bool:
+    if role_allows(user.role, "admin"):
+        return True
+    return is_authorized(telegram_id, "admin", load_role_bindings())
+
+
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext) -> None:
     await state.clear()
@@ -86,13 +94,11 @@ async def cmd_start(message: types.Message, state: FSMContext) -> None:
     user = _find_or_link_user(message.from_user)
     if user:
         await message.answer(
-            "Добро пожаловать в экосистему Lumica Services! \n"
-            "Вы можете открыть Mini app по кнопке ниже.\n\n"
-            "Команды:\n"
-            "/subscription - ваша подписка\n"
-            "/ping, /status, /update, /restart, /config (для администраторов)",
-            reply_markup=_webapp_keyboard(),
+            "Здравствуйте! Здесь можно посмотреть подписку, статус инфраструктуры и связаться с поддержкой.",
+            reply_markup=user_menu(),
         )
+        if _has_admin_mini_app_access(user, message.from_user.id):
+            await message.answer("Откройте панель управления.", reply_markup=_webapp_keyboard())
         return
 
     await state.set_state(ApplicationForm.full_name)

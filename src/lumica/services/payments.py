@@ -9,7 +9,8 @@ Subscription.payment_id."""
 
 from __future__ import annotations
 
-from datetime import timedelta
+import calendar
+from datetime import datetime, timedelta
 
 from lumica.domain.models import Group, Payment, Subscription, User
 from lumica.services import groups as groups_service
@@ -20,6 +21,15 @@ DRAFT_STATUSES = {"draft", "inactive"}
 
 class PaymentError(ValueError):
     pass
+
+
+def add_calendar_month(value: datetime, months: int = 1) -> datetime:
+    """Advance by calendar months, clamping to the target month's final day."""
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
 
 
 def _draft_subscriptions_or_error(db, subscription_ids: list[int]) -> list[Subscription]:
@@ -162,6 +172,7 @@ def cancel_payment(db, payment: Payment) -> None:
 
 __all__ = [
     "PaymentError",
+    "add_calendar_month",
     "create_payment",
     "create_group_payment",
     "confirm_payment",

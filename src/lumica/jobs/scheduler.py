@@ -7,7 +7,9 @@ from lumica.infra.bootstrap import _bootstrap_multi_panel_state
 from lumica.infra.bootstrap import bootstrap_runtime
 from lumica.infra.db import SessionLocal
 from lumica.jobs.expire_subscriptions import run_expire_subscriptions
+from lumica.jobs.panel_monitor import run_panel_monitoring
 from lumica.jobs.subscription_reminders import run_subscription_reminders
+from lumica.jobs.payment_due_reminders import run_payment_due_reminders
 from lumica.services.panels import PanelRegistry, sync_all_panels, sync_group_members_from_inbounds
 
 
@@ -23,6 +25,8 @@ def run_scheduler_forever() -> None:
     next_sync = 0.0
     next_expire = 0.0
     next_reminders = 0.0
+    next_payment_reminders = 0.0
+    next_panel_monitor = 0.0
 
     bootstrap_runtime(with_multi_panel_state=True)
 
@@ -53,6 +57,20 @@ def run_scheduler_forever() -> None:
             except Exception:
                 pass
             next_reminders = now + reminders_interval
+
+        if now >= next_payment_reminders:
+            try:
+                run_payment_due_reminders()
+            except Exception:
+                pass
+            next_payment_reminders = now + 30
+
+        if now >= next_panel_monitor:
+            try:
+                run_panel_monitoring(registry)
+            except Exception:
+                pass
+            next_panel_monitor = now + 60
 
         time.sleep(3)
 

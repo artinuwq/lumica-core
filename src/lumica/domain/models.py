@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -134,9 +134,17 @@ class Subscription(Base, TimestampMixin):
     payload = Column(JSON, nullable=True)
     notes = Column(String, nullable=True)
     payment_id = Column(Integer, ForeignKey("payments.id", ondelete="SET NULL"), nullable=True)
+    billing_day = Column(Integer, nullable=True)
+    billing_details = Column(Text, nullable=True)
+    is_frozen = Column(Boolean, nullable=False, default=False, server_default=text("0"))
 
     user = relationship("User", back_populates="subscriptions")
     payment = relationship("Payment", back_populates="subscriptions")
+    vpn_account_links = relationship(
+        "SubscriptionVpnAccount",
+        back_populates="subscription",
+        cascade="all, delete-orphan",
+    )
 
 
 class VpnAccount(Base, TimestampMixin):
@@ -156,6 +164,25 @@ class VpnAccount(Base, TimestampMixin):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     user = relationship("User", back_populates="vpn_accounts")
+    subscription_links = relationship(
+        "SubscriptionVpnAccount",
+        back_populates="vpn_account",
+        cascade="all, delete-orphan",
+    )
+
+
+class SubscriptionVpnAccount(Base, TimestampMixin):
+    __tablename__ = "subscription_vpn_accounts"
+    __table_args__ = (
+        UniqueConstraint("subscription_id", "vpn_account_id", name="uq_subscription_vpn_account"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
+    vpn_account_id = Column(Integer, ForeignKey("vpn_accounts.id", ondelete="CASCADE"), nullable=False)
+
+    subscription = relationship("Subscription", back_populates="vpn_account_links")
+    vpn_account = relationship("VpnAccount", back_populates="subscription_links")
 
 
 class PendingBinding(Base, TimestampMixin):
@@ -493,6 +520,41 @@ class Payment(Base, TimestampMixin):
     group = relationship("Group")
     confirmer = relationship("User", foreign_keys=[confirmed_by])
     subscriptions = relationship("Subscription", back_populates="payment")
+
+
+class PaymentRequest(Base, TimestampMixin):
+    """Monthly payment attempt, independent of the legacy checkout flow."""
+
+    __tablename__ = "payment_requests"
+
+    id = Column(Integer, primary_key=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
+    subscription_ids = Column(JSON, nullable=True)
+    payer_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    amount = Column(Numeric(10, 2), nullable=True)
+    status = Column(String(20), nullable=False, default="pending", server_default=text("'pending'"))
+    receipt_file_id = Column(String(256), nullable=True)
+    operator_chat_id = Column(String(64), nullable=True)
+    operator_message_id = Column(Integer, nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
+    subscription = relationship("Subscription")
+    payer = relationship("User", foreign_keys=[payer_user_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+
+class UserAuditEvent(Base, TimestampMixin):
+    __tablename__ = "user_audit_events"
+
+    id = Column(Integer, primary_key=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    subject_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    action = Column(String(64), nullable=False)
+    changes = Column(JSON, nullable=True)
+
+    actor = relationship("User", foreign_keys=[actor_user_id])
+    subject = relationship("User", foreign_keys=[subject_user_id])
 
 
 class NotificationLog(Base, TimestampMixin):
