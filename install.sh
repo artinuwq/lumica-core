@@ -28,7 +28,7 @@ OWNER_IDS=()
 WEBAPP_URL="${WEBAPP_URL:-}"
 OPERATOR_GROUP_READY=""
 FLASK_HOST="${FLASK_HOST:-}"              # пусто = не менять (по умолчанию 0.0.0.0 только при первой установке)
-FLASK_PORT="${FLASK_PORT:-}"              # пусто = не менять (по умолчанию 8000 только при первой установке)
+FLASK_PORT="${FLASK_PORT:-}"              # пусто = не менять (по умолчанию 5000 только при первой установке)
 NON_INTERACTIVE="0"
 
 # Состояние для отката неудачной первой установки.
@@ -53,7 +53,7 @@ usage() {
   --owner-id ID         Telegram ID владельца; можно несколько раз
   --webapp-url URL      URL Telegram Mini App (WEBAPP_URL)
   --host HOST           адрес веб-сервера (по умолчанию при первой установке: 0.0.0.0)
-    --port PORT           порт веб-сервера (без флага установщик спросит; по умолчанию: 8000)
+    --port PORT           порт веб-сервера (без флага установщик спросит; по умолчанию: 5000)
   --non-interactive     не задавать вопросов, при нехватке данных завершиться с ошибкой
   -h, --help            эта справка
 
@@ -167,7 +167,7 @@ PY
 
 wait_for_service() {  # active 6 секунд подряд и отвечает /health, до ~60 с
     local port stable=0 i
-    port="$(env_get FLASK_PORT)"; port="${port:-8000}"
+    port="$(env_get FLASK_PORT)"; port="${port:-5000}"
     for ((i = 0; i < 60; i++)); do
         if systemctl is-active --quiet "$SERVICE_NAME"; then stable=$((stable + 1)); else stable=0; fi
         if (( stable >= 6 )) && health_ok "$port"; then return 0; fi
@@ -286,7 +286,7 @@ configure_env() {
     [[ "${#OWNER_IDS[@]}" -gt 0 ]] && env_set OWNER_TELEGRAM_IDS "$(join_csv "${OWNER_IDS[@]}")"
     [[ -n "$WEBAPP_URL" ]] && env_set WEBAPP_URL "$WEBAPP_URL"
     if [[ -n "$FLASK_HOST" ]]; then env_set FLASK_HOST "$FLASK_HOST"; else env_default FLASK_HOST 0.0.0.0; fi
-    if [[ -n "$FLASK_PORT" ]]; then env_set FLASK_PORT "$FLASK_PORT"; else env_default FLASK_PORT 8000; fi
+    if [[ -n "$FLASK_PORT" ]]; then env_set FLASK_PORT "$FLASK_PORT"; else env_default FLASK_PORT 5000; fi
     if [[ -n "$BRANCH" ]]; then env_set UPDATE_BRANCH "$BRANCH"; else env_default UPDATE_BRANCH main; fi
     env_set UPDATE_SERVICE_NAME "$SERVICE_NAME"   # должно совпадать с именем unit, который мы только что записали
 
@@ -305,10 +305,10 @@ fresh_install() {
     if [[ -z "$FLASK_PORT" ]]; then
         if [[ "$NON_INTERACTIVE" != "1" ]] && have_tty; then
             local port_reply=""
-            read -r -p "Порт веб-приложения [8000]: " port_reply < /dev/tty || true
-            FLASK_PORT="${port_reply:-8000}"
+            read -r -p "Порт веб-приложения [5000]: " port_reply < /dev/tty || true
+            FLASK_PORT="${port_reply:-5000}"
         else
-            FLASK_PORT=8000
+            FLASK_PORT=5000
         fi
     fi
     validate_port

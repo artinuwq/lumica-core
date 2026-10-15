@@ -9,7 +9,7 @@ from lumica.jobs import run_scheduler_forever
 
 def _run_server(app) -> None:
     host = os.getenv("FLASK_HOST", "0.0.0.0")
-    port = int(os.getenv("FLASK_PORT", "8000"))
+    port = int(os.getenv("FLASK_PORT", "5000"))
     server = os.getenv("WEB_SERVER", "waitress").strip().lower()
 
     if server == "flask":

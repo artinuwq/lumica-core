@@ -113,7 +113,7 @@ def default_health_url() -> str | None:
         return None
     if override:
         return override
-    return f"http://127.0.0.1:{os.getenv('FLASK_PORT', '8000').strip() or '8000'}/health"
+    return f"http://127.0.0.1:{os.getenv('FLASK_PORT', '5000').strip() or '5000'}/health"
 
 
 __all__ = ["ServiceController", "default_health_url"]
