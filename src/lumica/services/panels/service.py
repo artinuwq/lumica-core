@@ -4,6 +4,8 @@ import json
 from datetime import datetime, timezone
 
 from lumica.domain.models import InboundGroup, InboundGroupMember, Panel, PanelInbound
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from .registry import PanelRegistry
 from .xui_provider import _extract_clients_from_settings
 
@@ -48,9 +50,32 @@ def ensure_default_groups(db) -> dict[str, InboundGroup]:
     for key, title in expected.items():
         row = db.query(InboundGroup).filter(InboundGroup.key == key).first()
         if not row:
-            row = InboundGroup(key=key, title=title, visible=1, sort=100 if key == "vless" else 200)
-            db.add(row)
-            db.flush()
+            values = {"key": key, "title": title, "visible": 1, "sort": 100 if key == "vless" else 200}
+            dialect = db.get_bind().dialect.name
+            if dialect == "sqlite":
+                db.execute(
+                    sqlite_insert(InboundGroup)
+                    .values(**values)
+                    .on_conflict_do_nothing(index_elements=[InboundGroup.key])
+                )
+            elif dialect == "postgresql":
+                db.execute(
+                    postgresql_insert(InboundGroup)
+                    .values(**values)
+                    .on_conflict_do_nothing(index_elements=[InboundGroup.key])
+                )
+            else:
+                from sqlalchemy.exc import IntegrityError
+
+                try:
+                    with db.begin_nested():
+                        db.add(InboundGroup(**values))
+                        db.flush()
+                except IntegrityError:
+                    db.expire_all()
+            row = db.query(InboundGroup).filter(InboundGroup.key == key).first()
+            if not row:
+                raise RuntimeError(f"Unable to initialize inbound group {key}")
         out[key] = row
     return out
 

@@ -1,8 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from lumica.domain.models import Base, Subscription, SubscriptionVpnAccount, User
+from lumica.domain.models import Base, InboundGroup, Subscription, SubscriptionVpnAccount, User
 from lumica.services.groups import add_member, create_group, remove_member, set_admin
+from lumica.services.panels.service import ensure_default_groups
 from lumica.services.user_provisioning import create_preprovisioned_user
 
 
@@ -39,3 +40,16 @@ def test_subscription_vpn_account_link_is_persisted():
 
     assert link.subscription_id == subscription.id
     assert link.vpn_account_id == 15
+
+
+def test_default_inbound_groups_are_idempotent():
+    db = _session()
+
+    first = ensure_default_groups(db)
+    db.commit()
+    second = ensure_default_groups(db)
+    db.commit()
+
+    assert first["vless"].id == second["vless"].id
+    assert first["socks5"].id == second["socks5"].id
+    assert db.query(InboundGroup).count() == 2

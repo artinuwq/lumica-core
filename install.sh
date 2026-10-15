@@ -328,8 +328,8 @@ fresh_install() {
         local group_reply=""
         read -r -p "Операторская Telegram-группа уже создана как супергруппа-форум? [y/N]: " group_reply < /dev/tty || true
         case "${group_reply,,}" in
-            y|yes|да) OPERATOR_GROUP_READY="yes" ;;
-            n|no|нет|"") OPERATOR_GROUP_READY="no" ;;
+            y|yes|у|да) OPERATOR_GROUP_READY="yes" ;;
+            n|no|н|нет|"") OPERATOR_GROUP_READY="no" ;;
             *) warn "Ответ не распознан; после установки проверьте настройку operator-группы вручную" ;;
         esac
     fi
