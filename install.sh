@@ -53,7 +53,7 @@ usage() {
   --owner-id ID         Telegram ID владельца; можно несколько раз
   --webapp-url URL      URL Telegram Mini App (WEBAPP_URL)
   --host HOST           адрес веб-сервера (по умолчанию при первой установке: 0.0.0.0)
-  --port PORT           порт веб-сервера (по умолчанию при первой установке: 8000)
+    --port PORT           порт веб-сервера (без флага установщик спросит; по умолчанию: 8000)
   --non-interactive     не задавать вопросов, при нехватке данных завершиться с ошибкой
   -h, --help            эта справка
 
@@ -138,6 +138,13 @@ PY
 env_default() { env_has "$1" || env_set "$1" "$2"; }   # только если ключа ещё нет
 random_secret() { python3 -c 'import secrets; print(secrets.token_hex(32))'; }
 join_csv() { local IFS=','; echo "$*"; }
+
+validate_port() {
+    [[ "$FLASK_PORT" =~ ^[0-9]{1,5}$ ]] || fail "порт должен быть числом от 1 до 65535"
+    local port_number=$((10#$FLASK_PORT))
+    (( port_number >= 1 && port_number <= 65535 )) || fail "порт должен быть в диапазоне 1–65535"
+    FLASK_PORT="$port_number"
+}
 
 ask() {  # ask VAR "вопрос" - спросить через /dev/tty, если значение не задано
     local var="$1" question="$2" answer
@@ -295,6 +302,16 @@ fresh_install() {
 
     # Данные для .env нужны до любых изменений в системе.
     ask TOKEN "Токен Telegram-бота (TELEGRAM_BOT_TOKEN):"
+    if [[ -z "$FLASK_PORT" ]]; then
+        if [[ "$NON_INTERACTIVE" != "1" ]] && have_tty; then
+            local port_reply=""
+            read -r -p "Порт веб-приложения [8000]: " port_reply < /dev/tty || true
+            FLASK_PORT="${port_reply:-8000}"
+        else
+            FLASK_PORT=8000
+        fi
+    fi
+    validate_port
     if [[ ! "$TOKEN" =~ ^[0-9]{5,}:[A-Za-z0-9_-]{20,}$ ]]; then
         fail "токен не похож на токен Telegram-бота (ожидается вид 123456789:AAE...)"
     fi
@@ -409,6 +426,10 @@ main() {
             *) echo "Неизвестный аргумент: $1" >&2; usage >&2; exit 1 ;;
         esac
     done
+
+    if [[ -n "$FLASK_PORT" ]]; then
+        validate_port
+    fi
 
     LOG_FILE="$(mktemp /tmp/lumica-install.XXXXXX.log)"
     chmod 600 "$LOG_FILE"
