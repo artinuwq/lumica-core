@@ -184,14 +184,47 @@ class XuiProvider(PanelProvider):
         return [self._normalize_panel_client(item) for item in rows if item.get("email")]
 
     def get_panel_client(self, panel: Panel, auth: dict, email: str) -> dict | None:
-        payload = self._client(panel, auth).clients_get(email)
-        obj = self._unwrap_clients_payload(payload)
-        # 3x-ui clients/get/{email} returns obj as a list with one client object.
-        if isinstance(obj, list):
-            obj = obj[0] if obj else None
-        if not isinstance(obj, dict) or not obj.get("email"):
-            return None
-        return self._normalize_panel_client(obj)
+        wanted = str(email or "").strip()
+        found: dict | None = None
+        get_error: Exception | None = None
+        try:
+            payload = self._client(panel, auth).clients_get(wanted)
+            obj = self._unwrap_clients_payload(payload)
+            # 3x-ui clients/get/{email} returns obj as a list with one client object.
+            if isinstance(obj, list):
+                obj = obj[0] if obj else None
+            # Some 3x-ui versions wrap the client: {"client": {...}}.
+            if isinstance(obj, dict) and not obj.get("email") and isinstance(obj.get("client"), dict):
+                obj = obj["client"]
+            if isinstance(obj, dict) and obj.get("email"):
+                found = self._normalize_panel_client(obj)
+        except Exception as exc:  # fall back to the list endpoint below
+            get_error = exc
+
+        # clients/get может не находить клиента (другой регистр/формат email,
+        # отличия версий 3x-ui), хотя clients/list его возвращает - именно из
+        # списка пользователь выбирает клиента. Ищем в списке без учёта регистра
+        # и дополняем inbound_ids, если get их не вернул.
+        if found is None or not found.get("inbound_ids"):
+            try:
+                rows = self.list_panel_clients(panel, auth)
+            except Exception:
+                if found is not None:
+                    return found
+                if get_error is not None:
+                    raise get_error
+                return None
+            for row in rows:
+                if str(row.get("email") or "").strip().lower() == wanted.lower():
+                    if found is None:
+                        return row
+                    found["inbound_ids"] = row.get("inbound_ids") or []
+                    if not found.get("sub_id"):
+                        found["sub_id"] = row.get("sub_id")
+                    return found
+            if found is None and get_error is not None:
+                raise get_error
+        return found
 
     def get_panel_client_links(self, panel: Panel, auth: dict, email: str) -> list[str]:
         payload = self._client(panel, auth).clients_links(email)
