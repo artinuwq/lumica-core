@@ -441,12 +441,7 @@
                                 </select>
                                 <input id="work-panel-base-url" type="url" placeholder="https://host:port/panel/api">
                                 <input id="work-panel-region" type="text" maxlength="2" placeholder="Локация (de)">
-                                <input id="work-panel-token" type="password" autocomplete="new-password" placeholder="API-токен (или login/password)">
-                                <select id="work-panel-token-header">
-                                    <option value="Authorization">Authorization</option>
-                                    <option value="X-API-Key">X-API-Key</option>
-                                </select>
-                                <input id="work-panel-token-prefix" type="text" value="Bearer" placeholder="Префикс (например Bearer)">
+                                <input id="work-panel-token" type="password" autocomplete="new-password" placeholder="API-токен 3x-ui (только сам токен, без слова Bearer)">
                                 <input id="work-panel-username" type="text" placeholder="login (если без API-токена)">
                                 <input id="work-panel-password" type="password" placeholder="password (если без API-токена)">
                                 <div class="work-bind-actions">
@@ -482,11 +477,6 @@
                             <div id="work-panel-detail-access-wrap" class="work-bind hidden">
                                 <input id="work-panel-detail-base-url" type="url" placeholder="https://host:port/panel/api">
                                 <input id="work-panel-detail-token" type="password" autocomplete="new-password" placeholder="Новый API-токен (не показываем сохранённый)">
-                                <select id="work-panel-detail-token-header">
-                                    <option value="Authorization">Authorization</option>
-                                    <option value="X-API-Key">X-API-Key</option>
-                                </select>
-                                <input id="work-panel-detail-token-prefix" type="text" value="Bearer" placeholder="Префикс (например Bearer)">
                                 <input id="work-panel-detail-username" type="text" placeholder="login (если меняется доступ)">
                                 <input id="work-panel-detail-password" type="password" placeholder="password (если меняется доступ)">
                                 <div class="work-bind-actions">

@@ -137,8 +137,6 @@ const statusCard = document.getElementById("status-card");
         const workPanelUsernameEl = document.getElementById("work-panel-username");
         const workPanelPasswordEl = document.getElementById("work-panel-password");
         const workPanelTokenEl = document.getElementById("work-panel-token");
-        const workPanelTokenHeaderEl = document.getElementById("work-panel-token-header");
-        const workPanelTokenPrefixEl = document.getElementById("work-panel-token-prefix");
         const workPanelTestBtnEl = document.getElementById("work-panel-test-btn");
         const workPanelSaveBtnEl = document.getElementById("work-panel-save-btn");
         const workPanelStatusEl = document.getElementById("work-panel-status");
@@ -155,8 +153,6 @@ const statusCard = document.getElementById("status-card");
         const workPanelDetailUsernameEl = document.getElementById("work-panel-detail-username");
         const workPanelDetailPasswordEl = document.getElementById("work-panel-detail-password");
         const workPanelDetailTokenEl = document.getElementById("work-panel-detail-token");
-        const workPanelDetailTokenHeaderEl = document.getElementById("work-panel-detail-token-header");
-        const workPanelDetailTokenPrefixEl = document.getElementById("work-panel-detail-token-prefix");
         const workPanelDetailTestBtnEl = document.getElementById("work-panel-detail-test-btn");
         const workPanelDetailSaveBtnEl = document.getElementById("work-panel-detail-save-btn");
         const workPanelDetailDeleteBtnEl = document.getElementById("work-panel-detail-delete-btn");
@@ -4229,7 +4225,7 @@ const statusCard = document.getElementById("status-card");
         }
 
         function collectWorkPanelPayload() {
-            const token = String(workPanelTokenEl?.value || "").trim();
+            const token = String(workPanelTokenEl?.value || "").trim().replace(/^bearer\s+/i, "");
             return {
                 name: String(workPanelNameEl?.value || "").trim(),
                 provider: String(workPanelProviderEl?.value || "3xui").trim(),
@@ -4237,28 +4233,19 @@ const statusCard = document.getElementById("status-card");
                 region: String(workPanelRegionEl?.value || "").trim() || null,
                 auth_type: token ? "api_token" : "login_password",
                 token,
-                token_header: String(workPanelTokenHeaderEl?.value || "Authorization").trim(),
-                token_prefix: String(workPanelTokenPrefixEl?.value || "").trim(),
+                token_header: "Authorization",
+                token_prefix: "Bearer",
                 username: String(workPanelUsernameEl?.value || "").trim(),
                 password: String(workPanelPasswordEl?.value || "").trim(),
             };
         }
 
-        function syncPanelTokenPrefix(headerEl, prefixEl) {
-            if (!headerEl || !prefixEl) return;
-            if (headerEl.value === "X-API-Key" && prefixEl.value.trim() === "Bearer") {
-                prefixEl.value = "";
-            } else if (headerEl.value === "Authorization" && !prefixEl.value.trim()) {
-                prefixEl.value = "Bearer";
-            }
-        }
-
         function collectWorkPanelDetailAccessPayload() {
             return {
                 base_url: String(workPanelDetailBaseUrlEl?.value || "").trim(),
-                token: String(workPanelDetailTokenEl?.value || "").trim(),
-                token_header: String(workPanelDetailTokenHeaderEl?.value || "Authorization").trim(),
-                token_prefix: String(workPanelDetailTokenPrefixEl?.value || "").trim(),
+                token: String(workPanelDetailTokenEl?.value || "").trim().replace(/^bearer\s+/i, ""),
+                token_header: "Authorization",
+                token_prefix: "Bearer",
                 username: String(workPanelDetailUsernameEl?.value || "").trim(),
                 password: String(workPanelDetailPasswordEl?.value || "").trim(),
             };
@@ -5736,13 +5723,6 @@ const statusCard = document.getElementById("status-card");
                 console.error("save system settings error:", err);
                 setWorkSettingsStatus(err?.message || "Не удалось сохранить настройки", "error");
             }
-        });
-
-        workPanelTokenHeaderEl?.addEventListener("change", () => {
-            syncPanelTokenPrefix(workPanelTokenHeaderEl, workPanelTokenPrefixEl);
-        });
-        workPanelDetailTokenHeaderEl?.addEventListener("change", () => {
-            syncPanelTokenPrefix(workPanelDetailTokenHeaderEl, workPanelDetailTokenPrefixEl);
         });
 
         workPanelTestBtnEl?.addEventListener("click", async () => {
