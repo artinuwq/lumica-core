@@ -34,7 +34,12 @@ def test_admin_users_lists_only_users_added_with_subscription():
 
     assert response.status_code == 200
     users = response.get_json()["users"]
-    assert {u["name"] for u in users} == {"Subscribed", "Member", "Empty seat"}
+    assert {u["name"] for u in users} == {
+        "Just opened the bot",
+        "Subscribed",
+        "Member",
+        "Empty seat",
+    }
     by_name = {u["name"]: u for u in users}
     assert by_name["Subscribed"]["subscription_type"] == "personal"
     assert by_name["Subscribed"]["subscription_status"] == "active"

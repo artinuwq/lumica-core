@@ -528,12 +528,20 @@ def register_admin_routes(app, deps):
             ):
                 latest_subscription[sub.user_id] = sub
 
-            users: list[dict] = []
+                opened_launch_ids = {
+                    row.user_id
+                    for row in db.query(MiniAppLaunch.user_id)
+                    .filter(MiniAppLaunch.status == "opened")
+                    .distinct()
+                    .all()
+                }
+                users: list[dict] = []
             for u in db.query(User).order_by(User.id.asc()).all():
                 profile = u.profile_data if isinstance(u.profile_data, dict) else {}
                 subscription_type = profile.get("subscription_type")
                 sub = latest_subscription.get(u.id)
-                if sub is None and not subscription_type:
+                opened_launch = u.id in opened_launch_ids
+                if sub is None and not subscription_type and not opened_launch:
                     continue
                 users.append(
                     {
@@ -1367,6 +1375,17 @@ def register_admin_routes(app, deps):
                 return jsonify({"ok": False, "error": str(exc)}), 502
             if not client or not client.get("email"):
                 return jsonify({"ok": False, "error": "Client not found in panel"}), 404
+
+            occupied = (
+                db.query(VpnAccount)
+                .filter(VpnAccount.identifier == email)
+                .filter(VpnAccount.user_id != user.id)
+                .first()
+            )
+            if occupied is not None:
+                return jsonify(
+                    {"ok": False, "error": "Client already bound to another user"}
+                ), 409
 
             warning = None
             if set_tg_id and user.telegram_id:
