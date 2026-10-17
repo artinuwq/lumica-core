@@ -77,5 +77,15 @@ def test_api_token_works_against_secret_base_path(panel_url):
 
 def test_rejected_api_token_gives_actionable_error(panel_url):
     client = XUIClient(base_url=panel_url, token="wrong-token")
-    with pytest.raises(RuntimeError, match="API-токен не принят"):
+    with pytest.raises(RuntimeError, match="API-токен не принят") as err:
+        client.get_inbounds()
+    # в ошибке видно, что именно ушло в панель, но сам токен не раскрывается
+    assert "заголовок Authorization" in str(err.value)
+    assert "токен 11 симв., оканчивается на ...ken" in str(err.value)
+    assert "wrong-token" not in str(err.value)
+
+
+def test_wrong_header_name_is_visible_in_error(panel_url):
+    client = XUIClient(base_url=panel_url, token="good-token", token_header="X-API-Key")
+    with pytest.raises(RuntimeError, match="заголовок X-API-Key"):
         client.get_inbounds()

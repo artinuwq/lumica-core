@@ -22,6 +22,8 @@ class XUIClient:
         self.password = password or os.getenv("PANEL_PASS")
         self.session = requests.Session()
         self._active_prefix: str = ""
+        self._token_header = ""
+        self._token_prefix = ""
         self.token = str(token or "").strip()
         if self.token:
             if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", token_header):
@@ -30,6 +32,8 @@ class XUIClient:
                 raise ValueError("invalid API token prefix")
             value = f"{token_prefix.strip()} {self.token}".strip()
             self.session.headers[token_header] = value
+            self._token_header = token_header
+            self._token_prefix = token_prefix.strip()
 
     def _url_parts(self) -> tuple[str, str]:
         base = self.base_url.rstrip("/")
@@ -153,10 +157,16 @@ class XUIClient:
         if not any(code in (401, 403, 404) for code in statuses):
             return ""
         if self.token:
+            sent = (
+                f"Отправлено: заголовок {self._token_header or 'Authorization'}, "
+                f"префикс {self._token_prefix!r}, токен {len(self.token)} симв., "
+                f"оканчивается на ...{self.token[-3:]}. "
+            )
             return (
                 "3X-UI отвечает 404 на запросы без авторизации - API-токен не принят. "
-                "Проверь: вставлен исходный токен (он показывается один раз при создании, "
-                "в списке токенов панели виден только хэш), токен включён, не истёк и имеет scope admin."
+                + sent
+                + "Сверь длину и конец токена с настоящим, заголовок должен быть Authorization "
+                "и префикс Bearer. Если совпадает - токен выключен, истёк или имеет scope не admin."
             )
         return (
             "3X-UI отвечает 404 на запросы без авторизации - сессия не получена. "
