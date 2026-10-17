@@ -147,9 +147,26 @@ class XUIClient:
                 return
         raise RuntimeError(f"3X-UI login failed for all base paths. Last error: {last_error}")
 
+    def _auth_failure_hint(self, statuses: list[int | None]) -> str:
+        # 3x-ui отвечает 404 (а не 401) на любой API-запрос без валидной авторизации,
+        # поэтому "всё 404" почти всегда означает "панель не приняла наши креды".
+        if not any(code in (401, 403, 404) for code in statuses):
+            return ""
+        if self.token:
+            return (
+                "3X-UI отвечает 404 на запросы без авторизации - API-токен не принят. "
+                "Проверь: вставлен исходный токен (он показывается один раз при создании, "
+                "в списке токенов панели виден только хэш), токен включён, не истёк и имеет scope admin."
+            )
+        return (
+            "3X-UI отвечает 404 на запросы без авторизации - сессия не получена. "
+            "Проверь логин/пароль панели и адрес с секретным путём (webBasePath)."
+        )
+
     def get_inbounds(self) -> list[dict[str, Any]]:
         self.login()
         errors: list[str] = []
+        statuses: list[int | None] = []
         prefix_candidates = [self._active_prefix] + [p for p in self._candidate_prefixes() if p != self._active_prefix]
         for prefix in prefix_candidates:
             candidate_urls = [
@@ -174,8 +191,13 @@ class XUIClient:
                         return items
                 except requests.RequestException as exc:
                     errors.append(f"{url}: {exc}")
+                    statuses.append(getattr(getattr(exc, "response", None), "status_code", None))
                     continue
-        raise RuntimeError(f"Failed to load inbounds: {' | '.join(errors)}")
+        hint = self._auth_failure_hint(statuses)
+        details = " | ".join(errors)
+        if len(details) > 800:
+            details = details[:800] + "..."
+        raise RuntimeError(f"Failed to load inbounds. {hint} Details: {details}".replace(".  ", ". "))
 
     def _get_first_json(self, suffixes: list[str]) -> Any:
         self.login()

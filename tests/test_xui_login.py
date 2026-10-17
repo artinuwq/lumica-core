@@ -41,7 +41,8 @@ class FakePanel(BaseHTTPRequestHandler):
         return self._send(404, "not found", "text/plain")
 
     def do_GET(self):
-        if self.path == f"/{SECRET}/panel/api/inbounds/list" and "session=abc" in (self.headers.get("Cookie") or ""):
+        authorized = "session=abc" in (self.headers.get("Cookie") or "") or self.headers.get("Authorization") == "Bearer good-token"
+        if self.path == f"/{SECRET}/panel/api/inbounds/list" and authorized:
             return self._send(200, json.dumps({"success": True, "obj": [{"id": 1, "remark": "main"}]}))
         return self._send(404, "not found", "text/plain")
 
@@ -66,4 +67,15 @@ def test_login_skips_bogus_root_2xx_and_uses_real_login(panel_url):
 def test_login_reports_panel_rejection_instead_of_404_noise(panel_url):
     client = XUIClient(base_url=panel_url, username="admin", password="bad")
     with pytest.raises(RuntimeError, match="wrong username or password"):
+        client.get_inbounds()
+
+
+def test_api_token_works_against_secret_base_path(panel_url):
+    client = XUIClient(base_url=panel_url, token="good-token")
+    assert client.get_inbounds() == [{"id": 1, "remark": "main"}]
+
+
+def test_rejected_api_token_gives_actionable_error(panel_url):
+    client = XUIClient(base_url=panel_url, token="wrong-token")
+    with pytest.raises(RuntimeError, match="API-токен не принят"):
         client.get_inbounds()
