@@ -3580,6 +3580,7 @@ const statusCard = document.getElementById("status-card");
                 label: binding.label,
                 secret: binding.secret,
                 sub_id: binding.sub_id,
+                inbound_ids: Array.isArray(binding.inbound_ids) ? binding.inbound_ids : [],
             };
         }
 

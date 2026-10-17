@@ -186,6 +186,9 @@ class XuiProvider(PanelProvider):
     def get_panel_client(self, panel: Panel, auth: dict, email: str) -> dict | None:
         payload = self._client(panel, auth).clients_get(email)
         obj = self._unwrap_clients_payload(payload)
+        # 3x-ui clients/get/{email} returns obj as a list with one client object.
+        if isinstance(obj, list):
+            obj = obj[0] if obj else None
         if not isinstance(obj, dict) or not obj.get("email"):
             return None
         return self._normalize_panel_client(obj)

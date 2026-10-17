@@ -1374,7 +1374,53 @@ def register_admin_routes(app, deps):
             except Exception as exc:
                 return jsonify({"ok": False, "error": str(exc)}), 502
             if not client or not client.get("email"):
-                return jsonify({"ok": False, "error": "Client not found in panel"}), 404
+                # Клиент не найден через get API. Пытаемся создать его в панели,
+                # используя inbound_ids/sub_id из тела запроса или из списка
+                # клиентов панели (если клиент уже существует, но get API его не вернул).
+                inbound_ids = body.get("inbound_ids") or []
+                if isinstance(inbound_ids, str):
+                    try:
+                        inbound_ids = [int(x.strip()) for x in inbound_ids.split(",") if x.strip()]
+                    except (TypeError, ValueError):
+                        inbound_ids = []
+                inbound_ids = [int(i) for i in inbound_ids if str(i).strip().isdigit()]
+                sub_id = body.get("sub_id") or None
+
+                if not inbound_ids:
+                    try:
+                        panel_clients = provider.list_panel_clients(panel, auth_payload)
+                        for pc in panel_clients:
+                            if str(pc.get("email") or "").strip().lower() == email.lower():
+                                inbound_ids = pc.get("inbound_ids") or []
+                                sub_id = pc.get("sub_id") or sub_id
+                                break
+                    except Exception:
+                        pass
+
+                if not inbound_ids:
+                    return jsonify({"ok": False, "error": "Client not found in panel"}), 404
+
+                client_payload = {
+                    "email": email,
+                    "subId": sub_id,
+                    "enable": True,
+                    "limitIp": 0,
+                    "totalGB": 0,
+                    "expiryTime": 0,
+                    "tgId": 0,
+                    "reset": 0,
+                    "comment": email,
+                }
+                try:
+                    provider.create_panel_client(panel, auth_payload, client_payload, inbound_ids)
+                except Exception as exc:
+                    return jsonify(
+                        {"ok": False, "error": f"Failed to create client in panel: {exc}"}
+                    ), 502
+
+                client = provider.get_panel_client(panel, auth_payload, email)
+                if not client or not client.get("email"):
+                    return jsonify({"ok": False, "error": "Client not found in panel"}), 404
 
             occupied = (
                 db.query(VpnAccount)
