@@ -378,6 +378,132 @@ def build_vpn_helpers(deps):
         account.status = "active"
         return account
 
+    def _protocol_for_inbound_ids(db, panel, inbound_ids) -> str:
+        """Определяет protocol аккаунта по инбаундам клиента панели.
+
+        Клиент Clients API живёт на нескольких инбаундах; для нашей модели
+        VpnAccount берём 'vless', если хоть один инбаунд vless, иначе 'mixed'.
+        """
+        ids = [str(i) for i in (inbound_ids or [])]
+        if not ids:
+            return "vless"
+        rows = (
+            db.query(PanelInbound)
+            .filter(
+                PanelInbound.panel_id == panel.id,
+                PanelInbound.external_inbound_id.in_(ids),
+            )
+            .all()
+        )
+        protocols = {(r.protocol or "").strip().lower() for r in rows}
+        if "vless" in protocols:
+            return "vless"
+        if protocols & {"mixed", "http", "socks", "socks5"}:
+            return "mixed"
+        return "vless"
+
+    def _representative_inbound_ref(db, panel, inbound_ids) -> int | None:
+        """Представительский PanelInbound.id для клиента панели.
+
+        Clients API хранит клиента отдельно от инбаундов, а наша модель
+        VpnAccount и существующие роуты (/api/vpn/config, freeze, extend)
+        резолвятся через panel_inbound_ref_id. Поэтому берём первый живой
+        inbound клиента как якорь; полный набор остаётся в meta.inbound_ids.
+        """
+        ids = [str(i) for i in (inbound_ids or [])]
+        if not ids:
+            return None
+        rows = (
+            db.query(PanelInbound)
+            .filter(
+                PanelInbound.panel_id == panel.id,
+                PanelInbound.external_inbound_id.in_(ids),
+            )
+            .all()
+        )
+        if not rows:
+            return None
+        for row in rows:
+            if (row.protocol or "").strip().lower() == "vless" and row.port:
+                return row.id
+        for row in rows:
+            if row.port:
+                return row.id
+        return rows[0].id
+
+    def _upsert_panel_client_account(db, *, user_id, panel, client: dict) -> VpnAccount:
+        """Создаёт/обновляет VpnAccount для клиента панели (Clients API).
+
+        Один клиент панели = одна запись VpnAccount на пользователя.
+        identifier = email клиента (его «id на сервере»), в meta — panel_id,
+        sub_id и полный inbound_ids; panel_inbound_ref_id — представительский
+        inbound-якорь для существующих роутов.
+        """
+        email = str(client.get("email") or "").strip()
+        if not email:
+            raise ValueError("client email is required")
+        inbound_ids = client.get("inbound_ids") or []
+        sub_id = client.get("sub_id")
+        protocol = _normalize_account_protocol(_protocol_for_inbound_ids(db, panel, inbound_ids))
+        anchor_ref = _representative_inbound_ref(db, panel, inbound_ids)
+
+        account = (
+            db.query(VpnAccount)
+            .filter(
+                VpnAccount.user_id == int(user_id),
+                VpnAccount.protocol == protocol,
+                VpnAccount.identifier == email,
+            )
+            .order_by(VpnAccount.id.desc())
+            .first()
+        )
+        if not account:
+            account = VpnAccount(user_id=int(user_id), protocol=protocol)
+            db.add(account)
+
+        meta = account.meta_json if isinstance(account.meta_json, dict) else {}
+        meta["panel_id"] = panel.id
+        meta["inbound_ids"] = [int(i) for i in inbound_ids]
+        if sub_id:
+            meta["sub_id"] = str(sub_id)
+
+        account.panel_inbound_ref_id = anchor_ref
+        if anchor_ref is not None:
+            anchor = db.query(PanelInbound).filter(PanelInbound.id == anchor_ref).first()
+            try:
+                account.panel_inbound_id = int(anchor.external_inbound_id) if anchor else None
+            except (TypeError, ValueError):
+                account.panel_inbound_id = None
+        else:
+            account.panel_inbound_id = None
+
+        account.identifier = email
+        account.label = client.get("comment") or email
+        account.secret = None
+        account.meta_json = meta
+        account.status = "active"
+        return account
+
+    def _serialize_panel_client_account(db, account: VpnAccount) -> dict:
+        meta = account.meta_json if isinstance(account.meta_json, dict) else {}
+        panel = None
+        if meta.get("panel_id"):
+            panel = db.query(Panel).filter(Panel.id == meta.get("panel_id")).first()
+        return {
+            "id": account.id,
+            "user_id": account.user_id,
+            "protocol": account.protocol,
+            "identifier": account.identifier,
+            "label": account.label,
+            "status": account.status,
+            "panel_id": meta.get("panel_id"),
+            "panel_name": panel.name if panel else None,
+            "sub_id": meta.get("sub_id"),
+            "inbound_ids": meta.get("inbound_ids") or [],
+            "is_panel_client": True,
+            "updated_at": account.updated_at.isoformat() if account.updated_at else None,
+        }
+
     def _serialize_pending_binding(db, row: PendingBinding) -> dict:
         panel_inbound, panel = _panel_by_inbound_ref(db, row.panel_inbound_ref_id) if row.panel_inbound_ref_id else (None, None)
         panel_inbound_id_value = None
@@ -642,6 +768,10 @@ def build_vpn_helpers(deps):
         "_build_subscription_urls": _build_subscription_urls,
         "_normalize_account_protocol": _normalize_account_protocol,
         "_upsert_vpn_account": _upsert_vpn_account,
+        "_protocol_for_inbound_ids": _protocol_for_inbound_ids,
+        "_representative_inbound_ref": _representative_inbound_ref,
+        "_upsert_panel_client_account": _upsert_panel_client_account,
+        "_serialize_panel_client_account": _serialize_panel_client_account,
         "_serialize_pending_binding": _serialize_pending_binding,
         "_apply_pending_bindings_for_user": _apply_pending_bindings_for_user,
         "_normalize_selection_strategy": _normalize_selection_strategy,

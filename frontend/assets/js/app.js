@@ -47,6 +47,8 @@ const statusCard = document.getElementById("status-card");
         const adminSyncInboundsUrl = `${window.location.origin}/api/admin/sync-inbounds`;
         const adminBindClientUrl = `${window.location.origin}/api/admin/bind-client`;
         const adminUnbindClientUrl = `${window.location.origin}/api/admin/unbind-client`;
+        const adminPanelClientsUrl = `${window.location.origin}/api/admin/panel-clients`;
+        const adminUserPanelClientUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/panel-client`;
         const adminInboundVisibilityUrl = (panelInboundId) => `${window.location.origin}/api/admin/inbounds/${panelInboundId}/visibility`;
         const adminInboundClientsUrl = (panelInboundId) => `${window.location.origin}/api/admin/inbounds/${panelInboundId}/clients`;
         const adminUserBindingsUrl = (userId) => `${window.location.origin}/api/admin/users/${userId}/bindings`;
@@ -3525,46 +3527,47 @@ const statusCard = document.getElementById("status-card");
             const server = servers.find((item) => item.id === serverKey);
             if (!server) return null;
 
-            const loaded = await Promise.all(server.inbounds.map(async (inbound) => {
-                try {
-                    const resp = await fetchJson(adminInboundClientsUrl(inbound.panel_inbound_ref_id), false);
-                    return { inbound, clients: Array.isArray(resp?.clients) ? resp.clients : [] };
-                } catch (err) {
-                    console.error("load inbound clients error:", err);
-                    return { inbound, clients: [] };
-                }
-            }));
-            const rows = [];
-            loaded.forEach(({ inbound, clients }) => {
-                clients.forEach((client) => rows.push({ inbound, client }));
-            });
+            // Единый список клиентов панели одним запросом (Clients API)
+            // вместо отдельного запроса на каждый inbound.
+            let resp;
+            try {
+                resp = await fetchJson(adminPanelClientsUrl, false);
+            } catch (err) {
+                console.error("load panel clients error:", err);
+                throw new Error("Не удалось загрузить клиентов панели. Проверь, что панель поддерживает Clients API и доступна.");
+            }
+            const allClients = Array.isArray(resp?.clients) ? resp.clients : [];
+            const panelIds = new Set(server.inbounds.map((inbound) => String(inbound.panel_id ?? "")));
+            const rows = allClients.filter((client) => panelIds.has(String(client?.panel_id ?? "")));
             if (!rows.length) {
-                throw new Error(`На сервере «${server.name}» нет пользователей. Попробуй «Обновить список с серверов».`);
+                throw new Error(`На сервере «${server.name}» нет клиентов. Попробуй «Обновить список с серверов».`);
             }
             const pickedIdx = await openUiSheet({
-                title: `Пользователь на «${server.name}»`,
+                title: `Клиент на «${server.name}»`,
                 searchable: true,
-                items: rows.map((row, idx) => ({
+                items: rows.map((client, idx) => ({
                     value: String(idx),
-                    label: row.client.label || row.client.identifier || "Клиент",
+                    label: client.email || client.comment || "Клиент",
                     meta: [
-                        row.inbound.remark || `inbound ${row.inbound.panel_inbound_id ?? ""}`.trim(),
-                        String(row.inbound.protocol || row.client.protocol || "").toUpperCase(),
+                        client.panel_name || "",
+                        client.bound ? "привязан" : `inboundIds: ${(client.inbound_ids || []).length}`,
                     ],
                 })),
             });
             if (pickedIdx === null) return null;
-            const row = rows[Number(pickedIdx)];
-            if (!row) return null;
+            const client = rows[Number(pickedIdx)];
+            if (!client) return null;
+            const firstInboundId = (client.inbound_ids || [])[0];
+            const inbound = server.inbounds.find((item) => String(item.panel_inbound_id) === String(firstInboundId)) || server.inbounds[0];
             return {
-                panel_inbound_ref_id: Number(row.inbound.panel_inbound_ref_id),
-                client_identifier: row.client.identifier,
-                protocol: String(row.inbound.protocol || row.client.protocol || "").toLowerCase(),
-                label: row.client.label || null,
-                secret: row.client.secret ?? null,
-                sub_id: row.client.sub_id ?? null,
+                panel_id: client.panel_id,
+                email: client.email,
+                client_identifier: client.email,
+                protocol: String(inbound?.protocol || "vless").toLowerCase(),
+                label: client.comment || client.email,
+                sub_id: client.sub_id ?? null,
                 server_name: server.name,
-                inbound_name: row.inbound.remark || "",
+                inbound_name: inbound?.remark || "",
             };
         }
 
@@ -3580,13 +3583,26 @@ const statusCard = document.getElementById("status-card");
             };
         }
 
+        /** Привязка binding к пользователю: Clients API-путь (/panel-client),
+         * если выбран клиент панели (известен panel_id), иначе — старый
+         * per-inbound путь (/bind-client). */
+        async function postBinding(userId, binding) {
+            if (binding && binding.panel_id) {
+                return postJson(adminUserPanelClientUrl(userId), {
+                    panel_id: binding.panel_id,
+                    email: binding.client_identifier,
+                });
+            }
+            return postJson(adminBindClientUrl, bindingRequestBody(userId, binding));
+        }
+
         async function addStagedBinding(bindings, listEl, statusEl) {
             try {
                 const picked = await pickServerBinding();
                 if (!picked) return;
                 const duplicate = bindings.some((item) =>
-                    item.panel_inbound_ref_id === picked.panel_inbound_ref_id
-                    && item.client_identifier === picked.client_identifier
+                    item.client_identifier === picked.client_identifier
+                    && String(item.panel_id ?? "") === String(picked.panel_id ?? "")
                 );
                 if (duplicate) {
                     setFormNote(statusEl, "Это подключение уже добавлено", "error");
@@ -3651,7 +3667,7 @@ const statusCard = document.getElementById("status-card");
                 userId = result?.user?.id;
             }
             for (const binding of member.bindings) {
-                await postJson(adminBindClientUrl, bindingRequestBody(userId, binding));
+                await postBinding(userId, binding);
             }
             return userId;
         }
@@ -3696,7 +3712,7 @@ const statusCard = document.getElementById("status-card");
                 const failures = [];
                 for (const binding of createDraft.bindings) {
                     try {
-                        await postJson(adminBindClientUrl, bindingRequestBody(userId, binding));
+                        await postBinding(userId, binding);
                     } catch (err) {
                         failures.push(`${binding.label || binding.client_identifier}: ${err?.message || "ошибка"}`);
                     }
@@ -5932,7 +5948,7 @@ const statusCard = document.getElementById("status-card");
             try {
                 const picked = await pickServerBinding();
                 if (!picked) return;
-                await postJson(adminBindClientUrl, bindingRequestBody(userId, picked));
+                await postBinding(userId, picked);
                 await loadSelectedUserBindings();
                 await loadSelectedUserOverview();
                 setFormNote(workBindStatusEl, "Подключение привязано", "success");

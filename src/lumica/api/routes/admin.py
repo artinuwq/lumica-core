@@ -1291,6 +1291,126 @@ def register_admin_routes(app, deps):
 
             return jsonify({"ok": True, "deleted": deleted})
 
+    @app.get("/api/admin/panel-clients")
+    def admin_panel_clients_list():
+        """Список клиентов панели (Clients API) для выбора при привязке к
+        пользователю бота. Возвращает клиентов всех активных панелей, помечая
+        уже привязанных (есть VpnAccount с identifier == email)."""
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            panels = db.query(Panel).filter(Panel.is_active == 1).all()
+            if not panels:
+                return jsonify({"ok": True, "clients": [], "errors": []})
+
+            bound_identifiers: set[str] = {
+                str(row.identifier).strip().lower()
+                for row in db.query(VpnAccount.identifier).distinct()
+                if row.identifier
+            }
+
+            clients: list[dict] = []
+            errors: list[dict] = []
+            for panel in panels:
+                try:
+                    provider = panel_registry.get_provider(panel.provider)
+                    auth_payload = panel_registry.get_auth_payload(db, panel)
+                    rows = provider.list_panel_clients(panel, auth_payload)
+                except Exception as exc:
+                    errors.append({"panel_id": panel.id, "panel_name": panel.name, "error": str(exc)})
+                    continue
+                for row in rows:
+                    email = str(row.get("email") or "").strip()
+                    if not email:
+                        continue
+                    clients.append(
+                        {
+                            **row,
+                            "panel_id": panel.id,
+                            "panel_name": panel.name,
+                            "region": panel.region,
+                            "bound": email.lower() in bound_identifiers,
+                        }
+                    )
+            return jsonify({"ok": True, "clients": clients, "errors": errors})
+
+    @app.post("/api/admin/users/<int:user_id>/panel-client")
+    def admin_user_bind_panel_client(user_id: int):
+        """Привязывает уже созданного клиента панели (Clients API) к
+        пользователю бота. Тело: {panel_id, email}. Делает get_client(email),
+        создаёт VpnAccount (identifier = email клиента) и записывает в панель
+        tgId пользователя, чтобы связь читалась с обеих сторон."""
+        auth, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        panel_id = str(body.get("panel_id") or "").strip()
+        email = str(body.get("email") or "").strip()
+        set_tg_id = bool(body.get("set_tg_id", True))
+        if not panel_id or not email:
+            return jsonify({"ok": False, "error": "panel_id and email are required"}), 400
+
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.id == int(user_id)).first()
+            if not user:
+                return jsonify({"ok": False, "error": "User not found"}), 404
+            panel = db.query(Panel).filter(Panel.id == panel_id).first()
+            if not panel:
+                return jsonify({"ok": False, "error": "Panel not found"}), 404
+
+            provider = panel_registry.get_provider(panel.provider)
+            auth_payload = panel_registry.get_auth_payload(db, panel)
+            try:
+                client = provider.get_panel_client(panel, auth_payload, email)
+            except Exception as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 502
+            if not client or not client.get("email"):
+                return jsonify({"ok": False, "error": "Client not found in panel"}), 404
+
+            warning = None
+            if set_tg_id and user.telegram_id:
+                try:
+                    tg_numeric = int(str(user.telegram_id).strip())
+                    merged = dict(client.get("raw") or {})
+                    merged.pop("traffic", None)
+                    merged.pop("inboundIds", None)
+                    merged["email"] = client["email"]
+                    merged["tgId"] = tg_numeric
+                    provider.update_panel_client(
+                        panel,
+                        auth_payload,
+                        client["email"],
+                        merged,
+                        client.get("inbound_ids") or None,
+                    )
+                except Exception as exc:
+                    warning = f"Клиент привязан, но не удалось записать tgId в панель: {exc}"
+
+            try:
+                account = _upsert_panel_client_account(db, user_id=user.id, panel=panel, client=client)
+            except ValueError as exc:
+                db.rollback()
+                return jsonify({"ok": False, "error": str(exc)}), 400
+
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=user.id,
+                action="panel_client_bound",
+                changes={
+                    "panel_id": panel.id,
+                    "email": client.get("email"),
+                    "sub_id": client.get("sub_id"),
+                    "inbound_ids": client.get("inbound_ids"),
+                },
+            )
+            db.commit()
+            payload = {"ok": True, "account": _serialize_panel_client_account(db, account)}
+            if warning:
+                payload["warning"] = warning
+            return jsonify(payload)
+
     @app.get("/api/admin/panels")
     def admin_panels_list():
         _, err = _auth_context(require_role="admin")

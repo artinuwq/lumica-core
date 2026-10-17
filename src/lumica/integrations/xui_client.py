@@ -1,7 +1,7 @@
 import os
 import re
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 import requests
 import json
@@ -376,3 +376,152 @@ class XUIClient:
                     return parsed if isinstance(parsed, dict) else {"ok": True, "payload": parsed}
 
         raise RuntimeError(f"Failed to add client to inbound {inbound_id}: {' | '.join(errors)[:1200]}")
+
+    def _clients_request(
+        self,
+        method: str,
+        suffixes: list[str],
+        body: dict[str, Any] | None = None,
+        timeout: int = 10,
+    ) -> Any:
+        """GET/POST запрос к Clients API (/panel/api/clients/*).
+
+        Итерирует по префиксам (секретный webBasePath через
+        _candidate_prefixes), проверяет HTTP-статус и поле success.
+        Возвращает распарсенный JSON-конверт целиком.
+        """
+        self.login()
+        errors: list[str] = []
+        statuses: list[int | None] = []
+        prefix_candidates = [self._active_prefix] + [
+            p for p in self._candidate_prefixes() if p != self._active_prefix
+        ]
+        for prefix in prefix_candidates:
+            seen: list[str] = []
+            for suffix in suffixes:
+                url = self._build_url(prefix, suffix)
+                if url in seen:
+                    continue
+                seen.append(url)
+                try:
+                    if method.upper() == "POST":
+                        response = self.session.post(url, json=body or {}, timeout=timeout)
+                    else:
+                        response = self.session.get(url, timeout=timeout)
+                except requests.RequestException as exc:
+                    errors.append(f"{url}: {exc}")
+                    statuses.append(getattr(getattr(exc, "response", None), "status_code", None))
+                    continue
+                if response.status_code >= 400:
+                    errors.append(f"{url}: HTTP {response.status_code}")
+                    statuses.append(response.status_code)
+                    continue
+                try:
+                    payload = response.json()
+                except ValueError:
+                    errors.append(f"{url}: не JSON-ответ")
+                    continue
+                if isinstance(payload, dict) and payload.get("success") is False:
+                    reason = str(payload.get("msg") or "без пояснения")
+                    errors.append(f"{url}: success=false ({reason})")
+                    continue
+                return payload
+        hint = self._auth_failure_hint(statuses)
+        details = " | ".join(errors)
+        if len(details) > 800:
+            details = details[:800] + "..."
+        raise RuntimeError(
+            f"Failed to fetch 3X-UI clients API. {hint}Details: {details}".replace(".  ", ". ")
+        )
+
+    def clients_list(self, inbound_id: int | None = None) -> Any:
+        suffixes = ["/panel/api/clients/list", "/api/clients/list", "/clients/list"]
+        params = {}
+        if inbound_id is not None:
+            params["inboundIds"] = str(int(inbound_id))
+        if params:
+            query = urlencode(params)
+            suffixes = [f"{s}?{query}" for s in suffixes]
+        return self._clients_request("GET", suffixes)
+
+    def clients_list_paged(self, **params: Any) -> Any:
+        clean = {k: v for k, v in params.items() if v not in (None, "")}
+        query = urlencode(clean)
+        suffixes = [
+            f"/panel/api/clients/list/paged?{query}" if query else "/panel/api/clients/list/paged",
+            f"/api/clients/list/paged?{query}" if query else "/api/clients/list/paged",
+            f"/clients/list/paged?{query}" if query else "/clients/list/paged",
+        ]
+        return self._clients_request("GET", suffixes)
+
+    def clients_get(self, email: str) -> Any:
+        quoted = quote(str(email), safe="")
+        return self._clients_request(
+            "GET",
+            [
+                f"/panel/api/clients/get/{quoted}",
+                f"/api/clients/get/{quoted}",
+                f"/clients/get/{quoted}",
+            ],
+        )
+
+    def clients_links(self, email: str) -> Any:
+        quoted = quote(str(email), safe="")
+        return self._clients_request(
+            "GET",
+            [
+                f"/panel/api/clients/links/{quoted}",
+                f"/api/clients/links/{quoted}",
+                f"/clients/links/{quoted}",
+            ],
+        )
+
+    def clients_sub_links(self, sub_id: str) -> Any:
+        quoted = quote(str(sub_id), safe="")
+        return self._clients_request(
+            "GET",
+            [
+                f"/panel/api/clients/subLinks/{quoted}",
+                f"/api/clients/subLinks/{quoted}",
+                f"/clients/subLinks/{quoted}",
+            ],
+        )
+
+    def clients_add(self, client: dict[str, Any], inbound_ids: list[int]) -> Any:
+        body = {
+            "client": client,
+            "inboundIds": [int(i) for i in inbound_ids],
+        }
+        return self._clients_request(
+            "POST",
+            ["/panel/api/clients/add", "/api/clients/add", "/clients/add"],
+            body=body,
+        )
+
+    def clients_update(
+        self, email: str, client: dict[str, Any], inbound_ids: list[int] | None = None
+    ) -> Any:
+        quoted = quote(str(email), safe="")
+        body: dict[str, Any] = {"client": client}
+        if inbound_ids is not None:
+            body["inboundIds"] = [int(i) for i in inbound_ids]
+        return self._clients_request(
+            "POST",
+            [
+                f"/panel/api/clients/update/{quoted}",
+                f"/api/clients/update/{quoted}",
+                f"/clients/update/{quoted}",
+            ],
+            body=body,
+        )
+
+    def clients_del(self, email: str) -> Any:
+        quoted = quote(str(email), safe="")
+        return self._clients_request(
+            "POST",
+            [
+                f"/panel/api/clients/del/{quoted}",
+                f"/api/clients/del/{quoted}",
+                f"/clients/del/{quoted}",
+            ],
+        )
