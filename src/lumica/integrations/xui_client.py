@@ -123,11 +123,28 @@ class XUIClient:
                         timeout=8,
                     )
                     response.raise_for_status()
-                    self._active_prefix = prefix
-                    return
                 except requests.RequestException as exc:
                     last_error = exc
                     continue
+                # 2xx сам по себе - не успешный вход: заглушка/прокси может отвечать 200 HTML,
+                # а 3x-ui на неверный пароль тоже отвечает 200 с {"success": false}.
+                try:
+                    payload = response.json()
+                except ValueError:
+                    last_error = RuntimeError(f"{login_url}: не JSON-ответ логина")
+                    continue
+                if not isinstance(payload, dict):
+                    last_error = RuntimeError(f"{login_url}: неожиданный ответ логина")
+                    continue
+                if payload.get("success") is False:
+                    # нашли настоящий эндпоинт логина, но панель отказала - дальше перебирать нечего
+                    reason = str(payload.get("msg") or "без пояснения")
+                    raise RuntimeError(
+                        f"3X-UI отклонил вход ({login_url}): {reason}. "
+                        "Проверь логин/пароль панели (и что не включена двухфакторка)."
+                    )
+                self._active_prefix = prefix
+                return
         raise RuntimeError(f"3X-UI login failed for all base paths. Last error: {last_error}")
 
     def get_inbounds(self) -> list[dict[str, Any]]:
