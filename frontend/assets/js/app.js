@@ -174,24 +174,55 @@ const statusCard = document.getElementById("status-card");
         const workInboundDetailAddStatusEl = document.getElementById("work-inbound-detail-add-status");
         const workClientCardsEl = document.getElementById("work-client-cards");
         const workClientSearchEl = document.getElementById("work-client-search");
-        const workUserCreateToggleEl = document.getElementById("work-user-create-toggle");
-        const workUserCreateFormEl = document.getElementById("work-user-create-form");
         const workUserCreateModeEl = document.getElementById("work-user-create-mode");
         const workUserExistingWrapEl = document.getElementById("work-user-existing-wrap");
-        const workUserExistingSearchEl = document.getElementById("work-user-existing-search");
         const workUserExistingSelectEl = document.getElementById("work-user-existing-select");
         const workUserIdentityWrapEl = document.getElementById("work-user-identity-wrap");
+        const workUserIdentityEl = document.getElementById("work-user-identity");
         const workUserNameEl = document.getElementById("work-user-name");
-        const workUserTelegramIdEl = document.getElementById("work-user-telegram-id");
-        const workUserUsernameEl = document.getElementById("work-user-username");
         const workUserMonthPriceEl = document.getElementById("work-user-month-price");
         const workUserPaymentDateEl = document.getElementById("work-user-payment-date");
         const workUserPaymentDetailsEl = document.getElementById("work-user-payment-details");
         const workUserSubscriptionTypeEl = document.getElementById("work-user-subscription-type");
-        const workUserGroupWrapEl = document.getElementById("work-user-group-wrap");
-        const workUserGroupSelectEl = document.getElementById("work-user-group-select");
+        const workUserNotesEl = document.getElementById("work-user-notes");
+        const workUserBindingsAddEl = document.getElementById("work-user-bindings-add");
+        const workUserBindingsListEl = document.getElementById("work-user-bindings-list");
+        const workUserMembersCardEl = document.getElementById("work-user-members-card");
+        const workUserMembersAddEl = document.getElementById("work-user-members-add");
+        const workUserMembersListEl = document.getElementById("work-user-members-list");
         const workUserCreateSubmitEl = document.getElementById("work-user-create-submit");
         const workUserCreateStatusEl = document.getElementById("work-user-create-status");
+        const workMemberModeEl = document.getElementById("work-member-mode");
+        const workMemberExistingWrapEl = document.getElementById("work-member-existing-wrap");
+        const workMemberExistingSelectEl = document.getElementById("work-member-existing-select");
+        const workMemberIdentityWrapEl = document.getElementById("work-member-identity-wrap");
+        const workMemberIdentityFieldEl = document.getElementById("work-member-identity-field");
+        const workMemberIdentityEl = document.getElementById("work-member-identity");
+        const workMemberNameEl = document.getElementById("work-member-name");
+        const workMemberNameLabelEl = document.getElementById("work-member-name-label");
+        const workMemberBindingsAddEl = document.getElementById("work-member-bindings-add");
+        const workMemberBindingsListEl = document.getElementById("work-member-bindings-list");
+        const workMemberSaveEl = document.getElementById("work-member-save");
+        const workMemberStatusEl = document.getElementById("work-member-status");
+        const workBindAddBtnEl = document.getElementById("work-bind-add-btn");
+        // Экранов "ожидающих привязок" в разметке больше нет; константы нужны, чтобы
+        // обработчики ниже (с ?.) не падали ReferenceError и не обрывали скрипт.
+        const workPendingTelegramIdEl = document.getElementById("work-pending-telegram-id");
+        const workPendingInboundSelectEl = document.getElementById("work-pending-inbound-select");
+        const workPendingClientSelectEl = document.getElementById("work-pending-client-select");
+        const workPendingAddBtnEl = document.getElementById("work-pending-add-btn");
+        const workPendingSubStatusSelectEl = document.getElementById("work-pending-sub-status-select");
+        const workPendingSubPriceInputEl = document.getElementById("work-pending-sub-price-input");
+        const workPendingSubLimitInputEl = document.getElementById("work-pending-sub-limit-input");
+        const workPendingSubCreateDateEl = document.getElementById("work-pending-sub-create-date");
+        const workPendingSubSaveBtnEl = document.getElementById("work-pending-sub-save-btn");
+        const workPendingSubSaveStatusEl = document.getElementById("work-pending-sub-save-status");
+        const workBindStatusEl = document.getElementById("work-bind-status");
+        const uiSheetOverlayEl = document.getElementById("ui-sheet-overlay");
+        const uiSheetTitleEl = document.getElementById("ui-sheet-title");
+        const uiSheetCloseEl = document.getElementById("ui-sheet-close");
+        const uiSheetSearchEl = document.getElementById("ui-sheet-search");
+        const uiSheetListEl = document.getElementById("ui-sheet-list");
         const workVerifyMenuBtnEl = document.getElementById("work-verify-menu-btn");
         const workVerifyCountEl = document.getElementById("work-verify-count");
         const workVerifyLengthEl = document.getElementById("work-verify-length");
@@ -214,7 +245,6 @@ const statusCard = document.getElementById("status-card");
         const workExistingLinksEl = document.getElementById("work-existing-links");
         const workInboundSelectEl = document.getElementById("work-inbound-select");
         const workClientSelectEl = document.getElementById("work-client-select");
-        const workBindBtnEl = document.getElementById("work-bind-btn");
         const workRefreshInboundClientsBtnEl = document.getElementById("work-refresh-inbound-clients-btn");
         const workSubStatusSelectEl = document.getElementById("work-sub-status-select");
         const workSubPriceInputEl = document.getElementById("work-sub-price-input");
@@ -363,6 +393,8 @@ const statusCard = document.getElementById("status-card");
         const workContextTitleByPage = new Map([
             ["work-staff-page", "Персонал"],
             ["work-clients-page", "Клиенты"],
+            ["work-user-create-page", "Новый пользователь"],
+            ["work-user-member-page", "Участник группы"],
             ["work-verify-page", "Коды подтверждения"],
             ["work-inbounds-page", "Подключения"],
             ["work-inbound-detail-page", "Подключение"],
@@ -981,6 +1013,10 @@ const statusCard = document.getElementById("status-card");
         }
 
         function handleTelegramBack() {
+            if (isUiSheetOpen()) {
+                closeUiSheet(null);
+                return;
+            }
             const activeScreenId = getActiveScreenId();
             if (
                 activeScreenId === "screen-cloud"
@@ -2906,6 +2942,9 @@ const statusCard = document.getElementById("status-card");
                 username: user.username,
                 name: user.name,
                 role: user.role,
+                group_id: user.group_id ?? null,
+                subscription_type: user.subscription_type || "personal",
+                subscription_status: overview?.subscription?.status ?? null,
             };
             const idx = workState.users.findIndex((row) => String(row?.id) === String(user.id));
             if (idx >= 0) {
@@ -2979,7 +3018,7 @@ const statusCard = document.getElementById("status-card");
             if (!Array.isArray(workState.users) || !workState.users.length) {
                 const empty = document.createElement("div");
                 empty.className = "work-empty";
-                empty.textContent = "Клиенты не найдены.";
+                empty.textContent = "Пока нет пользователей с подпиской. Нажми «Создать пользователя».";
                 workClientCardsEl.appendChild(empty);
                 return;
             }
@@ -3009,15 +3048,38 @@ const statusCard = document.getElementById("status-card");
                 card.className = "work-client-card";
                 card.dataset.userId = String(user.id);
 
+                const head = document.createElement("div");
+                head.className = "work-client-card-head";
+
                 const title = document.createElement("div");
                 title.className = "work-client-card-title";
                 title.textContent = user.name || user.username || `Клиент #${user.id}`;
+                head.appendChild(title);
+
+                const chips = document.createElement("div");
+                chips.className = "work-client-card-chips";
+                const typeLabel = SUBSCRIPTION_TYPE_LABELS[user.subscription_type];
+                if (typeLabel) {
+                    const chip = document.createElement("span");
+                    chip.className = "work-chip";
+                    chip.textContent = typeLabel;
+                    chips.appendChild(chip);
+                }
+                const status = String(user.subscription_status || "").toLowerCase();
+                if (status && !["active", "lifetime"].includes(status)) {
+                    const chip = document.createElement("span");
+                    chip.className = "work-chip work-chip-warn";
+                    chip.textContent = status;
+                    chips.appendChild(chip);
+                }
+                if (chips.children.length) head.appendChild(chips);
 
                 const sub = document.createElement("div");
                 sub.className = "work-client-card-sub";
-                sub.textContent = `${user.id} · ${user.username ? `@${user.username}` : "—"}`;
+                const username = String(user.username || "").replace(/^@/, "");
+                sub.textContent = `${username ? `@${username}` : "без username"} · ID ${user.telegram_id || "—"}`;
 
-                card.appendChild(title);
+                card.appendChild(head);
                 card.appendChild(sub);
                 card.addEventListener("click", () => {
                     openWorkClientPage(user.id).catch((err) => {
@@ -3028,59 +3090,664 @@ const statusCard = document.getElementById("status-card");
             });
         }
 
-        function renderUserCreateOptions() {
-            if (!workUserExistingSelectEl) return;
-            const query = String(workUserExistingSearchEl?.value || "").trim().toLowerCase();
-            const users = (Array.isArray(workState.knownUsers) ? workState.knownUsers : []).filter((user) => {
-                const values = [user?.name, user?.username, user?.telegram_id, user?.id]
-                    .map((value) => String(value || "").toLowerCase());
-                return !query || values.some((value) => value.includes(query));
+        // ---------- UI-кит: bottom sheet и красивые селекты ----------
+        const uiSheetState = { resolve: null, items: [], selected: "", emptyText: "" };
+
+        function isUiSheetOpen() {
+            return Boolean(uiSheetOverlayEl && !uiSheetOverlayEl.classList.contains("hidden"));
+        }
+
+        function closeUiSheet(result = null) {
+            if (!isUiSheetOpen()) return;
+            uiSheetOverlayEl.classList.add("hidden");
+            uiSheetOverlayEl.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("ui-sheet-open");
+            const resolve = uiSheetState.resolve;
+            uiSheetState.resolve = null;
+            uiSheetState.items = [];
+            if (uiSheetSearchEl) uiSheetSearchEl.value = "";
+            if (resolve) resolve(result);
+        }
+
+        function renderUiSheetItems() {
+            if (!uiSheetListEl) return;
+            const query = String(uiSheetSearchEl?.value || "").trim().toLowerCase();
+            uiSheetListEl.innerHTML = "";
+            const rows = uiSheetState.items.filter((item) => !query || item.search.includes(query));
+            if (!rows.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = uiSheetState.emptyText || "Ничего не найдено.";
+                uiSheetListEl.appendChild(empty);
+                return;
+            }
+            rows.forEach((item) => {
+                const selected = String(item.value) === String(uiSheetState.selected);
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "ui-sheet-item";
+                btn.classList.toggle("selected", selected);
+                btn.setAttribute("role", "option");
+                btn.setAttribute("aria-selected", selected ? "true" : "false");
+
+                const main = document.createElement("span");
+                main.className = "ui-sheet-item-main";
+                main.textContent = item.label;
+                btn.appendChild(main);
+
+                const metaLines = (item.meta || []).filter(Boolean).slice(0, 2);
+                if (metaLines.length) {
+                    const meta = document.createElement("span");
+                    meta.className = "ui-sheet-item-meta";
+                    metaLines.forEach((line) => {
+                        const row = document.createElement("span");
+                        row.textContent = line;
+                        meta.appendChild(row);
+                    });
+                    btn.appendChild(meta);
+                }
+                if (selected) {
+                    const check = document.createElement("span");
+                    check.className = "ui-sheet-check";
+                    check.setAttribute("aria-hidden", "true");
+                    check.textContent = "✓";
+                    btn.appendChild(check);
+                }
+                btn.addEventListener("click", () => closeUiSheet(String(item.value)));
+                uiSheetListEl.appendChild(btn);
             });
-            const selectedId = workUserExistingSelectEl.value;
-            workUserExistingSelectEl.innerHTML = '<option value="">Выберите пользователя</option>';
-            users.forEach((user) => {
+        }
+
+        /** Открывает нижнюю шторку выбора. Резолвится значением выбранного пункта или null. */
+        function openUiSheet({ title = "Выбор", items = [], selected = "", searchable = false, emptyText = "" } = {}) {
+            if (!uiSheetOverlayEl) return Promise.resolve(null);
+            if (isUiSheetOpen()) closeUiSheet(null);
+            uiSheetState.items = items.map((item) => ({
+                ...item,
+                search: [item.label, ...(item.meta || [])].join(" ").toLowerCase(),
+            }));
+            uiSheetState.selected = selected;
+            uiSheetState.emptyText = emptyText;
+            if (uiSheetTitleEl) uiSheetTitleEl.textContent = title;
+            if (uiSheetSearchEl) {
+                uiSheetSearchEl.classList.toggle("hidden", !searchable);
+                uiSheetSearchEl.value = "";
+            }
+            renderUiSheetItems();
+            uiSheetOverlayEl.classList.remove("hidden");
+            uiSheetOverlayEl.setAttribute("aria-hidden", "false");
+            document.body.classList.add("ui-sheet-open");
+            if (uiSheetListEl) uiSheetListEl.scrollTop = 0;
+            return new Promise((resolve) => {
+                uiSheetState.resolve = resolve;
+            });
+        }
+
+        function syncSheetSelect(select, trigger) {
+            const option = select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
+            const hasValue = Boolean(option && option.value !== "");
+            trigger.innerHTML = "";
+            const text = document.createElement("span");
+            text.className = "ui-select-text";
+            text.textContent = option ? option.textContent : (select.dataset.placeholder || "Выбрать");
+            trigger.appendChild(text);
+            const metaLines = hasValue ? [option.dataset.metaTop, option.dataset.metaBottom].filter(Boolean) : [];
+            if (metaLines.length) {
+                const meta = document.createElement("span");
+                meta.className = "ui-select-meta";
+                metaLines.forEach((line) => {
+                    const row = document.createElement("span");
+                    row.textContent = line;
+                    meta.appendChild(row);
+                });
+                trigger.appendChild(meta);
+            }
+            const chevron = document.createElement("span");
+            chevron.className = "ui-select-chevron";
+            chevron.setAttribute("aria-hidden", "true");
+            trigger.appendChild(chevron);
+            trigger.classList.toggle("is-placeholder", !hasValue);
+            trigger.disabled = Boolean(select.disabled);
+        }
+
+        function syncSegmentedSelect(select, seg) {
+            seg.innerHTML = "";
+            Array.from(select.options).forEach((option) => {
+                const active = option.value === select.value;
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "ui-seg-btn";
+                btn.classList.toggle("active", active);
+                btn.setAttribute("role", "tab");
+                btn.setAttribute("aria-selected", active ? "true" : "false");
+                btn.disabled = Boolean(select.disabled);
+                btn.textContent = option.textContent;
+                btn.addEventListener("click", () => {
+                    if (select.value === option.value) return;
+                    select.value = option.value;
+                    select.dispatchEvent(new Event("change", { bubbles: true }));
+                });
+                seg.appendChild(btn);
+            });
+        }
+
+        /**
+         * Заменяет нативный <select> красивым контролом (шторка или сегменты).
+         * Сам <select> остаётся в DOM скрытым и остаётся источником истины,
+         * поэтому весь остальной код продолжает читать/писать select.value.
+         */
+        function enhanceSelect(select) {
+            if (!select || select.dataset.uiEnhanced === "1") return;
+            select.dataset.uiEnhanced = "1";
+            select.classList.add("ui-native");
+            const segmented = select.dataset.ui === "segmented";
+            const control = document.createElement(segmented ? "div" : "button");
+            if (segmented) {
+                control.className = "ui-seg";
+                control.setAttribute("role", "tablist");
+            } else {
+                control.type = "button";
+                control.className = "ui-select";
+                control.setAttribute("aria-haspopup", "listbox");
+            }
+            select.insertAdjacentElement("afterend", control);
+
+            const sync = () => (segmented ? syncSegmentedSelect(select, control) : syncSheetSelect(select, control));
+
+            // программная установка select.value не шлёт события - ловим её сами
+            const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+            Object.defineProperty(select, "value", {
+                configurable: true,
+                get() {
+                    return valueDescriptor.get.call(this);
+                },
+                set(next) {
+                    valueDescriptor.set.call(this, next);
+                    sync();
+                },
+            });
+            select.addEventListener("change", sync);
+            new MutationObserver(sync).observe(select, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true,
+                attributeFilter: ["disabled", "label"],
+            });
+
+            if (!segmented) {
+                control.addEventListener("click", async () => {
+                    const rows = Array.from(select.options).filter((option) => option.value !== "");
+                    const picked = await openUiSheet({
+                        title: select.dataset.sheetTitle || select.getAttribute("aria-label") || "Выбор",
+                        selected: select.value,
+                        searchable: select.dataset.searchable === "true" || rows.length > 8,
+                        emptyText: select.dataset.emptyText || "Список пуст.",
+                        items: rows.map((option) => ({
+                            value: option.value,
+                            label: option.textContent,
+                            meta: [option.dataset.metaTop, option.dataset.metaBottom],
+                        })),
+                    });
+                    if (picked === null || picked === select.value) return;
+                    select.value = picked;
+                    select.dispatchEvent(new Event("change", { bubbles: true }));
+                });
+            }
+            sync();
+        }
+
+        function enhanceWorkSelects() {
+            document.querySelectorAll("#screen-work select").forEach(enhanceSelect);
+        }
+
+        function setFormNote(el, message, tone = "") {
+            if (!el) return;
+            el.classList.remove("success", "error");
+            if (!message) {
+                el.textContent = "";
+                el.classList.add("hidden");
+                return;
+            }
+            if (tone === "success" || tone === "error") el.classList.add(tone);
+            el.textContent = message;
+            el.classList.remove("hidden");
+        }
+
+        // ---------- Создание пользователя ----------
+        const createDraft = { bindings: [], members: [] };
+        const memberDraft = { bindings: [] };
+
+        const SUBSCRIPTION_TYPE_LABELS = {
+            personal: "Личная",
+            family_admin: "Админ семьи",
+            family_member: "Участник",
+        };
+
+        /** Telegram ID (только цифры) или @username -> { telegram_id, username } либо null. */
+        function parseTelegramIdentity(raw) {
+            const value = String(raw || "").trim();
+            if (/^\d+$/.test(value)) return { telegram_id: value, username: null };
+            if (/^@[A-Za-z0-9_]{5,32}$/.test(value)) return { telegram_id: null, username: value };
+            return null;
+        }
+
+        function fillKnownUserSelect(select) {
+            if (!select) return;
+            const selectedId = select.value;
+            select.innerHTML = "";
+            const empty = document.createElement("option");
+            empty.value = "";
+            empty.textContent = "Выбрать из тех, кто открывал бота";
+            select.appendChild(empty);
+            (Array.isArray(workState.knownUsers) ? workState.knownUsers : []).forEach((user) => {
+                const username = String(user?.username || "").replace(/^@/, "");
                 const option = document.createElement("option");
                 option.value = String(user.id);
-                option.textContent = `${user.name || user.username || `Пользователь #${user.id}`} · ${user.username ? `@${user.username}` : "без username"} · ID ${user.telegram_id || "—"}`;
-                workUserExistingSelectEl.appendChild(option);
+                option.textContent = user.name || (username ? `@${username}` : `Пользователь #${user.id}`);
+                option.dataset.metaTop = username ? `@${username}` : "без username";
+                option.dataset.metaBottom = `ID ${user.telegram_id || "—"}`;
+                select.appendChild(option);
             });
-            if (users.some((user) => String(user.id) === selectedId)) {
-                workUserExistingSelectEl.value = selectedId;
+            if (selectedId && Array.from(select.options).some((option) => option.value === selectedId)) {
+                select.value = selectedId;
             }
+        }
+
+        function renderUserCreateOptions() {
+            fillKnownUserSelect(workUserExistingSelectEl);
+            fillKnownUserSelect(workMemberExistingSelectEl);
         }
 
         function updateUserCreateMode() {
             const mode = String(workUserCreateModeEl?.value || "existing");
             workUserExistingWrapEl?.classList.toggle("hidden", mode !== "existing");
             workUserIdentityWrapEl?.classList.toggle("hidden", mode === "existing");
-            workUserTelegramIdEl?.classList.toggle("hidden", mode === "placeholder");
-            workUserUsernameEl?.classList.toggle("hidden", mode === "placeholder");
-            updateUserCreateGroupVisibility();
-            renderUserCreateOptions();
         }
 
-        function updateUserCreateGroupVisibility() {
-            workUserGroupWrapEl?.classList.toggle(
-                "hidden",
-                workUserSubscriptionTypeEl?.value !== "family_member"
-            );
+        function updateUserCreateType() {
+            const isFamilyAdmin = String(workUserSubscriptionTypeEl?.value || "") === "family_admin";
+            workUserMembersCardEl?.classList.toggle("hidden", !isFamilyAdmin);
+        }
+
+        function updateMemberMode() {
+            const mode = String(workMemberModeEl?.value || "existing");
+            workMemberExistingWrapEl?.classList.toggle("hidden", mode !== "existing");
+            workMemberIdentityWrapEl?.classList.toggle("hidden", mode === "existing");
+            workMemberIdentityFieldEl?.classList.toggle("hidden", mode !== "new");
+            if (workMemberNameLabelEl) {
+                workMemberNameLabelEl.innerHTML = mode === "placeholder"
+                    ? "Имя пустого места"
+                    : 'Имя <span class="field-optional">необязательно</span>';
+            }
+        }
+
+        function renderStagedBindings(listEl, bindings) {
+            if (!listEl) return;
+            listEl.innerHTML = "";
+            if (!bindings.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Пока ничего не привязано. Нажми «+».";
+                listEl.appendChild(empty);
+                return;
+            }
+            bindings.forEach((binding, idx) => {
+                const row = document.createElement("div");
+                row.className = "binding-row";
+                const text = document.createElement("div");
+                text.className = "binding-row-text";
+                const title = document.createElement("div");
+                title.className = "binding-row-title";
+                title.textContent = binding.label || binding.client_identifier;
+                const sub = document.createElement("div");
+                sub.className = "binding-row-sub";
+                sub.textContent = [binding.server_name, binding.inbound_name].filter(Boolean).join(" · ");
+                text.appendChild(title);
+                text.appendChild(sub);
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "binding-row-remove";
+                remove.setAttribute("aria-label", "Убрать");
+                remove.textContent = "×";
+                remove.addEventListener("click", () => {
+                    bindings.splice(idx, 1);
+                    renderStagedBindings(listEl, bindings);
+                });
+                row.appendChild(text);
+                row.appendChild(remove);
+                listEl.appendChild(row);
+            });
+        }
+
+        function renderStagedMembers() {
+            if (!workUserMembersListEl) return;
+            workUserMembersListEl.innerHTML = "";
+            if (!createDraft.members.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Участников пока нет. Нажми «+».";
+                workUserMembersListEl.appendChild(empty);
+                return;
+            }
+            const modeLabels = { existing: "из бота", new: "новый", placeholder: "пустое место" };
+            createDraft.members.forEach((member, idx) => {
+                const row = document.createElement("div");
+                row.className = "binding-row";
+                const text = document.createElement("div");
+                text.className = "binding-row-text";
+                const title = document.createElement("div");
+                title.className = "binding-row-title";
+                title.textContent = member.title;
+                const sub = document.createElement("div");
+                sub.className = "binding-row-sub";
+                const parts = [modeLabels[member.mode] || ""];
+                if (member.bindings.length) parts.push(`подключений: ${member.bindings.length}`);
+                sub.textContent = parts.filter(Boolean).join(" · ");
+                text.appendChild(title);
+                text.appendChild(sub);
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "binding-row-remove";
+                remove.setAttribute("aria-label", "Убрать участника");
+                remove.textContent = "×";
+                remove.addEventListener("click", () => {
+                    createDraft.members.splice(idx, 1);
+                    renderStagedMembers();
+                });
+                row.appendChild(text);
+                row.appendChild(remove);
+                workUserMembersListEl.appendChild(row);
+            });
+        }
+
+        function resetUserCreateForm() {
+            createDraft.bindings = [];
+            createDraft.members = [];
+            [
+                workUserIdentityEl, workUserNameEl, workUserMonthPriceEl, workUserPaymentDateEl,
+                workUserPaymentDetailsEl, workUserNotesEl,
+            ].forEach((el) => {
+                if (el) el.value = "";
+            });
+            if (workUserCreateModeEl) workUserCreateModeEl.value = "existing";
+            if (workUserSubscriptionTypeEl) workUserSubscriptionTypeEl.value = "personal";
+            renderUserCreateOptions();
+            if (workUserExistingSelectEl) workUserExistingSelectEl.value = "";
+            updateUserCreateMode();
+            updateUserCreateType();
+            renderStagedBindings(workUserBindingsListEl, createDraft.bindings);
+            renderStagedMembers();
+            setFormNote(workUserCreateStatusEl, "");
+        }
+
+        function resetMemberForm() {
+            memberDraft.bindings = [];
+            [workMemberIdentityEl, workMemberNameEl].forEach((el) => {
+                if (el) el.value = "";
+            });
+            if (workMemberModeEl) workMemberModeEl.value = "existing";
+            renderUserCreateOptions();
+            if (workMemberExistingSelectEl) workMemberExistingSelectEl.value = "";
+            updateMemberMode();
+            renderStagedBindings(workMemberBindingsListEl, memberDraft.bindings);
+            setFormNote(workMemberStatusEl, "");
+        }
+
+        function serverGroupsFromInbounds() {
+            const groups = new Map();
+            (Array.isArray(workState.inbounds) ? workState.inbounds : []).forEach((inbound) => {
+                const key = String(inbound?.panel_id ?? inbound?.panel_name ?? "");
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        id: key,
+                        name: String(inbound?.panel_name || "").trim() || "Сервер",
+                        region: String(inbound?.region || "").trim(),
+                        inbounds: [],
+                    });
+                }
+                groups.get(key).inbounds.push(inbound);
+            });
+            return Array.from(groups.values());
+        }
+
+        /** Шаг 1: выбираем сервер. Шаг 2: выбираем пользователя на этом сервере. */
+        async function pickServerBinding() {
+            const servers = serverGroupsFromInbounds();
+            if (!servers.length) {
+                throw new Error("Серверов с подключениями пока нет. Добавь сервер во вкладке «Сервера».");
+            }
+            const serverKey = await openUiSheet({
+                title: "Выбери сервер",
+                items: servers.map((server) => ({
+                    value: server.id,
+                    label: server.name,
+                    meta: [server.region ? server.region.toUpperCase() : "", `подключений: ${server.inbounds.length}`],
+                })),
+            });
+            if (serverKey === null) return null;
+            const server = servers.find((item) => item.id === serverKey);
+            if (!server) return null;
+
+            const loaded = await Promise.all(server.inbounds.map(async (inbound) => {
+                try {
+                    const resp = await fetchJson(adminInboundClientsUrl(inbound.panel_inbound_ref_id), false);
+                    return { inbound, clients: Array.isArray(resp?.clients) ? resp.clients : [] };
+                } catch (err) {
+                    console.error("load inbound clients error:", err);
+                    return { inbound, clients: [] };
+                }
+            }));
+            const rows = [];
+            loaded.forEach(({ inbound, clients }) => {
+                clients.forEach((client) => rows.push({ inbound, client }));
+            });
+            if (!rows.length) {
+                throw new Error(`На сервере «${server.name}» нет пользователей. Попробуй «Обновить список с серверов».`);
+            }
+            const pickedIdx = await openUiSheet({
+                title: `Пользователь на «${server.name}»`,
+                searchable: true,
+                items: rows.map((row, idx) => ({
+                    value: String(idx),
+                    label: row.client.label || row.client.identifier || "Клиент",
+                    meta: [
+                        row.inbound.remark || `inbound ${row.inbound.panel_inbound_id ?? ""}`.trim(),
+                        String(row.inbound.protocol || row.client.protocol || "").toUpperCase(),
+                    ],
+                })),
+            });
+            if (pickedIdx === null) return null;
+            const row = rows[Number(pickedIdx)];
+            if (!row) return null;
+            return {
+                panel_inbound_ref_id: Number(row.inbound.panel_inbound_ref_id),
+                client_identifier: row.client.identifier,
+                protocol: String(row.inbound.protocol || row.client.protocol || "").toLowerCase(),
+                label: row.client.label || null,
+                secret: row.client.secret ?? null,
+                sub_id: row.client.sub_id ?? null,
+                server_name: server.name,
+                inbound_name: row.inbound.remark || "",
+            };
+        }
+
+        function bindingRequestBody(userId, binding) {
+            return {
+                user_id: Number(userId),
+                panel_inbound_ref_id: binding.panel_inbound_ref_id,
+                client_identifier: binding.client_identifier,
+                protocol: binding.protocol,
+                label: binding.label,
+                secret: binding.secret,
+                sub_id: binding.sub_id,
+            };
+        }
+
+        async function addStagedBinding(bindings, listEl, statusEl) {
+            try {
+                const picked = await pickServerBinding();
+                if (!picked) return;
+                const duplicate = bindings.some((item) =>
+                    item.panel_inbound_ref_id === picked.panel_inbound_ref_id
+                    && item.client_identifier === picked.client_identifier
+                );
+                if (duplicate) {
+                    setFormNote(statusEl, "Это подключение уже добавлено", "error");
+                    return;
+                }
+                bindings.push(picked);
+                renderStagedBindings(listEl, bindings);
+                setFormNote(statusEl, "");
+            } catch (err) {
+                setFormNote(statusEl, err?.message || "Не удалось выбрать подключение", "error");
+            }
+        }
+
+        function saveMemberDraft() {
+            try {
+                const mode = String(workMemberModeEl?.value || "existing");
+                const member = { mode, bindings: memberDraft.bindings.slice() };
+                if (mode === "existing") {
+                    const userId = Number(workMemberExistingSelectEl?.value || 0);
+                    if (!userId) throw new Error("Выбери пользователя из списка");
+                    if (createDraft.members.some((item) => item.mode === "existing" && item.user_id === userId)) {
+                        throw new Error("Этот пользователь уже добавлен");
+                    }
+                    const option = workMemberExistingSelectEl.options[workMemberExistingSelectEl.selectedIndex];
+                    member.user_id = userId;
+                    member.title = option?.textContent || `Пользователь #${userId}`;
+                } else if (mode === "new") {
+                    const identity = parseTelegramIdentity(workMemberIdentityEl?.value);
+                    if (!identity) throw new Error("Укажи числовой Telegram ID или username с @");
+                    member.telegram_id = identity.telegram_id;
+                    member.username = identity.username;
+                    member.name = String(workMemberNameEl?.value || "").trim();
+                    member.title = member.name || member.username || `ID ${member.telegram_id}`;
+                } else {
+                    const name = String(workMemberNameEl?.value || "").trim();
+                    if (!name) throw new Error("Укажи имя пустого места");
+                    member.name = name;
+                    member.title = name;
+                }
+                createDraft.members.push(member);
+                renderStagedMembers();
+                switchWorkPage("work-user-create-page");
+            } catch (err) {
+                setFormNote(workMemberStatusEl, err?.message || "Не удалось добавить участника", "error");
+            }
+        }
+
+        async function createGroupMember(member, groupId) {
+            const base = { subscription_type: "family_member", group_id: groupId, notes: null };
+            let userId;
+            if (member.mode === "existing") {
+                const result = await postJson(adminUserSubscriptionUrl(member.user_id), base);
+                userId = result?.overview?.user?.id || member.user_id;
+            } else {
+                const result = await postJson(adminUsersUrl, {
+                    ...base,
+                    name: member.name || null,
+                    telegram_id: member.telegram_id || null,
+                    username: member.username || null,
+                    allow_placeholder: member.mode === "placeholder",
+                });
+                userId = result?.user?.id;
+            }
+            for (const binding of member.bindings) {
+                await postJson(adminBindClientUrl, bindingRequestBody(userId, binding));
+            }
+            return userId;
+        }
+
+        async function submitUserCreate() {
+            if (!workUserCreateSubmitEl) return;
+            workUserCreateSubmitEl.disabled = true;
+            setFormNote(workUserCreateStatusEl, "Сохраняем пользователя…");
+            try {
+                const mode = String(workUserCreateModeEl?.value || "existing");
+                const type = String(workUserSubscriptionTypeEl?.value || "personal");
+                const date = String(workUserPaymentDateEl?.value || "").trim();
+                const payload = {
+                    price_amount: String(workUserMonthPriceEl?.value || "").trim() || null,
+                    billing_day: date ? Number(date.slice(-2)) : null,
+                    billing_details: String(workUserPaymentDetailsEl?.value || "").trim() || null,
+                    notes: String(workUserNotesEl?.value || "").trim() || null,
+                    subscription_type: type,
+                };
+                if (date) payload.access_until = `${date}T00:00:00+00:00`;
+
+                let userId;
+                let groupId = null;
+                if (mode === "existing") {
+                    userId = Number(workUserExistingSelectEl?.value || 0);
+                    if (!userId) throw new Error("Выбери пользователя из списка");
+                    const result = await postJson(adminUserSubscriptionUrl(userId), payload);
+                    groupId = result?.overview?.user?.group_id || null;
+                } else {
+                    const identity = parseTelegramIdentity(workUserIdentityEl?.value);
+                    if (!identity) throw new Error("Укажи числовой Telegram ID или username с @");
+                    const result = await postJson(adminUsersUrl, {
+                        ...payload,
+                        name: String(workUserNameEl?.value || "").trim() || null,
+                        telegram_id: identity.telegram_id,
+                        username: identity.username,
+                    });
+                    userId = result?.user?.id;
+                    groupId = result?.user?.group_id || null;
+                }
+
+                const failures = [];
+                for (const binding of createDraft.bindings) {
+                    try {
+                        await postJson(adminBindClientUrl, bindingRequestBody(userId, binding));
+                    } catch (err) {
+                        failures.push(`${binding.label || binding.client_identifier}: ${err?.message || "ошибка"}`);
+                    }
+                }
+                if (type === "family_admin") {
+                    for (const member of createDraft.members) {
+                        if (!groupId) {
+                            failures.push("группа семьи не создана, участники не добавлены");
+                            break;
+                        }
+                        try {
+                            await createGroupMember(member, groupId);
+                        } catch (err) {
+                            failures.push(`${member.title}: ${err?.message || "ошибка"}`);
+                        }
+                    }
+                }
+
+                await loadWorkClientsData();
+                if (userId) await openWorkClientPage(userId);
+                if (failures.length) {
+                    setFormNote(
+                        workClientActionStatusEl,
+                        `Пользователь создан, но не всё применилось: ${failures.join("; ")}`,
+                        "error"
+                    );
+                }
+            } catch (err) {
+                setFormNote(workUserCreateStatusEl, err?.message || "Не удалось сохранить пользователя", "error");
+            } finally {
+                workUserCreateSubmitEl.disabled = false;
+            }
         }
 
         function renderUserCreateGroups() {
-            [workUserGroupSelectEl, workSubGroupSelectEl].forEach((select) => {
-                if (!select) return;
-                const selectedId = select.value;
-                select.innerHTML = '<option value="">Выберите семью</option>';
-                (Array.isArray(workState.groups) ? workState.groups : []).forEach((group) => {
-                    const option = document.createElement("option");
-                    option.value = String(group.id);
-                    option.textContent = group.name || `Семья #${group.id}`;
-                    select.appendChild(option);
-                });
-                if (workState.groups.some((group) => String(group.id) === selectedId)) {
-                    select.value = selectedId;
-                }
+            if (!workSubGroupSelectEl) return;
+            const selectedId = workSubGroupSelectEl.value;
+            workSubGroupSelectEl.innerHTML = '<option value="">Выберите семью</option>';
+            (Array.isArray(workState.groups) ? workState.groups : []).forEach((group) => {
+                const option = document.createElement("option");
+                option.value = String(group.id);
+                option.textContent = group.name || `Семья #${group.id}`;
+                workSubGroupSelectEl.appendChild(option);
             });
+            if (workState.groups.some((group) => String(group.id) === selectedId)) {
+                workSubGroupSelectEl.value = selectedId;
+            }
         }
 
         function createWorkInboundStatusBadge(kind, enabled, mode = "icon") {
@@ -4343,21 +5010,7 @@ const statusCard = document.getElementById("status-card");
                 () => "",
                 "Select client from inbound"
             );
-            fillSelect(
-                workPendingClientSelectEl,
-                [],
-                () => "",
-                () => "",
-                "Select client from inbound"
-            );
             workState.clients = [];
-            if (workPendingInboundSelectEl?.value) {
-                await loadPendingInboundClients(workPendingInboundSelectEl.value);
-            } else {
-                renderPendingBindings([]);
-                renderPendingSubscriptionOverview(null);
-                setPendingSubscriptionStatus("Укажи Telegram ID и сохрани параметры подписки.");
-            }
             return { users: workState.users.length, inbounds: workState.inbounds.length };
         }
 
@@ -4427,34 +5080,13 @@ const statusCard = document.getElementById("status-card");
         }
 
         async function refreshInboundClientsFromPanel() {
-            const panelInboundRefId = workInboundSelectEl?.value?.trim();
-            if (!panelInboundRefId) {
-                throw new Error("Сначала выбери inbound");
-            }
-
             await postJson(adminSyncInboundsUrl);
             const inboundsResp = await fetchJson(adminInboundsUrl, false);
             workState.inbounds = Array.isArray(inboundsResp?.inbounds) ? inboundsResp.inbounds : [];
             renderWorkInboundsManager();
             renderWorkInboundSelectOptions();
             renderWorkPendingInboundSelectOptions();
-
-            const exists = workState.inbounds.some((row) => String(row?.panel_inbound_ref_id) === panelInboundRefId);
-            if (!exists) {
-                workState.clients = [];
-                fillSelect(workClientSelectEl, [], () => "", () => "", "Выбери клиента из inbound");
-                throw new Error(`Inbound ${panelInboundRefId} не найден после обновления`);
-            }
-
-            if (workInboundSelectEl) {
-                workInboundSelectEl.value = panelInboundRefId;
-            }
-            await loadInboundClients(panelInboundRefId);
-            if (workPendingInboundSelectEl?.value === panelInboundRefId) {
-                await loadPendingInboundClients(panelInboundRefId);
-            }
-
-            return { inbounds: workState.inbounds.length, clients: workState.clients.length };
+            return { inbounds: workState.inbounds.length };
         }
 
 
@@ -4477,6 +5109,12 @@ const statusCard = document.getElementById("status-card");
             }
             if (next === "work-panel-detail-page" && !workState.selectedPanelId) {
                 clearWorkPanelDetail();
+            }
+            if (next === "work-user-create-page" && current !== "work-user-member-page") {
+                resetUserCreateForm();
+            }
+            if (next === "work-user-member-page" && current !== "work-user-member-page") {
+                resetMemberForm();
             }
             workPages.forEach((page) => page.classList.toggle("hidden", page.id !== next));
             if (adminOnlyMode) {
@@ -4943,68 +5581,42 @@ const statusCard = document.getElementById("status-card");
             }
         });
 
-        workUserCreateToggleEl?.addEventListener("click", () => {
-            workUserCreateFormEl?.classList.toggle("hidden");
-            updateUserCreateMode();
-        });
-        workUserCreateModeEl?.addEventListener("change", updateUserCreateMode);
-        workUserSubscriptionTypeEl?.addEventListener("change", updateUserCreateGroupVisibility);
-        workUserExistingSearchEl?.addEventListener("input", renderUserCreateOptions);
-        workUserCreateSubmitEl?.addEventListener("click", async () => {
-            if (!workUserCreateSubmitEl) return;
-            workUserCreateSubmitEl.disabled = true;
-            if (workUserCreateStatusEl) {
-                workUserCreateStatusEl.classList.remove("hidden");
-                workUserCreateStatusEl.textContent = "Сохраняем пользователя...";
-            }
-            try {
-                const mode = String(workUserCreateModeEl?.value || "existing");
-                const date = String(workUserPaymentDateEl?.value || "").trim();
-                const billingDay = date ? Number(date.slice(-2)) : null;
-                const payload = {
-                    price_amount: String(workUserMonthPriceEl?.value || "").trim() || null,
-                    billing_day: billingDay,
-                    billing_details: String(workUserPaymentDetailsEl?.value || "").trim() || null,
-                    subscription_type: String(workUserSubscriptionTypeEl?.value || "personal"),
-                };
-                if (payload.subscription_type === "family_member") {
-                    const groupId = Number(workUserGroupSelectEl?.value || 0);
-                    if (!groupId) throw new Error("Выбери семью для участника");
-                    payload.group_id = groupId;
-                }
-                if (date) payload.access_until = `${date}T00:00:00+00:00`;
-                let userId;
-                if (mode === "existing") {
-                    userId = Number(workUserExistingSelectEl?.value || 0);
-                    if (!userId) throw new Error("Выбери пользователя из списка");
-                    await postJson(adminUserSubscriptionUrl(userId), payload);
-                } else {
-                    const name = String(workUserNameEl?.value || "").trim();
-                    const telegramId = String(workUserTelegramIdEl?.value || "").trim();
-                    const username = String(workUserUsernameEl?.value || "").trim();
-                    if (mode === "placeholder" && !name) throw new Error("Укажи имя пустого места");
-                    if (mode === "new") {
-                        const hasId = /^\d+$/.test(telegramId);
-                        const hasUsername = /^@[A-Za-z0-9_]{5,32}$/.test(username);
-                        if (hasId === hasUsername) throw new Error("Укажи либо числовой Telegram ID, либо username с @");
-                    }
-                    const result = await postJson(adminUsersUrl, {
-                        ...payload,
-                        name,
-                        telegram_id: telegramId || null,
-                        username: username || null,
-                        allow_placeholder: mode === "placeholder",
+        enhanceWorkSelects();
+
+        adminPageButtons.forEach((btn) =>
+            btn.addEventListener("click", () => {
+                const target = btn.dataset.adminPage || "work-clients-page";
+                if (getActiveWorkPageId() === target) return;
+                switchWorkPage(target);
+                if (target === "work-clients-page") {
+                    loadWorkClientsData().catch((err) => {
+                        console.error("load clients error:", err);
                     });
-                    userId = result?.user?.id;
                 }
-                await loadWorkClientsData();
-                if (userId) await openWorkClientPage(userId);
-                if (workUserCreateStatusEl) workUserCreateStatusEl.textContent = "Пользователь сохранён";
-            } catch (err) {
-                if (workUserCreateStatusEl) workUserCreateStatusEl.textContent = err?.message || "Не удалось сохранить пользователя";
-            } finally {
-                workUserCreateSubmitEl.disabled = false;
-            }
+            })
+        );
+
+        uiSheetCloseEl?.addEventListener("click", () => closeUiSheet(null));
+        uiSheetOverlayEl?.addEventListener("click", (event) => {
+            if (event.target === uiSheetOverlayEl) closeUiSheet(null);
+        });
+        uiSheetSearchEl?.addEventListener("input", renderUiSheetItems);
+
+        workUserCreateModeEl?.addEventListener("change", updateUserCreateMode);
+        workUserSubscriptionTypeEl?.addEventListener("change", updateUserCreateType);
+        workMemberModeEl?.addEventListener("change", updateMemberMode);
+        workUserBindingsAddEl?.addEventListener("click", () => {
+            addStagedBinding(createDraft.bindings, workUserBindingsListEl, workUserCreateStatusEl);
+        });
+        workMemberBindingsAddEl?.addEventListener("click", () => {
+            addStagedBinding(memberDraft.bindings, workMemberBindingsListEl, workMemberStatusEl);
+        });
+        workUserMembersAddEl?.addEventListener("click", () => {
+            switchWorkPage("work-user-member-page");
+        });
+        workMemberSaveEl?.addEventListener("click", saveMemberDraft);
+        workUserCreateSubmitEl?.addEventListener("click", () => {
+            submitUserCreate();
         });
 
         workVerifyGenerateEl?.addEventListener("click", async () => {
@@ -5233,9 +5845,13 @@ const statusCard = document.getElementById("status-card");
         });
 
         workRefreshInboundClientsBtnEl?.addEventListener("click", async () => {
-            await runWorkAction("Refresh Inbound Clients", async () => {
-                return refreshInboundClientsFromPanel();
-            });
+            setFormNote(workBindStatusEl, "Обновляем список с серверов…");
+            try {
+                const result = await refreshInboundClientsFromPanel();
+                setFormNote(workBindStatusEl, `Список обновлён. Подключений: ${result.inbounds}`, "success");
+            } catch (err) {
+                setFormNote(workBindStatusEl, err?.message || "Не удалось обновить список", "error");
+            }
         });
 
         workInboundSelectEl?.addEventListener("change", async () => {
@@ -5326,34 +5942,23 @@ const statusCard = document.getElementById("status-card");
             });
         });
 
-        workBindBtnEl?.addEventListener("click", async () => {
-            await runWorkAction("Bind Client", async () => {
-                const userId = workState.selectedUserId;
-                if (!userId) {
-                    throw new Error("Open client card first");
-                }
-                const { panelInboundRefId, inbound, client } = resolveInboundClientSelection(
-                    workInboundSelectEl,
-                    workClientSelectEl,
-                    workState.clients,
-                    "Select inbound and client"
-                );
-
-                const payload = {
-                    user_id: Number(userId),
-                    panel_inbound_ref_id: panelInboundRefId,
-                    client_identifier: client.identifier,
-                    protocol: (inbound.protocol || client.protocol || "").toLowerCase(),
-                    label: client.label,
-                    secret: client.secret,
-                    sub_id: client.sub_id,
-                };
-
-                const result = await postJson(adminBindClientUrl, payload);
+        workBindAddBtnEl?.addEventListener("click", async () => {
+            const userId = workState.selectedUserId;
+            if (!userId) {
+                setFormNote(workBindStatusEl, "Сначала открой карточку клиента", "error");
+                return;
+            }
+            setFormNote(workBindStatusEl, "");
+            try {
+                const picked = await pickServerBinding();
+                if (!picked) return;
+                await postJson(adminBindClientUrl, bindingRequestBody(userId, picked));
                 await loadSelectedUserBindings();
                 await loadSelectedUserOverview();
-                return result;
-            });
+                setFormNote(workBindStatusEl, "Подключение привязано", "success");
+            } catch (err) {
+                setFormNote(workBindStatusEl, err?.message || "Не удалось привязать подключение", "error");
+            }
         });
 
         workPendingAddBtnEl?.addEventListener("click", async () => {

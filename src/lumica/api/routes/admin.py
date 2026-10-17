@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
-from lumica.domain.models import MiniAppLaunch, SubscriptionVpnAccount
+from lumica.domain.models import MiniAppLaunch, Subscription, SubscriptionVpnAccount
 from lumica.services import user_provisioning
 from lumica.services.notifications import send_raw
 from lumica.services.user_audit import record_user_event
@@ -515,23 +515,39 @@ def register_admin_routes(app, deps):
         if err:
             return err
 
+        # В списке клиентов - только те, кого уже добавили с подпиской (есть
+        # не-черновая подписка или админ задал тип подписки). Те, кто просто
+        # открыл бота, сюда не попадают: их можно выбрать через /users/known.
         with SessionLocal() as db:
-            rows = db.query(User).order_by(User.id.asc()).all()
-            return jsonify(
-                {
-                    "ok": True,
-                    "users": [
-                        {
-                            "id": u.id,
-                            "telegram_id": u.telegram_id,
-                            "username": u.username,
-                            "name": u.name,
-                            "role": u.role,
-                        }
-                        for u in rows
-                    ],
-                }
-            )
+            latest_subscription: dict[int, Subscription] = {}
+            for sub in (
+                db.query(Subscription)
+                .filter(Subscription.status != "draft")
+                .order_by(Subscription.id.asc())
+                .all()
+            ):
+                latest_subscription[sub.user_id] = sub
+
+            users: list[dict] = []
+            for u in db.query(User).order_by(User.id.asc()).all():
+                profile = u.profile_data if isinstance(u.profile_data, dict) else {}
+                subscription_type = profile.get("subscription_type")
+                sub = latest_subscription.get(u.id)
+                if sub is None and not subscription_type:
+                    continue
+                users.append(
+                    {
+                        "id": u.id,
+                        "telegram_id": u.telegram_id,
+                        "username": u.username,
+                        "name": u.name,
+                        "role": u.role,
+                        "group_id": u.group_id,
+                        "subscription_type": subscription_type or "personal",
+                        "subscription_status": sub.status if sub else None,
+                    }
+                )
+            return jsonify({"ok": True, "users": users})
 
     @app.get("/api/admin/users/known")
     def admin_known_users():
@@ -615,6 +631,7 @@ def register_admin_routes(app, deps):
                             "phone": user.phone,
                             "name": user.name,
                             "role": user.role,
+                            "group_id": user.group_id,
                         },
                     }
                 ),

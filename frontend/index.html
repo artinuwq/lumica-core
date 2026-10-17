@@ -192,50 +192,143 @@
                                 <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
                                 <div class="work-page-title">Пользователи</div>
                             </div>
+                            <button id="work-user-create-toggle" type="button" class="work-btn work-btn-primary" data-work-nav="work-user-create-page">
+                                <span class="work-btn-plus" aria-hidden="true">+</span>
+                                <span>Создать пользователя</span>
+                            </button>
                             <div class="work-bind">
-                                <button id="work-user-create-toggle" type="button" class="work-btn">Создать пользователя</button>
-                                <div id="work-user-create-form" class="work-bind hidden">
-                                    <select id="work-user-create-mode">
-                                        <option value="existing">Уже есть</option>
-                                        <option value="new">Новый</option>
-                                        <option value="placeholder">Пустое место</option>
-                                    </select>
-                                    <div id="work-user-existing-wrap">
-                                        <input id="work-user-existing-search" type="search" placeholder="Найти пользователя">
-                                        <select id="work-user-existing-select">
-                                            <option value="">Выберите пользователя</option>
-                                        </select>
-                                    </div>
-                                    <div id="work-user-identity-wrap" class="hidden">
-                                        <input id="work-user-name" type="text" placeholder="Имя пользователя">
-                                        <input id="work-user-telegram-id" type="text" inputmode="numeric" placeholder="Telegram ID (цифры)">
-                                        <input id="work-user-username" type="text" placeholder="Username с @">
-                                    </div>
-                                    <input id="work-user-month-price" type="number" min="0" step="0.01" placeholder="Оплата за месяц">
-                                    <label class="work-sub-create-label" for="work-user-payment-date">Дата следующей оплаты</label>
-                                    <input id="work-user-payment-date" type="date">
-                                    <textarea id="work-user-payment-details" rows="2" placeholder="Реквизиты"></textarea>
-                                    <select id="work-user-subscription-type">
-                                        <option value="personal">Личная подписка</option>
-                                        <option value="family_admin">Администратор семьи</option>
-                                        <option value="family_member">Участник группы</option>
-                                    </select>
-                                    <div id="work-user-group-wrap" class="hidden">
-                                        <label class="work-sub-create-label" for="work-user-group-select">Семья</label>
-                                        <select id="work-user-group-select">
-                                            <option value="">Выберите семью</option>
-                                        </select>
-                                    </div>
-                                    <button id="work-user-create-submit" type="button" class="work-btn">Сохранить пользователя</button>
-                                    <div id="work-user-create-status" class="work-note hidden"></div>
-                                </div>
-                            </div>
-                            <div class="work-bind">
-                                <input id="work-client-search" type="text" placeholder="Поиск по имени / username / Telegram ID">
+                                <input id="work-client-search" type="text" placeholder="Поиск по имени, @username или Telegram ID">
                             </div>
                             <div id="work-client-cards" class="work-client-cards">
-                                <div class="work-empty">Загрузка списка клиентов...</div>
+                                <div class="work-empty">Загрузка списка пользователей...</div>
                             </div>
+                        </section>
+
+                        <section id="work-user-create-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-clients-page">← Назад</button>
+                                <div class="work-page-title">Новый пользователь</div>
+                            </div>
+
+                            <div class="form-card">
+                                <div class="form-card-title">Кто это</div>
+                                <select id="work-user-create-mode" data-ui="segmented">
+                                    <option value="existing">Уже есть</option>
+                                    <option value="new">Новый</option>
+                                </select>
+                                <div id="work-user-existing-wrap" class="field">
+                                    <select id="work-user-existing-select" data-ui="sheet" data-searchable="true" data-sheet-title="Кого добавляем">
+                                        <option value="">Выбрать из тех, кто открывал бота</option>
+                                    </select>
+                                </div>
+                                <div id="work-user-identity-wrap" class="form-fields hidden">
+                                    <div class="field">
+                                        <label class="field-label" for="work-user-identity">Telegram ID или @username</label>
+                                        <input id="work-user-identity" class="field-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="123456789 или @username">
+                                        <div class="field-hint">ID — только цифры. Username — обязательно с @.</div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="work-user-name">Имя <span class="field-optional">необязательно</span></label>
+                                        <input id="work-user-name" class="field-input" type="text" autocomplete="off" placeholder="Как подписать в списке">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-card">
+                                <div class="form-card-title">Оплата</div>
+                                <div class="field-row">
+                                    <div class="field">
+                                        <label class="field-label" for="work-user-month-price">Сумма в месяц</label>
+                                        <div class="field-affix">
+                                            <input id="work-user-month-price" class="field-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0">
+                                            <span class="field-suffix">₽</span>
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="work-user-payment-date">Дата оплаты</label>
+                                        <input id="work-user-payment-date" class="field-input" type="date">
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label class="field-label" for="work-user-payment-details">Реквизиты</label>
+                                    <textarea id="work-user-payment-details" class="field-input field-textarea" rows="2" placeholder="Банк и номер карты&#10;Имя получателя"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="form-card">
+                                <div class="form-card-title">Тип подписки</div>
+                                <select id="work-user-subscription-type" data-ui="segmented">
+                                    <option value="personal">Личная</option>
+                                    <option value="family_admin">Админ семьи</option>
+                                </select>
+                            </div>
+
+                            <div class="form-card">
+                                <div class="form-card-head">
+                                    <div class="form-card-title">Подключения</div>
+                                    <button id="work-user-bindings-add" type="button" class="icon-add-btn" aria-label="Добавить подключение">+</button>
+                                </div>
+                                <div id="work-user-bindings-list" class="binding-list"></div>
+                            </div>
+
+                            <div class="form-card">
+                                <div class="form-card-title">Прокси-ссылки</div>
+                                <textarea id="work-user-notes" class="field-input field-textarea" rows="3" placeholder="Одна ссылка на строку: Telegram-прокси, SOCKS5 и т. д."></textarea>
+                            </div>
+
+                            <div id="work-user-members-card" class="form-card hidden">
+                                <div class="form-card-head">
+                                    <div class="form-card-title">Участники группы</div>
+                                    <button id="work-user-members-add" type="button" class="icon-add-btn" aria-label="Добавить участника">+</button>
+                                </div>
+                                <div id="work-user-members-list" class="binding-list"></div>
+                            </div>
+
+                            <button id="work-user-create-submit" type="button" class="work-btn work-btn-primary work-btn-center">Создать пользователя</button>
+                            <div id="work-user-create-status" class="work-note hidden"></div>
+                        </section>
+
+                        <section id="work-user-member-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-user-create-page">← Назад</button>
+                                <div class="work-page-title">Участник группы</div>
+                            </div>
+
+                            <div class="form-card">
+                                <div class="form-card-title">Кто это</div>
+                                <select id="work-member-mode" data-ui="segmented">
+                                    <option value="existing">Уже есть</option>
+                                    <option value="new">Новый</option>
+                                    <option value="placeholder">Пустой</option>
+                                </select>
+                                <div id="work-member-existing-wrap" class="field">
+                                    <select id="work-member-existing-select" data-ui="sheet" data-searchable="true" data-sheet-title="Кого добавляем">
+                                        <option value="">Выбрать из тех, кто открывал бота</option>
+                                    </select>
+                                </div>
+                                <div id="work-member-identity-wrap" class="form-fields hidden">
+                                    <div id="work-member-identity-field" class="field">
+                                        <label class="field-label" for="work-member-identity">Telegram ID или @username</label>
+                                        <input id="work-member-identity" class="field-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="123456789 или @username">
+                                        <div class="field-hint">ID — только цифры. Username — обязательно с @.</div>
+                                    </div>
+                                    <div class="field">
+                                        <label id="work-member-name-label" class="field-label" for="work-member-name">Имя <span class="field-optional">необязательно</span></label>
+                                        <input id="work-member-name" class="field-input" type="text" autocomplete="off" placeholder="Как подписать в списке">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-card">
+                                <div class="form-card-head">
+                                    <div class="form-card-title">Подключения</div>
+                                    <button id="work-member-bindings-add" type="button" class="icon-add-btn" aria-label="Добавить подключение">+</button>
+                                </div>
+                                <div id="work-member-bindings-list" class="binding-list"></div>
+                            </div>
+
+                            <button id="work-member-save" type="button" class="work-btn work-btn-primary work-btn-center">Добавить в группу</button>
+                            <div id="work-member-status" class="work-note hidden"></div>
                         </section>
 
                         <section id="work-verify-page" class="work-page hidden">
@@ -450,7 +543,7 @@
                             <div id="work-client-action-status" class="work-note hidden"></div>
                             <div class="work-bind" id="work-client-role-wrap">
                                 <label class="work-sub-create-label" for="work-client-role-select">Роль клиента</label>
-                                <select id="work-client-role-select">
+                                <select id="work-client-role-select" data-ui="sheet" data-sheet-title="Роль клиента">
                                     <option value="user">user</option>
                                     <option value="support">support</option>
                                     <option value="admin">admin</option>
@@ -476,18 +569,14 @@
                                 <button class="work-back-btn" data-work-back="work-client-page">← Назад</button>
                                 <div class="work-page-title">Подключения</div>
                             </div>
-                            <div class="work-bind">
-                                <select id="work-inbound-select">
-                                    <option value="">Выбери inbound</option>
-                                </select>
-                                <select id="work-client-select">
-                                    <option value="">Выбери клиента из inbound</option>
-                                </select>
-                                <div class="work-bind-actions">
-                                    <button id="work-bind-btn" class="work-btn">Привязать inbound</button>
-                                    <button id="work-refresh-inbound-clients-btn" type="button" class="work-btn">Обновить</button>
+                            <div class="form-card">
+                                <div class="form-card-head">
+                                    <div class="form-card-title">Привязать подключение</div>
+                                    <button id="work-bind-add-btn" type="button" class="icon-add-btn" aria-label="Привязать подключение">+</button>
                                 </div>
-                                <div class="work-note">Порядок: пользователь → inbound → клиент → привязка.</div>
+                                <div class="work-note">Нажми «+», выбери сервер, затем пользователя на этом сервере.</div>
+                                <button id="work-refresh-inbound-clients-btn" type="button" class="work-btn work-btn-ghost">Обновить список с серверов</button>
+                                <div id="work-bind-status" class="work-note hidden"></div>
                             </div>
                             <div class="work-page-title">Существующие связи</div>
                             <div id="work-existing-links" class="work-links-list">
@@ -500,35 +589,70 @@
                                 <button class="work-back-btn" data-work-back="work-client-page">← Назад</button>
                                 <div class="work-page-title">Подписка</div>
                             </div>
-                            <div class="work-bind">
-                                <select id="work-sub-status-select">
-                                    <option value="active">active</option>
-                                    <option value="lifetime">lifetime</option>
-                                    <option value="paused">paused</option>
-                                    <option value="expired">expired</option>
-                                    <option value="canceled">canceled</option>
-                                    <option value="inactive">inactive</option>
-                                </select>
-                                <input id="work-sub-price-input" type="number" min="0" step="0.01" placeholder="Цена (₽)">
-                                <input id="work-sub-limit-input" type="number" min="0" step="1" placeholder="Лимит подключений">
-                                <label class="work-sub-create-label" for="work-sub-billing-day">День оплаты</label>
-                                <input id="work-sub-billing-day" type="number" min="1" max="31" step="1" placeholder="1–31">
-                                <textarea id="work-sub-billing-details" rows="2" placeholder="Реквизиты"></textarea>
-                                <textarea id="work-sub-notes" rows="3" placeholder="Ссылки прокси и заметки, по одной на строку"></textarea>
-                                <select id="work-subscription-type-select">
+                            <div class="form-card">
+                                <div class="form-card-title">Статус и лимит</div>
+                                <div class="field">
+                                    <label class="field-label" for="work-sub-status-select">Статус</label>
+                                    <select id="work-sub-status-select" data-ui="sheet" data-sheet-title="Статус подписки">
+                                        <option value="active">active</option>
+                                        <option value="lifetime">lifetime</option>
+                                        <option value="paused">paused</option>
+                                        <option value="expired">expired</option>
+                                        <option value="canceled">canceled</option>
+                                        <option value="inactive">inactive</option>
+                                    </select>
+                                </div>
+                                <div class="field-row">
+                                    <div class="field">
+                                        <label class="field-label" for="work-sub-price-input">Цена в месяц</label>
+                                        <div class="field-affix">
+                                            <input id="work-sub-price-input" class="field-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0">
+                                            <span class="field-suffix">₽</span>
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="work-sub-limit-input">Лимит подключений</label>
+                                        <input id="work-sub-limit-input" class="field-input" type="number" inputmode="numeric" min="0" step="1" placeholder="—">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-card">
+                                <div class="form-card-title">Оплата</div>
+                                <div class="field">
+                                    <label class="field-label" for="work-sub-billing-day">День оплаты</label>
+                                    <input id="work-sub-billing-day" class="field-input" type="number" inputmode="numeric" min="1" max="31" step="1" placeholder="1–31">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label" for="work-sub-billing-details">Реквизиты</label>
+                                    <textarea id="work-sub-billing-details" class="field-input field-textarea" rows="2" placeholder="Банк и номер карты&#10;Имя получателя"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="form-card">
+                                <div class="form-card-title">Тип подписки</div>
+                                <select id="work-subscription-type-select" data-ui="sheet" data-sheet-title="Тип подписки">
                                     <option value="personal">Личная подписка</option>
                                     <option value="family_admin">Администратор семьи</option>
                                     <option value="family_member">Участник группы</option>
                                 </select>
-                                <div id="work-sub-group-wrap" class="hidden">
-                                    <label class="work-sub-create-label" for="work-sub-group-select">Семья</label>
-                                    <select id="work-sub-group-select">
+                                <div id="work-sub-group-wrap" class="field hidden">
+                                    <label class="field-label" for="work-sub-group-select">Семья</label>
+                                    <select id="work-sub-group-select" data-ui="sheet" data-sheet-title="Выбери семью">
                                         <option value="">Выберите семью</option>
                                     </select>
                                 </div>
-                                <button id="work-sub-save-btn" class="work-btn">Сохранить параметры</button>
                             </div>
-                            <div class="work-bind">
+
+                            <div class="form-card">
+                                <div class="form-card-title">Прокси-ссылки и заметки</div>
+                                <textarea id="work-sub-notes" class="field-input field-textarea" rows="3" placeholder="Одна ссылка на строку: Telegram-прокси, SOCKS5 и т. д."></textarea>
+                            </div>
+
+                            <button id="work-sub-save-btn" type="button" class="work-btn work-btn-primary work-btn-center">Сохранить параметры</button>
+
+                            <div class="form-card">
+                                <div class="form-card-title">Продление</div>
                                 <div id="work-sub-extend-wrap" class="work-sub-extend-wrap">
                                     <div class="work-sub-extend-head">
                                         <span class="work-sub-extend-label">Срок продления</span>
@@ -537,10 +661,10 @@
                                     <input id="work-sub-extend-range" class="work-sub-extend-range" type="range" min="1" max="12" step="1" value="1">
                                 </div>
                                 <div id="work-sub-create-wrap" class="work-sub-create-wrap hidden">
-                                    <label class="work-sub-create-label" for="work-sub-create-date">Дата окончания (если подписки нет)</label>
-                                    <input id="work-sub-create-date" class="work-sub-create-input" type="date">
+                                    <label class="field-label" for="work-sub-create-date">Дата окончания (если подписки нет)</label>
+                                    <input id="work-sub-create-date" class="field-input work-sub-create-input" type="date">
                                 </div>
-                                <button id="work-sub-extend-btn" class="work-btn">Продлить подписку</button>
+                                <button id="work-sub-extend-btn" type="button" class="work-btn work-btn-center">Продлить подписку</button>
                             </div>
                         </section>
                     </div>
@@ -730,6 +854,18 @@
             </div>
         </section>
     </main>
+
+    <div id="ui-sheet-overlay" class="ui-sheet-overlay hidden" aria-hidden="true">
+        <div id="ui-sheet" class="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="ui-sheet-title">
+            <div class="ui-sheet-grip" aria-hidden="true"></div>
+            <div class="ui-sheet-head">
+                <div id="ui-sheet-title" class="ui-sheet-title">Выбор</div>
+                <button id="ui-sheet-close" type="button" class="ui-sheet-close" aria-label="Закрыть">&times;</button>
+            </div>
+            <input id="ui-sheet-search" class="field-input ui-sheet-search hidden" type="search" autocomplete="off" placeholder="Поиск">
+            <div id="ui-sheet-list" class="ui-sheet-list" role="listbox"></div>
+        </div>
+    </div>
 
     <script src="static/assets/js/app.js"></script>
 </body>
