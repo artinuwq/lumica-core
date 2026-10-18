@@ -70,7 +70,49 @@ def build_auth_helpers(deps):
             else None
         )
 
+        from lumica.domain.models import Group as _Group
+
+        def _display_name(person) -> str:
+            return str(person.name or person.username or f"#{person.id}")
+
+        group_info = None
+        if user.group_id:
+            own_group = db.query(_Group).filter(_Group.id == user.group_id).first()
+            if own_group:
+                group_admin = (
+                    db.query(User).filter(User.id == own_group.admin_user_id).first()
+                    if own_group.admin_user_id
+                    else None
+                )
+                group_info = {
+                    "id": own_group.id,
+                    "name": own_group.name,
+                    "admin_user_id": own_group.admin_user_id,
+                    "admin_name": _display_name(group_admin) if group_admin else None,
+                    "is_admin": own_group.admin_user_id == user.id,
+                }
+
+        administered_groups = []
+        for admin_group in db.query(_Group).filter(_Group.admin_user_id == user.id).order_by(_Group.id.asc()).all():
+            member_rows = []
+            for member in db.query(User).filter(User.group_id == admin_group.id).order_by(User.id.asc()).all():
+                if member.id == user.id:
+                    continue
+                member_sub = _latest_subscription(db, member.id)
+                member_rows.append(
+                    {
+                        "id": member.id,
+                        "name": member.name,
+                        "username": member.username,
+                        "telegram_id": member.telegram_id,
+                        "subscription_status": member_sub.status if member_sub else None,
+                    }
+                )
+            administered_groups.append({"id": admin_group.id, "name": admin_group.name, "members": member_rows})
+
         return {
+            "group": group_info,
+            "administered_groups": administered_groups,
             "user": {
                 "id": user.id,
                 "telegram_id": user.telegram_id,

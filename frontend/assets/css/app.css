@@ -2181,3 +2181,65 @@
         .work-modal-body .work-bind {
             margin-top: 0;
         }
+
+        /* ---------- Страница клиента ---------- */
+        .work-bind-actions.work-bind-actions-auto {
+            grid-template-columns: none;
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(0, 1fr);
+        }
+        .work-client-member-note {
+            margin-top: 0.5rem;
+            padding: 0.4rem 0.7rem;
+            border-radius: 0.7rem;
+            background: rgba(120, 160, 255, 0.12);
+            border: 1px solid rgba(150, 185, 255, 0.28);
+            color: rgba(230, 240, 255, 0.92);
+            font-size: 0.78rem;
+            line-height: 1.3;
+            text-align: center;
+        }
+        .work-client-member-note + .work-bind-actions,
+        .work-panel-tiles + .work-bind-actions {
+            margin-top: 0.6rem;
+        }
+        .work-chip-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.4rem;
+            margin: 0.35rem 0 0.7rem;
+        }
+        .work-chip {
+            padding: 0.5rem 0.3rem;
+            border-radius: 0.7rem;
+            border: 1px solid rgba(150, 185, 255, 0.28);
+            background: rgba(255, 255, 255, 0.05);
+            color: #f5f9ff;
+            font: inherit;
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+        .work-chip.active {
+            background: rgba(90, 140, 255, 0.35);
+            border-color: rgba(150, 185, 255, 0.75);
+            font-weight: 700;
+        }
+        .work-btn-danger {
+            color: #ff9b9b;
+            border-color: rgba(255, 120, 120, 0.4);
+        }
+        .work-modal-body > .work-btn {
+            margin-top: 0.55rem;
+        }
+        .work-details {
+            margin: 0.4rem 0 0.7rem;
+        }
+        .work-details > summary {
+            cursor: pointer;
+            padding: 0.4rem 0;
+            color: rgba(219, 234, 255, 0.8);
+            font-size: 0.85rem;
+        }
+        .work-link-item-clickable {
+            cursor: pointer;
+        }

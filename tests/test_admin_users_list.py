@@ -99,3 +99,54 @@ def test_admin_users_works_when_nobody_has_a_subscription_yet():
 
     assert response.status_code == 200
     assert [u["name"] for u in response.get_json()["users"]] == ["Lonely"]
+
+
+def test_user_overview_exposes_group_membership_and_administered_groups():
+    from datetime import datetime, timezone
+
+    from lumica.api.helpers import build_auth_helpers
+    from lumica.domain.models import Group, VpnAccount
+
+    def _as_utc(value):
+        if value is None:
+            return None
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    helpers = build_auth_helpers(
+        {
+            "User": User,
+            "Subscription": Subscription,
+            "VpnAccount": VpnAccount,
+            "_as_utc": _as_utc,
+            "utcnow": lambda: datetime.now(timezone.utc),
+            "_latest_subscription": lambda db, user_id: (
+                db.query(Subscription).filter(Subscription.user_id == user_id).order_by(Subscription.id.desc()).first()
+            ),
+            "_extract_connections_limit": lambda _user: None,
+        }
+    )
+    serialize = helpers["_serialize_admin_user_overview"]
+
+    factory = _factory()
+    with factory() as db:
+        owner = User(telegram_id="10", name="Family Owner")
+        db.add(owner)
+        db.flush()
+        group = Group(name="Семья", admin_user_id=owner.id)
+        db.add(group)
+        db.flush()
+        member = User(telegram_id="11", name="Kid", group_id=group.id)
+        db.add(member)
+        db.flush()
+        db.add(Subscription(user_id=member.id, status="paused"))
+        db.commit()
+
+        member_overview = serialize(db, member)
+        assert member_overview["group"]["admin_name"] == "Family Owner"
+        assert member_overview["group"]["is_admin"] is False
+        assert member_overview["administered_groups"] == []
+
+        owner_overview = serialize(db, owner)
+        assert owner_overview["group"] is None
+        listed = owner_overview["administered_groups"][0]["members"]
+        assert [(m["name"], m["subscription_status"]) for m in listed] == [("Kid", "paused")]

@@ -512,63 +512,43 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="card work-client-summary-card">
-                                <div class="work-client-summary" id="work-client-summary">
-                                    <div class="work-client-summary-row">
-                                        <div class="work-client-summary-label">Подписка</div>
-                                        <div class="work-client-summary-value" id="work-client-sub-status">—</div>
+                            <div id="work-client-summary" class="work-panel-tiles">
+                                <div class="work-panel-tiles-row triple">
+                                    <div class="work-link-item work-panel-tile">
+                                        <div class="work-panel-tile-label">Статус</div>
+                                        <div class="work-panel-tile-value" id="work-client-sub-status">—</div>
                                     </div>
-                                    <div class="work-client-summary-row">
-                                        <div class="work-client-summary-label">До</div>
-                                        <div class="work-client-summary-value" id="work-client-sub-until">—</div>
+                                    <div class="work-link-item work-panel-tile">
+                                        <div class="work-panel-tile-label">До</div>
+                                        <div class="work-panel-tile-value" id="work-client-sub-until">—</div>
                                     </div>
-                                    <div class="work-client-summary-row">
-                                        <div class="work-client-summary-label">Платит</div>
-                                        <div class="work-client-summary-value" id="work-client-sub-price">—</div>
-                                    </div>
-                                    <div class="work-client-summary-row">
-                                        <div class="work-client-summary-label">Лимит подключений</div>
-                                        <div class="work-client-summary-value" id="work-client-connections-available">—</div>
+                                    <div class="work-link-item work-panel-tile">
+                                        <div class="work-panel-tile-label">Платит</div>
+                                        <div class="work-panel-tile-value" id="work-client-sub-price">—</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="work-bind-actions">
-                                <button id="work-client-freeze-btn" type="button" class="work-btn">Заморозить пользователя</button>
-                                <button id="work-client-manual-extend-btn" type="button" class="work-btn">Продлить на месяц</button>
+                            <div id="work-client-member-note" class="work-client-member-note hidden"></div>
+                            <div class="work-bind-actions work-bind-actions-row">
+                                <button id="work-client-actions-btn" type="button" class="work-btn work-btn-center">Действия</button>
+                                <button id="work-client-extend-btn" type="button" class="work-btn work-btn-center">Продлить</button>
                             </div>
                             <div id="work-client-action-status" class="work-note hidden"></div>
-                            <div class="work-bind" id="work-client-role-wrap">
-                                <label class="work-sub-create-label" for="work-client-role-select">Роль клиента</label>
-                                <select id="work-client-role-select" data-ui="sheet" data-sheet-title="Роль клиента">
-                                    <option value="user">user</option>
-                                    <option value="support">support</option>
-                                    <option value="admin">admin</option>
-                                    <option value="owner">owner</option>
-                                </select>
-                                <button id="work-client-role-save-btn" class="work-btn" type="button">Сохранить роль</button>
-                                <div id="work-client-role-status" class="work-note hidden"></div>
-                            </div>
-                            <div class="work-actions">
-                                <button type="button" class="work-action-link" data-work-nav="work-client-connections-page">
-                                    <span class="work-action-link-label">Подключения</span>
-                                    <span class="work-action-link-chevron" aria-hidden="true">›</span>
-                                </button>
-                                <button type="button" class="work-action-link" data-work-nav="work-client-subscription-page">
-                                    <span class="work-action-link-label">Подписка</span>
-                                    <span class="work-action-link-chevron" aria-hidden="true">›</span>
-                                </button>
+                            <div class="work-bind-actions work-bind-actions-auto">
+                                <button type="button" class="work-btn work-btn-center" data-work-nav="work-client-connections-page">Подписки</button>
+                                <button id="work-client-group-btn" type="button" class="work-btn work-btn-center hidden" data-work-nav="work-client-group-page">Группа</button>
                             </div>
                         </section>
 
                         <section id="work-client-connections-page" class="work-page hidden">
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-client-page">← Назад</button>
-                                <div class="work-page-title">Подключения</div>
+                                <div class="work-page-title">Подписки</div>
                             </div>
                             <div class="form-card">
                                 <div class="form-card-head">
-                                    <div class="form-card-title">Привязать подключение</div>
-                                    <button id="work-bind-add-btn" type="button" class="icon-add-btn" aria-label="Привязать подключение">+</button>
+                                    <div class="form-card-title">Привязать подписку</div>
+                                    <button id="work-bind-add-btn" type="button" class="icon-add-btn" aria-label="Привязать подписку">+</button>
                                 </div>
                                 <div class="work-note">Нажми «+», выбери сервер, затем пользователя на этом сервере.</div>
                                 <button id="work-refresh-inbound-clients-btn" type="button" class="work-btn work-btn-ghost">Обновить список с серверов</button>
@@ -580,87 +560,13 @@
                             </div>
                         </section>
 
-                        <section id="work-client-subscription-page" class="work-page hidden">
+                        <section id="work-client-group-page" class="work-page hidden">
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-client-page">← Назад</button>
-                                <div class="work-page-title">Подписка</div>
+                                <div class="work-page-title">Группа</div>
                             </div>
-                            <div class="form-card">
-                                <div class="form-card-title">Статус и лимит</div>
-                                <div class="field">
-                                    <label class="field-label" for="work-sub-status-select">Статус</label>
-                                    <select id="work-sub-status-select" data-ui="sheet" data-sheet-title="Статус подписки">
-                                        <option value="active">active</option>
-                                        <option value="lifetime">lifetime</option>
-                                        <option value="paused">paused</option>
-                                        <option value="expired">expired</option>
-                                        <option value="canceled">canceled</option>
-                                        <option value="inactive">inactive</option>
-                                    </select>
-                                </div>
-                                <div class="field-row">
-                                    <div class="field">
-                                        <label class="field-label" for="work-sub-price-input">Цена в месяц</label>
-                                        <div class="field-affix">
-                                            <input id="work-sub-price-input" class="field-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0">
-                                            <span class="field-suffix">₽</span>
-                                        </div>
-                                    </div>
-                                    <div class="field">
-                                        <label class="field-label" for="work-sub-limit-input">Лимит подключений</label>
-                                        <input id="work-sub-limit-input" class="field-input" type="number" inputmode="numeric" min="0" step="1" placeholder="—">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-card">
-                                <div class="form-card-title">Оплата</div>
-                                <div class="field">
-                                    <label class="field-label" for="work-sub-billing-day">День оплаты</label>
-                                    <input id="work-sub-billing-day" class="field-input" type="number" inputmode="numeric" min="1" max="31" step="1" placeholder="1–31">
-                                </div>
-                                <div class="field">
-                                    <label class="field-label" for="work-sub-billing-details">Реквизиты</label>
-                                    <textarea id="work-sub-billing-details" class="field-input field-textarea" rows="2" placeholder="Банк и номер карты&#10;Имя получателя"></textarea>
-                                </div>
-                            </div>
-
-                            <div class="form-card">
-                                <div class="form-card-title">Тип подписки</div>
-                                <select id="work-subscription-type-select" data-ui="sheet" data-sheet-title="Тип подписки">
-                                    <option value="personal">Личная подписка</option>
-                                    <option value="family_admin">Администратор семьи</option>
-                                    <option value="family_member">Участник группы</option>
-                                </select>
-                                <div id="work-sub-group-wrap" class="field hidden">
-                                    <label class="field-label" for="work-sub-group-select">Семья</label>
-                                    <select id="work-sub-group-select" data-ui="sheet" data-sheet-title="Выбери семью">
-                                        <option value="">Выберите семью</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="form-card">
-                                <div class="form-card-title">Прокси-ссылки и заметки</div>
-                                <textarea id="work-sub-notes" class="field-input field-textarea" rows="3" placeholder="Одна ссылка на строку: Telegram-прокси, SOCKS5 и т. д."></textarea>
-                            </div>
-
-                            <button id="work-sub-save-btn" type="button" class="work-btn work-btn-primary work-btn-center">Сохранить параметры</button>
-
-                            <div class="form-card">
-                                <div class="form-card-title">Продление</div>
-                                <div id="work-sub-extend-wrap" class="work-sub-extend-wrap">
-                                    <div class="work-sub-extend-head">
-                                        <span class="work-sub-extend-label">Срок продления</span>
-                                        <span class="work-sub-extend-value" id="work-sub-extend-value">1 месяц</span>
-                                    </div>
-                                    <input id="work-sub-extend-range" class="work-sub-extend-range" type="range" min="1" max="12" step="1" value="1">
-                                </div>
-                                <div id="work-sub-create-wrap" class="work-sub-create-wrap hidden">
-                                    <label class="field-label" for="work-sub-create-date">Дата окончания (если подписки нет)</label>
-                                    <input id="work-sub-create-date" class="field-input work-sub-create-input" type="date">
-                                </div>
-                                <button id="work-sub-extend-btn" type="button" class="work-btn work-btn-center">Продлить подписку</button>
+                            <div id="work-client-group-list" class="work-links-list">
+                                <div class="work-empty">Группа не загружена.</div>
                             </div>
                         </section>
                     </div>
@@ -850,6 +756,101 @@
             </div>
         </section>
     </main>
+
+    <div id="work-client-actions-overlay" class="ui-sheet-overlay hidden" aria-hidden="true">
+        <div class="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="work-client-actions-title">
+            <div class="ui-sheet-grip" aria-hidden="true"></div>
+            <div class="ui-sheet-head">
+                <div id="work-client-actions-title" class="ui-sheet-title">Действия</div>
+                <button id="work-client-actions-close" type="button" class="ui-sheet-close" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="work-modal-body">
+                <div data-hide-for-member>
+                    <div class="field-label">Статус подписки</div>
+                    <div id="work-client-status-chips" class="work-chip-grid">
+                        <button type="button" class="work-chip" data-sub-status="active">Активна</button>
+                        <button type="button" class="work-chip" data-sub-status="lifetime">Бессрочная</button>
+                        <button type="button" class="work-chip" data-sub-status="paused">Пауза</button>
+                        <button type="button" class="work-chip" data-sub-status="canceled">Отменена</button>
+                        <button type="button" class="work-chip" data-sub-status="inactive">Неактивна</button>
+                    </div>
+                </div>
+                <button id="work-client-freeze-btn" type="button" class="work-btn work-btn-center">Заморозить</button>
+                <button id="work-client-remove-member-btn" type="button" class="work-btn work-btn-center work-btn-danger hidden">Удалить из группы</button>
+                <div class="form-card" data-hide-for-member>
+                    <div class="form-card-title">Цена и оплата</div>
+                    <div class="field">
+                        <label class="field-label" for="work-sub-price-input">Цена в месяц</label>
+                        <div class="field-affix">
+                            <input id="work-sub-price-input" class="field-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0">
+                            <span class="field-suffix">₽</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="field-label" for="work-sub-billing-day">День оплаты</label>
+                        <input id="work-sub-billing-day" class="field-input" type="number" inputmode="numeric" min="1" max="31" step="1" placeholder="1–31">
+                    </div>
+                    <div class="field">
+                        <label class="field-label" for="work-sub-billing-details">Реквизиты</label>
+                        <textarea id="work-sub-billing-details" class="field-input field-textarea" rows="2" placeholder="Банк и номер карты&#10;Имя получателя"></textarea>
+                    </div>
+                    <details class="work-details">
+                        <summary>Тип подписки и заметки</summary>
+                        <div class="field">
+                            <select id="work-subscription-type-select" data-ui="sheet" data-sheet-title="Тип подписки">
+                                <option value="personal">Личная подписка</option>
+                                <option value="family_admin">Администратор семьи</option>
+                                <option value="family_member">Участник группы</option>
+                            </select>
+                        </div>
+                        <div id="work-sub-group-wrap" class="field hidden">
+                            <label class="field-label" for="work-sub-group-select">Семья</label>
+                            <select id="work-sub-group-select" data-ui="sheet" data-sheet-title="Выбери семью">
+                                <option value="">Выберите семью</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label class="field-label" for="work-sub-notes">Прокси-ссылки и заметки</label>
+                            <textarea id="work-sub-notes" class="field-input field-textarea" rows="3" placeholder="Одна ссылка на строку: Telegram-прокси, SOCKS5 и т. д."></textarea>
+                        </div>
+                    </details>
+                    <button id="work-sub-save-btn" type="button" class="work-btn work-btn-primary work-btn-center">Сохранить</button>
+                </div>
+                <div id="work-client-actions-status" class="work-note hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="work-client-extend-overlay" class="ui-sheet-overlay hidden" aria-hidden="true">
+        <div class="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="work-client-extend-title">
+            <div class="ui-sheet-grip" aria-hidden="true"></div>
+            <div class="ui-sheet-head">
+                <div id="work-client-extend-title" class="ui-sheet-title">Продлить</div>
+                <button id="work-client-extend-close" type="button" class="ui-sheet-close" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="work-modal-body">
+                <div id="work-client-extend-lifetime-note" class="work-note hidden">Подписка бессрочная, продлевать её по сроку не нужно. Дата ниже сделает подписку срочной.</div>
+                <button id="work-client-manual-extend-btn" type="button" class="work-btn work-btn-primary work-btn-center">Продлить на месяц</button>
+                <div id="work-sub-extend-wrap" class="form-card">
+                    <div class="form-card-title">На выбранный срок</div>
+                    <div class="work-sub-extend-wrap">
+                        <div class="work-sub-extend-head">
+                            <span class="work-sub-extend-label">Срок продления</span>
+                            <span class="work-sub-extend-value" id="work-sub-extend-value">1 месяц</span>
+                        </div>
+                        <input id="work-sub-extend-range" class="work-sub-extend-range" type="range" min="1" max="12" step="1" value="1">
+                    </div>
+                    <button id="work-sub-extend-btn" type="button" class="work-btn work-btn-center">Продлить на выбранный срок</button>
+                </div>
+                <div id="work-sub-create-wrap" class="form-card">
+                    <div class="form-card-title">До выбранной даты</div>
+                    <input id="work-sub-create-date" class="field-input work-sub-create-input" type="date">
+                    <button id="work-sub-date-btn" type="button" class="work-btn work-btn-center">Установить дату</button>
+                </div>
+                <div id="work-client-extend-status" class="work-note hidden"></div>
+            </div>
+        </div>
+    </div>
 
     <div id="work-panel-access-overlay" class="ui-sheet-overlay hidden" aria-hidden="true">
         <div class="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="work-panel-access-title">

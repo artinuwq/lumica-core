@@ -164,6 +164,21 @@ const statusCard = document.getElementById("status-card");
         const workPanelAccessOverlayEl = document.getElementById("work-panel-access-overlay");
         const workPanelAccessCloseEl = document.getElementById("work-panel-access-close");
         const workPanelAccessStatusEl = document.getElementById("work-panel-access-status");
+        const workClientActionsBtnEl = document.getElementById("work-client-actions-btn");
+        const workClientExtendBtnEl = document.getElementById("work-client-extend-btn");
+        const workClientActionsOverlayEl = document.getElementById("work-client-actions-overlay");
+        const workClientActionsCloseEl = document.getElementById("work-client-actions-close");
+        const workClientExtendOverlayEl = document.getElementById("work-client-extend-overlay");
+        const workClientExtendCloseEl = document.getElementById("work-client-extend-close");
+        const workClientActionsPopupStatusEl = document.getElementById("work-client-actions-status");
+        const workClientExtendPopupStatusEl = document.getElementById("work-client-extend-status");
+        const workClientStatusChipsEl = document.getElementById("work-client-status-chips");
+        const workClientRemoveMemberBtnEl = document.getElementById("work-client-remove-member-btn");
+        const workClientMemberNoteEl = document.getElementById("work-client-member-note");
+        const workClientGroupBtnEl = document.getElementById("work-client-group-btn");
+        const workClientGroupListEl = document.getElementById("work-client-group-list");
+        const workClientExtendLifetimeNoteEl = document.getElementById("work-client-extend-lifetime-note");
+        const workSubDateBtnEl = document.getElementById("work-sub-date-btn");
         const workInboundsListEl = document.getElementById("work-inbounds-list");
         const workInboundDetailTitleEl = document.getElementById("work-inbound-detail-title");
         const workInboundDetailMetaEl = document.getElementById("work-inbound-detail-meta");
@@ -407,8 +422,8 @@ const statusCard = document.getElementById("status-card");
             ["work-panel-inbounds-page", "Подключения"],
             ["work-panel-clients-page", "Клиенты"],
             ["work-client-page", "Клиент"],
-            ["work-client-connections-page", "Подключения"],
-            ["work-client-subscription-page", "Подписка"],
+            ["work-client-connections-page", "Подписки"],
+            ["work-client-group-page", "Группа"],
         ]);
         const menuContextTitleByScreen = new Map([
             ["screen-connections", "Подключения"],
@@ -659,7 +674,7 @@ const statusCard = document.getElementById("status-card");
             if (
                 pageId === "work-client-page"
                 || pageId === "work-client-connections-page"
-                || pageId === "work-client-subscription-page"
+                || pageId === "work-client-group-page"
             ) {
                 return "refresh-work-client";
             }
@@ -1024,8 +1039,8 @@ const statusCard = document.getElementById("status-card");
         }
 
         function handleTelegramBack() {
-            if (isPanelAccessModalOpen()) {
-                toggleWorkPanelAccessSection(false);
+            if (isWorkSheetOpen()) {
+                closeWorkSheets();
                 return;
             }
             if (isUiSheetOpen()) {
@@ -1186,6 +1201,33 @@ const statusCard = document.getElementById("status-card");
 
         function isSubscriptionLifetime(subscription) {
             return normalizeSubscriptionStatus(subscription?.status) === "lifetime";
+        }
+
+        const SUBSCRIPTION_STATUS_LABELS = {
+            active: "Активна",
+            lifetime: "Бессрочная",
+            paused: "На паузе",
+            expired: "Истекла",
+            canceled: "Отменена",
+            inactive: "Неактивна",
+            draft: "Черновик",
+        };
+
+        function subscriptionStatusLabel(subscription) {
+            if (!subscription) return "Нет подписки";
+            if (subscription.is_frozen) return "Заморожена";
+            const raw = normalizeSubscriptionStatus(subscription.status);
+            return SUBSCRIPTION_STATUS_LABELS[raw] || raw || "—";
+        }
+
+        /** Участник группы без собственной цены и дня оплаты: платит администратор группы. */
+        function isWorkClientGroupMember(overview) {
+            const group = overview?.group;
+            if (!group || group.is_admin) return false;
+            const sub = overview?.subscription;
+            const hasOwnPrice = Number(sub?.price_amount) > 0;
+            const hasOwnBillingDay = Number(sub?.billing_day) > 0;
+            return !hasOwnPrice && !hasOwnBillingDay;
         }
 
         function formatSubscriptionUntil(subscription, formatter = fmtDateTime) {
@@ -2886,51 +2928,93 @@ const statusCard = document.getElementById("status-card");
         }
 
         function renderWorkSubscriptionControls(sub) {
-            const hasSubscription = Boolean(sub);
-            const lifetimeSubscription = isSubscriptionLifetime(sub);
-            const selectedStatus = normalizeSubscriptionStatus(workSubStatusSelectEl?.value || sub?.status || "active");
-            const createAsLifetime = !hasSubscription && selectedStatus === "lifetime";
-            const switchingLifetimeToActive = hasSubscription && lifetimeSubscription && selectedStatus === "active";
-            workSubExtendWrapEl?.classList.toggle(
-                "hidden",
-                !hasSubscription || lifetimeSubscription || switchingLifetimeToActive
-            );
-            workSubCreateWrapEl?.classList.toggle(
-                "hidden",
-                (hasSubscription && !switchingLifetimeToActive) || createAsLifetime
-            );
+            const overview = workState.overview;
+            const memberMode = isWorkClientGroupMember(overview);
+            document.querySelectorAll("#work-client-actions-overlay [data-hide-for-member]").forEach((el) => {
+                el.classList.toggle("hidden", memberMode);
+            });
+            workClientRemoveMemberBtnEl?.classList.toggle("hidden", !memberMode);
 
-            if (workSubExtendBtnEl) {
-                if (!hasSubscription && createAsLifetime) {
-                    workSubExtendBtnEl.textContent = "Создать бессрочную подписку";
-                } else {
-                    workSubExtendBtnEl.textContent = hasSubscription
-                        ? "Продлить подписку"
-                        : "Создать подписку";
-                }
-                workSubExtendBtnEl.classList.toggle(
-                    "hidden",
-                    (hasSubscription && lifetimeSubscription) || switchingLifetimeToActive
-                );
+            const currentStatus = normalizeSubscriptionStatus(sub?.status);
+            workClientStatusChipsEl?.querySelectorAll("[data-sub-status]").forEach((btn) => {
+                btn.classList.toggle("active", !sub?.is_frozen && btn.dataset.subStatus === currentStatus);
+            });
+            if (workClientFreezeBtnEl) {
+                workClientFreezeBtnEl.textContent = sub?.is_frozen ? "Разморозить" : "Заморозить";
             }
 
+            const lifetime = isSubscriptionLifetime(sub);
+            workClientExtendLifetimeNoteEl?.classList.toggle("hidden", !lifetime);
+            workClientManualExtendBtnEl?.classList.toggle("hidden", lifetime);
+            workSubExtendWrapEl?.classList.toggle("hidden", lifetime);
             if (workSubCreateDateEl) {
-                if ((!hasSubscription && !createAsLifetime) || switchingLifetimeToActive) {
-                    if (!workSubCreateDateEl.value) {
-                        workSubCreateDateEl.value = defaultSubscriptionDateValue(30);
-                    }
-                }
-                if (createAsLifetime) {
-                    workSubCreateDateEl.value = "";
-                }
-                if (hasSubscription && !lifetimeSubscription && sub?.access_until) {
-                    const accessUntil = new Date(sub.access_until);
-                    if (!Number.isNaN(accessUntil.getTime())) {
-                        workSubCreateDateEl.value = toInputDateValue(accessUntil);
-                    }
-                }
+                const accessUntil = sub?.access_until ? new Date(sub.access_until) : null;
+                workSubCreateDateEl.value = accessUntil && !lifetime && !Number.isNaN(accessUntil.getTime())
+                    ? toInputDateValue(accessUntil)
+                    : defaultSubscriptionDateValue(30);
             }
+
+            if (workClientMemberNoteEl) {
+                const group = overview?.group;
+                workClientMemberNoteEl.classList.toggle("hidden", !memberMode);
+                workClientMemberNoteEl.textContent = memberMode
+                    ? (group?.admin_name
+                        ? `Участник группы пользователя «${group.admin_name}»`
+                        : `Участник группы «${group?.name || group?.id || ""}»`)
+                    : "";
+            }
+            renderWorkClientGroup(overview);
         }
+
+        function renderWorkClientGroup(overview) {
+            const groups = Array.isArray(overview?.administered_groups) ? overview.administered_groups : [];
+            workClientGroupBtnEl?.classList.toggle("hidden", !groups.length);
+            if (!workClientGroupListEl) return;
+            workClientGroupListEl.innerHTML = "";
+            if (!groups.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Этот пользователь не администратор группы.";
+                workClientGroupListEl.appendChild(empty);
+                return;
+            }
+            groups.forEach((group) => {
+                const head = document.createElement("div");
+                head.className = "work-page-title";
+                head.textContent = group?.name || `Группа #${group?.id}`;
+                workClientGroupListEl.appendChild(head);
+                const members = Array.isArray(group?.members) ? group.members : [];
+                if (!members.length) {
+                    const empty = document.createElement("div");
+                    empty.className = "work-empty";
+                    empty.textContent = "В группе пока нет участников.";
+                    workClientGroupListEl.appendChild(empty);
+                    return;
+                }
+                members.forEach((member) => {
+                    const item = document.createElement("div");
+                    item.className = "work-link-item work-link-item-clickable";
+                    const title = document.createElement("div");
+                    title.className = "work-link-item-title";
+                    title.textContent = member?.name || member?.username || `Клиент #${member?.id}`;
+                    const sub = document.createElement("div");
+                    sub.className = "work-link-item-sub";
+                    const statusRaw = normalizeSubscriptionStatus(member?.subscription_status);
+                    sub.textContent = [
+                        member?.username ? `@${member.username}` : "",
+                        SUBSCRIPTION_STATUS_LABELS[statusRaw] || "нет подписки",
+                    ].filter(Boolean).join(" · ");
+                    item.appendChild(title);
+                    item.appendChild(sub);
+                    item.addEventListener("click", () => {
+                        if (!workState.users.some((u) => String(u.id) === String(member.id))) return;
+                        openWorkClientPage(member.id).catch((err) => console.error("open group member error:", err));
+                    });
+                    workClientGroupListEl.appendChild(item);
+                });
+            });
+        }
+
         function isValidTelegramId(rawValue) {
             return /^\d+$/.test(String(rawValue || "").trim());
         }
@@ -4303,13 +4387,29 @@ const statusCard = document.getElementById("status-card");
             return Boolean(workPanelAccessOverlayEl && !workPanelAccessOverlayEl.classList.contains("hidden"));
         }
 
+        function isWorkSheetOpen() {
+            return [workPanelAccessOverlayEl, workClientActionsOverlayEl, workClientExtendOverlayEl]
+                .some((el) => el && !el.classList.contains("hidden"));
+        }
+
+        function setWorkSheetVisible(overlayEl, visible) {
+            if (!overlayEl) return;
+            overlayEl.classList.toggle("hidden", !visible);
+            overlayEl.setAttribute("aria-hidden", visible ? "false" : "true");
+            document.body.classList.toggle("ui-sheet-open", isWorkSheetOpen() || isUiSheetOpen());
+        }
+
+        function closeWorkSheets() {
+            toggleWorkPanelAccessSection(false);
+            setWorkSheetVisible(workClientActionsOverlayEl, false);
+            setWorkSheetVisible(workClientExtendOverlayEl, false);
+        }
+
         /** Настройки доступа открываются отдельным всплывающим окном (а не списком вниз по странице). */
         function toggleWorkPanelAccessSection(forceVisible = null) {
             if (!workPanelAccessOverlayEl) return;
             const nextVisible = forceVisible === null ? !isPanelAccessModalOpen() : Boolean(forceVisible);
-            workPanelAccessOverlayEl.classList.toggle("hidden", !nextVisible);
-            workPanelAccessOverlayEl.setAttribute("aria-hidden", nextVisible ? "false" : "true");
-            document.body.classList.toggle("ui-sheet-open", nextVisible || isUiSheetOpen());
+            setWorkSheetVisible(workPanelAccessOverlayEl, nextVisible);
             if (!nextVisible && workPanelAccessStatusEl) {
                 workPanelAccessStatusEl.textContent = "";
                 workPanelAccessStatusEl.classList.add("hidden");
@@ -5005,18 +5105,10 @@ const statusCard = document.getElementById("status-card");
         function renderWorkClientOverview(overview) {
             workState.overview = overview || null;
             const sub = overview?.subscription || null;
-            const conn = overview?.connections || null;
             const role = String(overview?.user?.role || "user").trim().toLowerCase();
 
-            if (workSubStatusSelectEl) {
-                workSubStatusSelectEl.value = sub?.status || "active";
-            }
             if (workSubPriceInputEl) {
                 workSubPriceInputEl.value = sub?.price_amount ?? "";
-            }
-            if (workSubLimitInputEl) {
-                workSubLimitInputEl.value =
-                    conn?.limit === null || conn?.limit === undefined ? "" : String(conn.limit);
             }
             if (workSubBillingDayEl) {
                 workSubBillingDayEl.value = sub?.billing_day ?? "";
@@ -5043,17 +5135,9 @@ const statusCard = document.getElementById("status-card");
             setWorkClientRoleStatus("");
             renderWorkSubscriptionControls(sub);
 
-            workClientSubStatusEl.textContent = sub?.status || "нет";
+            workClientSubStatusEl.textContent = subscriptionStatusLabel(sub);
             workClientSubUntilEl.textContent = formatSubscriptionUntil(sub, fmtDateTime);
             workClientSubPriceEl.textContent = fmtMoney(sub?.price_amount);
-
-            if (!conn) {
-                workClientConnectionsAvailableEl.textContent = "—";
-            } else if (conn.limit === null || conn.limit === undefined) {
-                workClientConnectionsAvailableEl.textContent = `${conn.active ?? 0}/∞`;
-            } else {
-                workClientConnectionsAvailableEl.textContent = `${conn.active ?? 0}/${conn.limit}`;
-            }
         }
         async function loadSelectedUserOverview() {
             if (!workState.selectedUserId) {
@@ -5205,6 +5289,7 @@ const statusCard = document.getElementById("status-card");
 
 
         async function switchWorkPage(target) {
+            closeWorkSheets();
             let next = target || "work-menu-page";
             if (adminOnlyMode && next === "work-menu-page") {
                 next = "work-clients-page";
@@ -5602,8 +5687,8 @@ const statusCard = document.getElementById("status-card");
         });
         document.addEventListener("keydown", (event) => {
             if (event.key !== "Escape") return;
-            if (isPanelAccessModalOpen()) {
-                toggleWorkPanelAccessSection(false);
+            if (isWorkSheetOpen()) {
+                closeWorkSheets();
                 return;
             }
             if (getActiveScreenId() === "screen-work" && getActiveWorkPageId() === "work-inbound-detail-page") {
@@ -5655,52 +5740,116 @@ const statusCard = document.getElementById("status-card");
             renderWorkClientCards();
         });
 
-        workClientFreezeBtnEl?.addEventListener("click", async () => {
+        function setWorkClientActionStatus(message, tone = "") {
+            [workClientActionStatusEl, workClientActionsPopupStatusEl, workClientExtendPopupStatusEl].forEach((el) => {
+                if (!el) return;
+                el.classList.remove("success", "error");
+                if (!message) {
+                    el.textContent = "";
+                    el.classList.add("hidden");
+                    return;
+                }
+                if (tone === "success" || tone === "error") el.classList.add(tone);
+                el.textContent = message;
+                el.classList.remove("hidden");
+            });
+        }
+
+        /** Выполняет действие над выбранным клиентом: блокирует повторные нажатия, показывает результат. */
+        async function runWorkClientAction(action, { successText = "", errorText = "Не удалось выполнить действие", closeSheets = true } = {}) {
             const userId = Number(workState.selectedUserId || 0);
-            if (!userId) return;
+            if (!userId) return false;
+            setWorkClientActionStatus("");
+            try {
+                await action(userId);
+                if (closeSheets) closeWorkSheets();
+                setWorkClientActionStatus(successText, "success");
+                return true;
+            } catch (err) {
+                console.error("client action error:", err);
+                setWorkClientActionStatus(err?.message || errorText, "error");
+                return false;
+            }
+        }
+
+        workClientActionsBtnEl?.addEventListener("click", () => {
+            setWorkClientActionStatus("");
+            renderWorkSubscriptionControls(workState.overview?.subscription || null);
+            setWorkSheetVisible(workClientActionsOverlayEl, true);
+        });
+        workClientExtendBtnEl?.addEventListener("click", () => {
+            setWorkClientActionStatus("");
+            renderWorkSubscriptionControls(workState.overview?.subscription || null);
+            setWorkSheetVisible(workClientExtendOverlayEl, true);
+        });
+        workClientActionsCloseEl?.addEventListener("click", () => setWorkSheetVisible(workClientActionsOverlayEl, false));
+        workClientExtendCloseEl?.addEventListener("click", () => setWorkSheetVisible(workClientExtendOverlayEl, false));
+        [workClientActionsOverlayEl, workClientExtendOverlayEl].forEach((overlay) => {
+            overlay?.addEventListener("click", (event) => {
+                if (event.target === overlay) setWorkSheetVisible(overlay, false);
+            });
+        });
+
+        workClientStatusChipsEl?.addEventListener("click", async (event) => {
+            const btn = event.target.closest("[data-sub-status]");
+            if (!btn) return;
+            const status = String(btn.dataset.subStatus || "");
+            const sub = workState.overview?.subscription || null;
+            const label = SUBSCRIPTION_STATUS_LABELS[status] || status;
+            if (!sub && status !== "lifetime") {
+                setWorkClientActionStatus("Подписки пока нет. Сначала создайте её через «Продлить».", "error");
+                return;
+            }
+            if (sub && normalizeSubscriptionStatus(sub.status) === status) return;
+            if (!window.confirm(`Сменить статус подписки на «${label}»?`)) return;
+            await runWorkClientAction(async (userId) => {
+                const result = await postJson(adminUserSubscriptionUrl(userId), { status });
+                renderWorkClientOverview(result?.overview || null);
+            }, { successText: `Статус подписки: ${label}`, errorText: "Не удалось сменить статус" });
+        });
+
+        workClientFreezeBtnEl?.addEventListener("click", async () => {
             const frozen = Boolean(workState.overview?.subscription?.is_frozen);
-            const action = frozen ? "разморозить" : "заморозить";
-            if (!window.confirm(`Подтвердить: ${action} пользователя?`)) return;
+            if (!window.confirm(`Подтвердить: ${frozen ? "разморозить" : "заморозить"} пользователя?`)) return;
             workClientFreezeBtnEl.disabled = true;
             try {
-                const response = await postJson(`${adminUsersUrl}/${userId}/freeze`, { frozen: !frozen });
-                const failures = Array.isArray(response?.failures) ? response.failures : [];
-                if (workClientActionStatusEl) {
-                    workClientActionStatusEl.classList.remove("hidden");
-                    workClientActionStatusEl.textContent = failures.length
-                        ? `Обновлено не всё: ${failures.length} подключений не изменены.`
-                        : frozen ? "Пользователь разморожен" : "Подписки пользователя заморожены";
-                }
-                await loadSelectedUserOverview();
-                await loadSelectedUserBindings();
-            } catch (err) {
-                if (workClientActionStatusEl) {
-                    workClientActionStatusEl.classList.remove("hidden");
-                    workClientActionStatusEl.textContent = err?.message || "Не удалось изменить состояние пользователя";
-                }
+                await runWorkClientAction(async (userId) => {
+                    const response = await postJson(`${adminUsersUrl}/${userId}/freeze`, { frozen: !frozen });
+                    const failures = Array.isArray(response?.failures) ? response.failures : [];
+                    await loadSelectedUserOverview();
+                    await loadSelectedUserBindings();
+                    if (failures.length) {
+                        throw new Error(`Обновлено не всё: ${failures.length} подключений не изменены.`);
+                    }
+                }, {
+                    successText: frozen ? "Пользователь разморожен" : "Подписки пользователя заморожены",
+                    errorText: "Не удалось изменить состояние пользователя",
+                });
             } finally {
                 workClientFreezeBtnEl.disabled = false;
             }
         });
 
+        workClientRemoveMemberBtnEl?.addEventListener("click", async () => {
+            const group = workState.overview?.group;
+            if (!group) return;
+            if (!window.confirm(`Удалить пользователя из группы «${group.name || group.id}»?`)) return;
+            await runWorkClientAction(async (userId) => {
+                await deleteJson(`${adminGroupsUrl}/${group.id}/members/${userId}`);
+                await loadSelectedUserOverview();
+                await loadWorkClientsData();
+            }, { successText: "Пользователь удалён из группы", errorText: "Не удалось удалить из группы" });
+        });
+
         workClientManualExtendBtnEl?.addEventListener("click", async () => {
-            const userId = Number(workState.selectedUserId || 0);
-            if (!userId) return;
             if (!window.confirm("Продлить подписку пользователя на один месяц?")) return;
             if (!window.confirm("Подтвердите продление ещё раз. Пользователю отправится уведомление.")) return;
             workClientManualExtendBtnEl.disabled = true;
             try {
-                await postJson(`${adminUsersUrl}/${userId}/manual-extend`, { confirmed: true, months: 1 });
-                if (workClientActionStatusEl) {
-                    workClientActionStatusEl.classList.remove("hidden");
-                    workClientActionStatusEl.textContent = "Подписка продлена";
-                }
-                await loadSelectedUserOverview();
-            } catch (err) {
-                if (workClientActionStatusEl) {
-                    workClientActionStatusEl.classList.remove("hidden");
-                    workClientActionStatusEl.textContent = err?.message || "Не удалось продлить подписку";
-                }
+                await runWorkClientAction(async (userId) => {
+                    await postJson(`${adminUsersUrl}/${userId}/manual-extend`, { confirmed: true, months: 1 });
+                    await loadSelectedUserOverview();
+                }, { successText: "Подписка продлена на месяц", errorText: "Не удалось продлить подписку" });
             } finally {
                 workClientManualExtendBtnEl.disabled = false;
             }
@@ -6151,20 +6300,13 @@ const statusCard = document.getElementById("status-card");
         });
 
         workSubSaveBtnEl?.addEventListener("click", async () => {
-            await runWorkAction("Save Subscription", async () => {
-                if (!workState.selectedUserId) {
-                    throw new Error("Сначала открой карточку клиента");
-                }
-
-                const currentSubscription = workState.overview?.subscription || null;
-                const creatingSubscription = !currentSubscription;
-                const selectedStatus = normalizeSubscriptionStatus(workSubStatusSelectEl?.value || "active");
-                const switchingLifetimeToActive =
-                    isSubscriptionLifetime(currentSubscription) && selectedStatus === "active";
+            if (!workState.overview?.subscription) {
+                setWorkClientActionStatus("Подписки пока нет. Сначала создайте её через «Продлить».", "error");
+                return;
+            }
+            await runWorkClientAction(async (userId) => {
                 const payload = {
-                    status: selectedStatus || "active",
                     price_amount: workSubPriceInputEl?.value?.trim() || null,
-                    connections_limit: workSubLimitInputEl?.value?.trim() || null,
                     billing_day: workSubBillingDayEl?.value?.trim() || null,
                     billing_details: workSubBillingDetailsEl?.value?.trim() || null,
                     notes: workSubNotesEl?.value?.trim() || null,
@@ -6175,55 +6317,36 @@ const statusCard = document.getElementById("status-card");
                     if (!groupId) throw new Error("Выбери семью для участника");
                     payload.group_id = groupId;
                 }
-                if (selectedStatus === "lifetime") {
-                    payload.access_until = null;
-                } else if (creatingSubscription || switchingLifetimeToActive) {
-                    payload.access_until = validateSubscriptionDateValue(workSubCreateDateEl?.value);
-                }
-                const result = await postJson(adminUserSubscriptionUrl(workState.selectedUserId), payload);
+                const result = await postJson(adminUserSubscriptionUrl(userId), payload);
                 renderWorkClientOverview(result?.overview || null);
-                return result;
-            });
+            }, { successText: "Сохранено", errorText: "Не удалось сохранить" });
         });
+
         workSubExtendBtnEl?.addEventListener("click", async () => {
-            await runWorkAction("Extend Subscription", async () => {
-                if (!workState.selectedUserId) {
-                    throw new Error("Сначала открой карточку клиента");
-                }
-                const hasSubscription = Boolean(workState.overview?.subscription);
-                if (!hasSubscription) {
-                    const selectedStatus = normalizeSubscriptionStatus(workSubStatusSelectEl?.value || "active");
-                    const payload =
-                        selectedStatus === "lifetime"
-                            ? { status: "lifetime", access_until: null }
-                            : {
-                                  status: "active",
-                                  access_until: validateSubscriptionDateValue(workSubCreateDateEl?.value),
-                              };
-                    const result = await postJson(adminUserSubscriptionUrl(workState.selectedUserId), payload);
-                    renderWorkClientOverview(result?.overview || null);
-                    return result;
-                }
-                if (isSubscriptionLifetime(workState.overview?.subscription)) {
-                    throw new Error("Бессрочную подписку не нужно продлевать");
-                }
-                const months = Number(workSubExtendRangeEl?.value || 0);
-                if (!Number.isInteger(months) || months <= 0) {
-                    throw new Error("Выбери срок продления");
-                }
-                const result = await postJson(adminUserSubscriptionUrl(workState.selectedUserId), {
-                    extend_months: months,
+            const months = Number(workSubExtendRangeEl?.value || 0);
+            if (!Number.isInteger(months) || months <= 0) {
+                setWorkClientActionStatus("Выбери срок продления", "error");
+                return;
+            }
+            await runWorkClientAction(async (userId) => {
+                const result = await postJson(adminUserSubscriptionUrl(userId), { extend_months: months });
+                renderWorkClientOverview(result?.overview || null);
+            }, { successText: `Продлено: ${fmtMonthsText(months)}`, errorText: "Не удалось продлить подписку" });
+        });
+
+        workSubDateBtnEl?.addEventListener("click", async () => {
+            await runWorkClientAction(async (userId) => {
+                const accessUntil = validateSubscriptionDateValue(workSubCreateDateEl?.value);
+                const result = await postJson(adminUserSubscriptionUrl(userId), {
+                    status: "active",
+                    access_until: accessUntil,
                 });
                 renderWorkClientOverview(result?.overview || null);
-                return result;
-            });
+            }, { successText: "Дата окончания подписки обновлена", errorText: "Не удалось установить дату" });
         });
 
         workSubExtendRangeEl?.addEventListener("input", () => {
             renderWorkSubExtendValue();
-        });
-        workSubStatusSelectEl?.addEventListener("change", () => {
-            renderWorkSubscriptionControls(workState.overview?.subscription || null);
         });
         workSubscriptionTypeSelectEl?.addEventListener("change", () => {
             workSubGroupWrapEl?.classList.toggle(
