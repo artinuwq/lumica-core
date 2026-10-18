@@ -2126,3 +2126,58 @@
             from { transform: translateY(24px); opacity: 0.6; }
             to { transform: translateY(0); opacity: 1; }
         }
+
+        /* ---------- Страница сервера: компактные плитки и кнопки по две в ряд ---------- */
+        .work-panel-tiles {
+            display: grid;
+            gap: 0.5rem;
+        }
+        .work-panel-tiles-row {
+            display: grid;
+            gap: 0.5rem;
+        }
+        .work-panel-tiles-row.name-region {
+            grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+        }
+        .work-panel-tiles-row.triple {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .work-panel-tiles-row.single {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .work-panel-tile {
+            min-width: 0;
+            padding: 0.5rem 0.65rem;
+        }
+        .work-panel-tile-label {
+            color: rgba(219, 234, 255, 0.62);
+            font-size: 0.68rem;
+            line-height: 1.2;
+        }
+        .work-panel-tile-value {
+            margin-top: 0.12rem;
+            color: #f5f9ff;
+            font-size: 0.9rem;
+            font-weight: 700;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+        .work-bind-actions.work-bind-actions-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .work-bind-actions .work-btn-center {
+            margin-top: 0;
+        }
+        .work-page > .work-bind-actions + .work-bind-actions {
+            margin-top: 0.55rem;
+        }
+
+        /* Всплывающее окно настроек доступа */
+        .work-modal-body {
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+        .work-modal-body .work-bind {
+            margin-top: 0;
+        }

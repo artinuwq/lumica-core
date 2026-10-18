@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
-from lumica.domain.models import MiniAppLaunch, Subscription, SubscriptionVpnAccount
+from lumica.domain.models import Application, AuthIdentity, MiniAppLaunch, Subscription, SubscriptionVpnAccount
 from lumica.services import user_provisioning
 from lumica.services.notifications import send_raw
 from lumica.services.user_audit import record_user_event
@@ -528,14 +528,14 @@ def register_admin_routes(app, deps):
             ):
                 latest_subscription[sub.user_id] = sub
 
-                opened_launch_ids = {
-                    row.user_id
-                    for row in db.query(MiniAppLaunch.user_id)
-                    .filter(MiniAppLaunch.status == "opened")
-                    .distinct()
-                    .all()
-                }
-                users: list[dict] = []
+            opened_launch_ids = {
+                row.user_id
+                for row in db.query(MiniAppLaunch.user_id)
+                .filter(MiniAppLaunch.status == "opened")
+                .distinct()
+                .all()
+            }
+            users: list[dict] = []
             for u in db.query(User).order_by(User.id.asc()).all():
                 profile = u.profile_data if isinstance(u.profile_data, dict) else {}
                 subscription_type = profile.get("subscription_type")
@@ -559,29 +559,43 @@ def register_admin_routes(app, deps):
 
     @app.get("/api/admin/users/known")
     def admin_known_users():
+        """Все, кто хотя бы раз открывал мини-приложение или писал боту (подал
+        заявку) - для выбора в «Новый пользователь -> Уже есть».
+
+        Раньше брались только строки mini_app_launches, но их нигде не создают,
+        поэтому список всегда был пустым. Мини-приложение оставляет следы в
+        auth_identities (telegram) и в profile_data (last_seen/visit_count), бот -
+        в applications. Заранее созданные админом записи, в которые человек ещё
+        не заходил, сюда не попадают."""
         _, err = _auth_context(require_role="admin")
         if err:
             return err
         with SessionLocal() as db:
-            rows = (
-                db.query(User)
-                .join(MiniAppLaunch, MiniAppLaunch.user_id == User.id)
-                .distinct()
-                .order_by(User.name.asc(), User.id.asc())
-                .all()
-            )
-            return jsonify({
-                "ok": True,
-                "users": [
+            app_user_ids: set[int] = set()
+            for (uid,) in db.query(MiniAppLaunch.user_id).filter(MiniAppLaunch.user_id.isnot(None)).distinct():
+                app_user_ids.add(uid)
+            for (uid,) in db.query(AuthIdentity.user_id).filter(AuthIdentity.provider == "telegram").distinct():
+                app_user_ids.add(uid)
+            bot_user_ids = {uid for (uid,) in db.query(Application.user_id).distinct() if uid is not None}
+
+            items: list[dict] = []
+            for user in db.query(User).all():
+                profile = user.profile_data if isinstance(user.profile_data, dict) else {}
+                opened_app = user.id in app_user_ids or bool(profile.get("last_seen"))
+                wrote_bot = user.id in bot_user_ids
+                if not (opened_app or wrote_bot):
+                    continue
+                items.append(
                     {
                         "id": user.id,
                         "telegram_id": user.telegram_id,
                         "username": user.username,
                         "name": user.name,
+                        "source": "app" if opened_app else "bot",
                     }
-                    for user in rows
-                ],
-            })
+                )
+            items.sort(key=lambda row: (str(row["name"] or row["username"] or "").lower(), row["id"]))
+            return jsonify({"ok": True, "users": items})
 
     @app.post("/api/admin/users")
     def admin_users_create():
@@ -1307,8 +1321,13 @@ def register_admin_routes(app, deps):
         _, err = _auth_context(require_role="admin")
         if err:
             return err
+        # ?panel_id=... - клиенты одного сервера (в том числе неактивного).
+        panel_id_filter = str(request.args.get("panel_id") or "").strip()
         with SessionLocal() as db:
-            panels = db.query(Panel).filter(Panel.is_active == 1).all()
+            if panel_id_filter:
+                panels = db.query(Panel).filter(Panel.id == panel_id_filter).all()
+            else:
+                panels = db.query(Panel).filter(Panel.is_active == 1).all()
             if not panels:
                 return jsonify({"ok": True, "clients": [], "errors": []})
 

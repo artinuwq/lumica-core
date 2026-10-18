@@ -143,10 +143,7 @@ const statusCard = document.getElementById("status-card");
         const workPanelSaveBtnEl = document.getElementById("work-panel-save-btn");
         const workPanelStatusEl = document.getElementById("work-panel-status");
         const workPanelDetailTitleEl = document.getElementById("work-panel-detail-title");
-        const workPanelDetailMetaEl = document.getElementById("work-panel-detail-meta");
-        const workPanelDetailBadgesEl = document.getElementById("work-panel-detail-badges");
         const workPanelDetailSummaryEl = document.getElementById("work-panel-detail-summary");
-        const workPanelDetailMetricsEl = document.getElementById("work-panel-detail-metrics");
         const workPanelDetailActivateBtnEl = document.getElementById("work-panel-detail-activate-btn");
         const workPanelDetailSyncBtnEl = document.getElementById("work-panel-detail-sync-btn");
         const workPanelDetailAccessBtnEl = document.getElementById("work-panel-detail-access-btn");
@@ -160,6 +157,13 @@ const statusCard = document.getElementById("status-card");
         const workPanelDetailDeleteBtnEl = document.getElementById("work-panel-detail-delete-btn");
         const workPanelDetailStatusEl = document.getElementById("work-panel-detail-status");
         const workPanelDetailInboundsListEl = document.getElementById("work-panel-detail-inbounds-list");
+        const workPanelDetailInboundsBtnEl = document.getElementById("work-panel-detail-inbounds-btn");
+        const workPanelDetailClientsBtnEl = document.getElementById("work-panel-detail-clients-btn");
+        const workPanelClientsListEl = document.getElementById("work-panel-clients-list");
+        const workPanelClientsStatusEl = document.getElementById("work-panel-clients-status");
+        const workPanelAccessOverlayEl = document.getElementById("work-panel-access-overlay");
+        const workPanelAccessCloseEl = document.getElementById("work-panel-access-close");
+        const workPanelAccessStatusEl = document.getElementById("work-panel-access-status");
         const workInboundsListEl = document.getElementById("work-inbounds-list");
         const workInboundDetailTitleEl = document.getElementById("work-inbound-detail-title");
         const workInboundDetailMetaEl = document.getElementById("work-inbound-detail-meta");
@@ -400,6 +404,8 @@ const statusCard = document.getElementById("status-card");
             ["work-panels-page", "Панели"],
             ["work-panel-create-page", "Новая панель"],
             ["work-panel-detail-page", "Панель"],
+            ["work-panel-inbounds-page", "Подключения"],
+            ["work-panel-clients-page", "Клиенты"],
             ["work-client-page", "Клиент"],
             ["work-client-connections-page", "Подключения"],
             ["work-client-subscription-page", "Подписка"],
@@ -1010,7 +1016,18 @@ const statusCard = document.getElementById("status-card");
             updateCloudUpButton();
         }
 
+        /** Корневые страницы раздела «Работа»: с них «назад» вести некуда. В режиме
+         * админа это вкладки «Пользователи» и «Сервера» (они же нижнее меню). */
+        function isWorkRootPage(pageId) {
+            if (pageId === "work-menu-page") return true;
+            return adminOnlyMode && (pageId === "work-clients-page" || pageId === "work-panels-page");
+        }
+
         function handleTelegramBack() {
+            if (isPanelAccessModalOpen()) {
+                toggleWorkPanelAccessSection(false);
+                return;
+            }
             if (isUiSheetOpen()) {
                 closeUiSheet(null);
                 return;
@@ -1050,6 +1067,7 @@ const statusCard = document.getElementById("status-card");
 
             if (activeScreenId === "screen-work") {
                 const activePageId = getActiveWorkPageId();
+                if (isWorkRootPage(activePageId)) return;
                 const backTarget = workBackTargetByPage.get(activePageId);
                 if (backTarget) {
                     switchWorkPage(backTarget);
@@ -1066,6 +1084,7 @@ const statusCard = document.getElementById("status-card");
 
             if (activeScreenId === "screen-work") {
                 const activePageId = getActiveWorkPageId();
+                if (isWorkRootPage(activePageId)) return false;
                 return Boolean(workBackTargetByPage.get(activePageId));
             }
 
@@ -3336,7 +3355,7 @@ const statusCard = document.getElementById("status-card");
             select.innerHTML = "";
             const empty = document.createElement("option");
             empty.value = "";
-            empty.textContent = "Выбрать из тех, кто открывал бота";
+            empty.textContent = "Выбрать из тех, кто открывал бота или приложение";
             select.appendChild(empty);
             (Array.isArray(workState.knownUsers) ? workState.knownUsers : []).forEach((user) => {
                 const username = String(user?.username || "").replace(/^@/, "");
@@ -3344,7 +3363,8 @@ const statusCard = document.getElementById("status-card");
                 option.value = String(user.id);
                 option.textContent = user.name || (username ? `@${username}` : `Пользователь #${user.id}`);
                 option.dataset.metaTop = username ? `@${username}` : "без username";
-                option.dataset.metaBottom = `ID ${user.telegram_id || "—"}`;
+                const sourceLabel = { app: "открыл приложение", bot: "писал боту" }[String(user?.source || "")] || "";
+                option.dataset.metaBottom = [`ID ${user.telegram_id || "—"}`, sourceLabel].filter(Boolean).join(" · ");
                 select.appendChild(option);
             });
             if (selectedId && Array.from(select.options).some((option) => option.value === selectedId)) {
@@ -3400,7 +3420,11 @@ const statusCard = document.getElementById("status-card");
                 title.textContent = binding.label || binding.client_identifier;
                 const sub = document.createElement("div");
                 sub.className = "binding-row-sub";
-                sub.textContent = [binding.server_name, binding.inbound_name].filter(Boolean).join(" · ");
+                const inboundCount = Number(binding.inbound_count);
+                sub.textContent = [
+                    binding.server_name,
+                    Number.isFinite(inboundCount) ? `Кол-во подключений: ${inboundCount}` : "",
+                ].filter(Boolean).join(" · ");
                 text.appendChild(title);
                 text.appendChild(sub);
                 const remove = document.createElement("button");
@@ -3440,7 +3464,7 @@ const statusCard = document.getElementById("status-card");
                 const sub = document.createElement("div");
                 sub.className = "binding-row-sub";
                 const parts = [modeLabels[member.mode] || ""];
-                if (member.bindings.length) parts.push(`подключений: ${member.bindings.length}`);
+                if (member.bindings.length) parts.push(`подписок: ${member.bindings.length}`);
                 sub.textContent = parts.filter(Boolean).join(" · ");
                 text.appendChild(title);
                 text.appendChild(sub);
@@ -3550,7 +3574,7 @@ const statusCard = document.getElementById("status-card");
                     label: client.email || client.comment || "Клиент",
                     meta: [
                         client.panel_name || "",
-                        client.bound ? "привязан" : `inboundIds: ${(client.inbound_ids || []).length}`,
+                        client.bound ? "привязан" : `Подключений: ${(client.inbound_ids || []).length}`,
                     ],
                 })),
             });
@@ -3568,6 +3592,7 @@ const statusCard = document.getElementById("status-card");
                 sub_id: client.sub_id ?? null,
                 server_name: server.name,
                 inbound_name: inbound?.remark || "",
+                inbound_count: Array.isArray(client.inbound_ids) ? client.inbound_ids.length : 0,
             };
         }
 
@@ -3606,14 +3631,14 @@ const statusCard = document.getElementById("status-card");
                     && String(item.panel_id ?? "") === String(picked.panel_id ?? "")
                 );
                 if (duplicate) {
-                    setFormNote(statusEl, "Это подключение уже добавлено", "error");
+                    setFormNote(statusEl, "Эта подписка уже добавлена", "error");
                     return;
                 }
                 bindings.push(picked);
                 renderStagedBindings(listEl, bindings);
                 setFormNote(statusEl, "");
             } catch (err) {
-                setFormNote(statusEl, err?.message || "Не удалось выбрать подключение", "error");
+                setFormNote(statusEl, err?.message || "Не удалось выбрать подписку", "error");
             }
         }
 
@@ -3926,9 +3951,12 @@ const statusCard = document.getElementById("status-card");
             setInboundDetailAddStatus("");
         }
 
-        async function openWorkInboundDetail(panelInboundRefIdRaw) {
+        async function openWorkInboundDetail(panelInboundRefIdRaw, backPage = "work-panel-detail-page") {
             const panelInboundRefId = Number(panelInboundRefIdRaw || 0);
             if (!panelInboundRefId) return;
+            const inboundBackBtn = document.querySelector("#work-inbound-detail-page .work-back-btn");
+            if (inboundBackBtn) inboundBackBtn.dataset.workBack = backPage;
+            workBackTargetByPage.set("work-inbound-detail-page", backPage);
             renderWorkInboundDetail(panelInboundRefId);
             if (!workState.selectedInboundPanelId) return;
             switchWorkPage("work-inbound-detail-page");
@@ -4205,18 +4233,21 @@ const statusCard = document.getElementById("status-card");
         }
 
         function setWorkPanelDetailStatus(message, tone = "") {
-            if (!workPanelDetailStatusEl) return;
-            workPanelDetailStatusEl.classList.remove("success", "error");
-            if (!message) {
-                workPanelDetailStatusEl.textContent = "";
-                workPanelDetailStatusEl.classList.add("hidden");
-                return;
-            }
-            if (tone === "success" || tone === "error") {
-                workPanelDetailStatusEl.classList.add(tone);
-            }
-            workPanelDetailStatusEl.textContent = message;
-            workPanelDetailStatusEl.classList.remove("hidden");
+            // Статус дублируется во всплывающем окне доступа, иначе за оверлеем его не видно.
+            [workPanelDetailStatusEl, workPanelAccessStatusEl].forEach((el) => {
+                if (!el) return;
+                el.classList.remove("success", "error");
+                if (!message) {
+                    el.textContent = "";
+                    el.classList.add("hidden");
+                    return;
+                }
+                if (tone === "success" || tone === "error") {
+                    el.classList.add(tone);
+                }
+                el.textContent = message;
+                el.classList.remove("hidden");
+            });
         }
 
         function panelHealthBadgeClass(healthRaw) {
@@ -4268,15 +4299,21 @@ const statusCard = document.getElementById("status-card");
             };
         }
 
+        function isPanelAccessModalOpen() {
+            return Boolean(workPanelAccessOverlayEl && !workPanelAccessOverlayEl.classList.contains("hidden"));
+        }
+
+        /** Настройки доступа открываются отдельным всплывающим окном (а не списком вниз по странице). */
         function toggleWorkPanelAccessSection(forceVisible = null) {
-            if (!workPanelDetailAccessWrapEl || !workPanelDetailAccessBtnEl) return;
-            const nextVisible = forceVisible === null
-                ? workPanelDetailAccessWrapEl.classList.contains("hidden")
-                : Boolean(forceVisible);
-            workPanelDetailAccessWrapEl.classList.toggle("hidden", !nextVisible);
-            workPanelDetailAccessBtnEl.textContent = nextVisible
-                ? "Скрыть настройки доступа"
-                : "Настройки доступа";
+            if (!workPanelAccessOverlayEl) return;
+            const nextVisible = forceVisible === null ? !isPanelAccessModalOpen() : Boolean(forceVisible);
+            workPanelAccessOverlayEl.classList.toggle("hidden", !nextVisible);
+            workPanelAccessOverlayEl.setAttribute("aria-hidden", nextVisible ? "false" : "true");
+            document.body.classList.toggle("ui-sheet-open", nextVisible || isUiSheetOpen());
+            if (!nextVisible && workPanelAccessStatusEl) {
+                workPanelAccessStatusEl.textContent = "";
+                workPanelAccessStatusEl.classList.add("hidden");
+            }
         }
 
         function renderWorkPanelInbounds(panelIdRaw) {
@@ -4346,7 +4383,7 @@ const statusCard = document.getElementById("status-card");
                 card.appendChild(hint);
 
                 const openDetail = () => {
-                    openWorkInboundDetail(panelInboundRefId).catch((err) => {
+                    openWorkInboundDetail(panelInboundRefId, "work-panel-inbounds-page").catch((err) => {
                         console.error("open panel inbound detail error:", err);
                         setWorkPanelDetailStatus(err?.message || "Не удалось открыть подключение", "error");
                     });
@@ -4367,21 +4404,12 @@ const statusCard = document.getElementById("status-card");
             if (workPanelDetailTitleEl) {
                 workPanelDetailTitleEl.textContent = "Панель";
             }
-            if (workPanelDetailMetaEl) {
-                workPanelDetailMetaEl.textContent = "—";
-            }
-            if (workPanelDetailBadgesEl) {
-                workPanelDetailBadgesEl.innerHTML = "";
-            }
             if (workPanelDetailSummaryEl) {
                 workPanelDetailSummaryEl.innerHTML = "";
                 const empty = document.createElement("div");
                 empty.className = "work-empty";
                 empty.textContent = note;
                 workPanelDetailSummaryEl.appendChild(empty);
-            }
-            if (workPanelDetailMetricsEl) {
-                workPanelDetailMetricsEl.textContent = "Метрики появятся после обновления мониторинга.";
             }
             if (workPanelDetailActivateBtnEl) {
                 workPanelDetailActivateBtnEl.removeAttribute("data-panel-id");
@@ -4392,7 +4420,6 @@ const statusCard = document.getElementById("status-card");
             }
             if (workPanelDetailAccessBtnEl) {
                 workPanelDetailAccessBtnEl.removeAttribute("data-panel-id");
-                workPanelDetailAccessBtnEl.textContent = "Настройки доступа";
             }
             if (workPanelDetailTestBtnEl) {
                 workPanelDetailTestBtnEl.removeAttribute("data-panel-id");
@@ -4432,57 +4459,63 @@ const statusCard = document.getElementById("status-card");
             workState.selectedPanelId = panel.id;
             const panelName = String(panel?.name || "Panel").trim() || "Panel";
             const region = String(panel?.region || "").trim();
-            const provider = String(panel?.provider || "").trim() || "provider";
             const health = String(panel?.health_status || "unknown").trim().toLowerCase() || "unknown";
             const panelInbounds = getWorkPanelInbounds(panel.id);
-            loadWorkPanelMetrics(panel.id).catch((err) => {
-                if (workPanelDetailMetricsEl) workPanelDetailMetricsEl.textContent = err?.message || "Не удалось загрузить метрики";
-            });
 
             if (workPanelDetailTitleEl) {
                 workPanelDetailTitleEl.textContent = `${panelName}${region ? ` (${region})` : ""}`;
             }
-            if (workPanelDetailMetaEl) {
-                workPanelDetailMetaEl.textContent = `Тип: ${provider} • Локация: ${region || "—"} • inbound: ${panelInbounds.length}`;
-            }
-            if (workPanelDetailBadgesEl) {
-                workPanelDetailBadgesEl.innerHTML = "";
-                const healthBadge = document.createElement("span");
-                healthBadge.className = `work-inbound-pill ${panelHealthBadgeClass(health)} text`;
-                healthBadge.textContent = `health: ${health}`;
-                workPanelDetailBadgesEl.appendChild(healthBadge);
-                workPanelDetailBadgesEl.appendChild(createWorkInboundStatusBadge("panel", Boolean(panel?.is_active), "text"));
-            }
 
             if (workPanelDetailSummaryEl) {
                 workPanelDetailSummaryEl.innerHTML = "";
-                const rows = [
-                    ["Название", panelName],
-                    ["Провайдер", provider],
-                    ["Локация", region || "—"],
-                    ["Состояние", health],
-                    ["Активность", panel?.is_active ? "active" : "inactive"],
-                    ["Подключения", String(panelInbounds.length)],
-                    ["Последняя успешная проверка", panel?.last_ok_at ? fmtDateTime(panel.last_ok_at) : "—"],
+                // Компактные плитки: несколько в одну строку. Провайдер, метрики и
+                // дубли (health/«Панель: on») на этой странице не показываем.
+                const tileRows = [
+                    {
+                        cls: "name-region",
+                        tiles: [
+                            ["Название", panelName],
+                            ["Локация", (region || "—").toUpperCase()],
+                        ],
+                    },
+                    {
+                        cls: "triple",
+                        tiles: [
+                            ["Состояние", health],
+                            ["Активность", panel?.is_active ? "active" : "inactive"],
+                            ["Подключения", String(panelInbounds.length)],
+                        ],
+                    },
+                    {
+                        cls: "single",
+                        tiles: [["Последняя успешная проверка", panel?.last_ok_at ? fmtDateTime(panel.last_ok_at) : "—"]],
+                    },
                 ];
                 if (panel?.error_message) {
-                    rows.push(["Последняя ошибка", String(panel.error_message).trim()]);
+                    tileRows.push({ cls: "single", tiles: [["Последняя ошибка", String(panel.error_message).trim()]] });
                 }
-                rows.forEach(([label, value]) => {
-                    const row = document.createElement("div");
-                    row.className = "work-link-item";
-                    const title = document.createElement("div");
-                    title.className = "work-link-item-title";
-                    title.textContent = label;
-                    const sub = document.createElement("div");
-                    sub.className = "work-link-item-sub";
-                    sub.textContent = value || "—";
-                    row.appendChild(title);
-                    row.appendChild(sub);
-                    workPanelDetailSummaryEl.appendChild(row);
+                tileRows.forEach((tileRow) => {
+                    const rowEl = document.createElement("div");
+                    rowEl.className = `work-panel-tiles-row ${tileRow.cls}`;
+                    tileRow.tiles.forEach(([label, value]) => {
+                        const tile = document.createElement("div");
+                        tile.className = "work-link-item work-panel-tile";
+                        const labelEl = document.createElement("div");
+                        labelEl.className = "work-panel-tile-label";
+                        labelEl.textContent = label;
+                        const valueEl = document.createElement("div");
+                        valueEl.className = "work-panel-tile-value";
+                        valueEl.textContent = value || "—";
+                        tile.appendChild(labelEl);
+                        tile.appendChild(valueEl);
+                        rowEl.appendChild(tile);
+                    });
+                    workPanelDetailSummaryEl.appendChild(rowEl);
                 });
             }
 
+            // Кнопка «Активировать/Деактивировать» убрана с экрана, но функционал
+            // (toggleWorkPanelActive) остаётся: если кнопку вернут в разметку, она заработает.
             if (workPanelDetailActivateBtnEl) {
                 workPanelDetailActivateBtnEl.dataset.panelId = panel.id;
                 workPanelDetailActivateBtnEl.textContent = panel?.is_active ? "Деактивировать панель" : "Активировать панель";
@@ -4516,10 +4549,87 @@ const statusCard = document.getElementById("status-card");
             setWorkPanelDetailStatus("");
         }
 
+        /** Метрики сервера (CPU/RAM/диск/uptime). С экрана панели временно убраны, функция оставлена. */
         async function loadWorkPanelMetrics(panelId) {
-            if (!workPanelDetailMetricsEl) return;
             const response = await fetchJson(adminPanelMetricsUrl(panelId), false);
-            workPanelDetailMetricsEl.textContent = String(response?.text || "Метрики недоступны.");
+            return String(response?.text || "Метрики недоступны.");
+        }
+
+        function openWorkPanelInbounds() {
+            const panelId = String(workState.selectedPanelId || "").trim();
+            if (!panelId) return;
+            renderWorkPanelInbounds(panelId);
+            switchWorkPage("work-panel-inbounds-page");
+        }
+
+        function setWorkPanelClientsStatus(message, tone = "") {
+            if (!workPanelClientsStatusEl) return;
+            workPanelClientsStatusEl.classList.remove("success", "error");
+            if (!message) {
+                workPanelClientsStatusEl.textContent = "";
+                workPanelClientsStatusEl.classList.add("hidden");
+                return;
+            }
+            if (tone === "success" || tone === "error") workPanelClientsStatusEl.classList.add(tone);
+            workPanelClientsStatusEl.textContent = message;
+            workPanelClientsStatusEl.classList.remove("hidden");
+        }
+
+        function renderWorkPanelClients(rows, emptyText = "На этом сервере пока нет клиентов.") {
+            if (!workPanelClientsListEl) return;
+            workPanelClientsListEl.innerHTML = "";
+            if (!rows.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = emptyText;
+                workPanelClientsListEl.appendChild(empty);
+                return;
+            }
+            rows.forEach((client) => {
+                const item = document.createElement("div");
+                item.className = "work-link-item";
+                const title = document.createElement("div");
+                title.className = "work-link-item-title";
+                title.textContent = String(client?.email || client?.comment || "Клиент");
+                const count = document.createElement("div");
+                count.className = "work-link-item-sub";
+                count.textContent = `Кол-во подключений: ${Array.isArray(client?.inbound_ids) ? client.inbound_ids.length : 0}`;
+                const state = document.createElement("div");
+                state.className = "work-link-item-sub";
+                state.textContent = [
+                    client?.enable === false ? "отключён" : "активен",
+                    client?.bound ? "привязан к пользователю" : "не привязан",
+                ].join(" • ");
+                item.appendChild(title);
+                item.appendChild(count);
+                item.appendChild(state);
+                workPanelClientsListEl.appendChild(item);
+            });
+        }
+
+        async function openWorkPanelClients() {
+            const panelId = String(workState.selectedPanelId || "").trim();
+            if (!panelId) return;
+            setWorkPanelClientsStatus("");
+            renderWorkPanelClients([], "Загрузка клиентов...");
+            switchWorkPage("work-panel-clients-page");
+            try {
+                const resp = await fetchJson(`${adminPanelClientsUrl}?panel_id=${encodeURIComponent(panelId)}`, false);
+                if (String(workState.selectedPanelId || "") !== panelId) return;
+                const rows = (Array.isArray(resp?.clients) ? resp.clients : [])
+                    .filter((client) => String(client?.panel_id ?? "") === panelId)
+                    .sort((a, b) => String(a?.email || "").localeCompare(String(b?.email || "")));
+                const panelError = (Array.isArray(resp?.errors) ? resp.errors : [])
+                    .find((row) => String(row?.panel_id ?? "") === panelId);
+                renderWorkPanelClients(rows);
+                if (!rows.length && panelError) {
+                    setWorkPanelClientsStatus(`Не удалось получить клиентов с сервера: ${panelError.error || "ошибка"}`, "error");
+                }
+            } catch (err) {
+                console.error("load panel clients error:", err);
+                renderWorkPanelClients([], "Не удалось загрузить клиентов.");
+                setWorkPanelClientsStatus(err?.message || "Не удалось загрузить клиентов", "error");
+            }
         }
 
         async function openWorkPanelDetail(panelIdRaw) {
@@ -5492,7 +5602,18 @@ const statusCard = document.getElementById("status-card");
         });
         document.addEventListener("keydown", (event) => {
             if (event.key !== "Escape") return;
+            if (isPanelAccessModalOpen()) {
+                toggleWorkPanelAccessSection(false);
+                return;
+            }
             if (getActiveScreenId() === "screen-work" && getActiveWorkPageId() === "work-inbound-detail-page") {
+                switchWorkPage(workBackTargetByPage.get("work-inbound-detail-page") || "work-panel-detail-page");
+                return;
+            }
+            if (
+                getActiveScreenId() === "screen-work"
+                && ["work-panel-inbounds-page", "work-panel-clients-page"].includes(getActiveWorkPageId())
+            ) {
                 switchWorkPage("work-panel-detail-page");
                 return;
             }
@@ -5790,7 +5911,7 @@ const statusCard = document.getElementById("status-card");
                 if (!panel) {
                     throw new Error("Панель не найдена");
                 }
-                setWorkPanelDetailStatus("Синхронизируем inbound...");
+                setWorkPanelDetailStatus("Синхронизируем...");
                 await syncWorkPanel(panel);
                 setWorkPanelDetailStatus("Синхронизация завершена", "success");
             } catch (err) {
@@ -5800,7 +5921,15 @@ const statusCard = document.getElementById("status-card");
         });
 
         workPanelDetailAccessBtnEl?.addEventListener("click", () => {
-            toggleWorkPanelAccessSection(null);
+            toggleWorkPanelAccessSection(true);
+        });
+        workPanelAccessCloseEl?.addEventListener("click", () => toggleWorkPanelAccessSection(false));
+        workPanelAccessOverlayEl?.addEventListener("click", (event) => {
+            if (event.target === workPanelAccessOverlayEl) toggleWorkPanelAccessSection(false);
+        });
+        workPanelDetailInboundsBtnEl?.addEventListener("click", () => openWorkPanelInbounds());
+        workPanelDetailClientsBtnEl?.addEventListener("click", () => {
+            openWorkPanelClients().catch((err) => console.error("open panel clients error:", err));
         });
 
         workPanelDetailTestBtnEl?.addEventListener("click", async () => {

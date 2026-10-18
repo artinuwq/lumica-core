@@ -59,3 +59,43 @@ def test_known_users_still_include_everyone_who_opened_the_bot():
     response = app.test_client().get("/api/admin/users/known")
 
     assert [u["name"] for u in response.get_json()["users"]] == ["Just opened the bot"]
+
+
+def test_known_users_cover_everyone_who_opened_the_app_or_the_bot():
+    from lumica.domain.models import Application, AuthIdentity
+
+    factory = _factory()
+    with factory() as db:
+        opened_app = User(telegram_id="1", name="Opened app", profile_data={"last_seen": "2026-10-01T10:00:00+00:00"})
+        has_identity = User(telegram_id="2", name="Has identity")
+        wrote_bot = User(telegram_id="3", name="Wrote bot")
+        never_came = User(telegram_id="4", name="Pre-created by admin")
+        placeholder = User(name="Empty seat")
+        db.add_all([opened_app, has_identity, wrote_bot, never_came, placeholder])
+        db.flush()
+        db.add(AuthIdentity(user_id=has_identity.id, provider="telegram", provider_user_id="2"))
+        db.add(Application(user_id=wrote_bot.id, full_name="Ivan Ivanov"))
+        db.commit()
+
+    app = _create_test_app(factory, FakeRegistry())
+    response = app.test_client().get("/api/admin/users/known")
+
+    assert response.status_code == 200
+    by_name = {u["name"]: u for u in response.get_json()["users"]}
+    assert set(by_name) == {"Opened app", "Has identity", "Wrote bot"}
+    assert by_name["Opened app"]["source"] == "app"
+    assert by_name["Has identity"]["source"] == "app"
+    assert by_name["Wrote bot"]["source"] == "bot"
+
+
+def test_admin_users_works_when_nobody_has_a_subscription_yet():
+    factory = _factory()
+    with factory() as db:
+        db.add(User(telegram_id="1", name="Lonely", profile_data={"subscription_type": "personal"}))
+        db.commit()
+
+    app = _create_test_app(factory, FakeRegistry())
+    response = app.test_client().get("/api/admin/users")
+
+    assert response.status_code == 200
+    assert [u["name"] for u in response.get_json()["users"]] == ["Lonely"]

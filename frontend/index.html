@@ -218,7 +218,7 @@
                                 </select>
                                 <div id="work-user-existing-wrap" class="field">
                                     <select id="work-user-existing-select" data-ui="sheet" data-searchable="true" data-sheet-title="Кого добавляем">
-                                        <option value="">Выбрать из тех, кто открывал бота</option>
+                                        <option value="">Выбрать из тех, кто открывал бота или приложение</option>
                                     </select>
                                 </div>
                                 <div id="work-user-identity-wrap" class="form-fields hidden">
@@ -265,8 +265,8 @@
 
                             <div class="form-card">
                                 <div class="form-card-head">
-                                    <div class="form-card-title">Подключения</div>
-                                    <button id="work-user-bindings-add" type="button" class="icon-add-btn" aria-label="Добавить подключение">+</button>
+                                    <div class="form-card-title">Подписки</div>
+                                    <button id="work-user-bindings-add" type="button" class="icon-add-btn" aria-label="Добавить подписку">+</button>
                                 </div>
                                 <div id="work-user-bindings-list" class="binding-list"></div>
                             </div>
@@ -303,7 +303,7 @@
                                 </select>
                                 <div id="work-member-existing-wrap" class="field">
                                     <select id="work-member-existing-select" data-ui="sheet" data-searchable="true" data-sheet-title="Кого добавляем">
-                                        <option value="">Выбрать из тех, кто открывал бота</option>
+                                        <option value="">Выбрать из тех, кто открывал бота или приложение</option>
                                     </select>
                                 </div>
                                 <div id="work-member-identity-wrap" class="form-fields hidden">
@@ -321,8 +321,8 @@
 
                             <div class="form-card">
                                 <div class="form-card-head">
-                                    <div class="form-card-title">Подключения</div>
-                                    <button id="work-member-bindings-add" type="button" class="icon-add-btn" aria-label="Добавить подключение">+</button>
+                                    <div class="form-card-title">Подписки</div>
+                                    <button id="work-member-bindings-add" type="button" class="icon-add-btn" aria-label="Добавить подписку">+</button>
                                 </div>
                                 <div id="work-member-bindings-list" class="binding-list"></div>
                             </div>
@@ -457,37 +457,43 @@
                                 <button class="work-back-btn" data-work-back="work-panels-page">← Назад</button>
                                 <div id="work-panel-detail-title" class="work-page-title">Панель</div>
                             </div>
-                            <div id="work-panel-detail-meta" class="work-inbound-meta">—</div>
-                            <div id="work-panel-detail-badges" class="work-inbound-badges work-inbound-badges-detail"></div>
-                            <div id="work-panel-detail-summary" class="work-links-list">
+                            <div id="work-panel-detail-summary" class="work-panel-tiles">
                                 <div class="work-empty">Выбери панель в списке.</div>
                             </div>
-                            <div id="work-panel-detail-metrics" class="work-note work-panel-metrics">Метрики появятся после обновления мониторинга.</div>
-                            <div class="work-bind-actions">
-                                <button id="work-panel-detail-activate-btn" type="button" class="work-btn">Активировать</button>
-                                <button id="work-panel-detail-sync-btn" type="button" class="work-btn">Синхронизировать inbound</button>
-                                <button id="work-panel-detail-access-btn" type="button" class="work-btn">Настройки доступа</button>
+                            <div class="work-bind-actions work-bind-actions-row">
+                                <button id="work-panel-detail-sync-btn" type="button" class="work-btn work-btn-center">Синхронизировать</button>
+                                <button id="work-panel-detail-access-btn" type="button" class="work-btn work-btn-center">Настройки доступа</button>
                             </div>
+                            <div class="work-bind-actions work-bind-actions-row">
+                                <button id="work-panel-detail-inbounds-btn" type="button" class="work-btn work-btn-center">Подключения</button>
+                                <button id="work-panel-detail-clients-btn" type="button" class="work-btn work-btn-center">Клиенты</button>
+                            </div>
+                            <div id="work-panel-detail-status" class="work-note hidden"></div>
                             <div class="work-actions">
                                 <button id="work-panel-detail-delete-btn" type="button" class="work-action-link work-action-link-danger">
                                     <span class="work-action-link-label">Удалить панель</span>
                                     <span class="work-action-link-chevron" aria-hidden="true">&times;</span>
                                 </button>
                             </div>
-                            <div id="work-panel-detail-access-wrap" class="work-bind hidden">
-                                <input id="work-panel-detail-base-url" type="url" placeholder="https://host:port/panel/api">
-                                <input id="work-panel-detail-token" type="password" autocomplete="new-password" placeholder="Новый API-токен (не показываем сохранённый)">
-                                <input id="work-panel-detail-username" type="text" placeholder="login (если меняется доступ)">
-                                <input id="work-panel-detail-password" type="password" placeholder="password (если меняется доступ)">
-                                <div class="work-bind-actions">
-                                    <button id="work-panel-detail-test-btn" class="work-btn" type="button">Проверить доступ</button>
-                                    <button id="work-panel-detail-save-btn" class="work-btn" type="button">Сохранить доступ</button>
-                                </div>
-                                <div class="work-note">Новый API-токен или login/password применятся только при сохранении.</div>
+                        </section>
+
+                        <section id="work-panel-inbounds-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-panel-detail-page">← Назад</button>
+                                <div id="work-panel-inbounds-title" class="work-page-title">Подключения</div>
                             </div>
-                            <div id="work-panel-detail-status" class="work-note hidden"></div>
-                            <div class="work-page-title work-inbound-detail-section-title">Подключения панели</div>
                             <div id="work-panel-detail-inbounds-list" class="work-inbounds-list">
+                                <div class="work-empty">Сначала открой панель.</div>
+                            </div>
+                        </section>
+
+                        <section id="work-panel-clients-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-panel-detail-page">← Назад</button>
+                                <div id="work-panel-clients-title" class="work-page-title">Клиенты</div>
+                            </div>
+                            <div id="work-panel-clients-status" class="work-note hidden"></div>
+                            <div id="work-panel-clients-list" class="work-links-list">
                                 <div class="work-empty">Сначала открой панель.</div>
                             </div>
                         </section>
@@ -844,6 +850,30 @@
             </div>
         </section>
     </main>
+
+    <div id="work-panel-access-overlay" class="ui-sheet-overlay hidden" aria-hidden="true">
+        <div class="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="work-panel-access-title">
+            <div class="ui-sheet-grip" aria-hidden="true"></div>
+            <div class="ui-sheet-head">
+                <div id="work-panel-access-title" class="ui-sheet-title">Настройки доступа</div>
+                <button id="work-panel-access-close" type="button" class="ui-sheet-close" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="work-modal-body">
+                <div id="work-panel-detail-access-wrap" class="work-bind">
+                    <input id="work-panel-detail-base-url" type="url" placeholder="https://host:port/panel/api">
+                    <input id="work-panel-detail-token" type="password" autocomplete="new-password" placeholder="Новый API-токен (не показываем сохранённый)">
+                    <input id="work-panel-detail-username" type="text" placeholder="login (если меняется доступ)">
+                    <input id="work-panel-detail-password" type="password" placeholder="password (если меняется доступ)">
+                    <div class="work-bind-actions work-bind-actions-row">
+                        <button id="work-panel-detail-test-btn" class="work-btn work-btn-center" type="button">Проверить доступ</button>
+                        <button id="work-panel-detail-save-btn" class="work-btn work-btn-center" type="button">Сохранить доступ</button>
+                    </div>
+                    <div class="work-note">Новый API-токен или login/password применятся только при сохранении.</div>
+                    <div id="work-panel-access-status" class="work-note hidden"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="ui-sheet-overlay" class="ui-sheet-overlay hidden" aria-hidden="true">
         <div id="ui-sheet" class="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="ui-sheet-title">
