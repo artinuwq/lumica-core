@@ -515,6 +515,22 @@ def build_admin_helpers(deps):
                     return jsonify({"ok": False, "error": "access_until must be ISO datetime"}), 400
                 sub.access_until = parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
+        # День оплаты в админке отдельно не вводится: если его ещё нет, берём день
+        # даты окончания. Участникам группы (платит администратор) не назначаем.
+        if (
+            sub
+            and sub.billing_day is None
+            and sub.access_until
+            and ("extend_months" in body or "access_until" in body)
+        ):
+            from lumica.domain.models import Group as _Group
+
+            user_group_id = getattr(user, "group_id", None)
+            own_group = db.query(_Group).filter(_Group.id == user_group_id).first() if user_group_id else None
+            is_group_member = own_group is not None and own_group.admin_user_id != user.id
+            if not is_group_member:
+                sub.billing_day = _as_utc(sub.access_until).day
+
         if sub and (sub.status or "").strip().lower() == "lifetime":
             sub.access_until = None
 

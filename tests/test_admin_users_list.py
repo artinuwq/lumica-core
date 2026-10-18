@@ -150,3 +150,61 @@ def test_user_overview_exposes_group_membership_and_administered_groups():
         assert owner_overview["group"] is None
         listed = owner_overview["administered_groups"][0]["members"]
         assert [(m["name"], m["subscription_status"]) for m in listed] == [("Kid", "paused")]
+
+
+def test_extending_sets_billing_day_only_when_missing_and_not_for_group_members():
+    from datetime import datetime, timezone
+    from decimal import Decimal, InvalidOperation
+
+    from lumica.api.helpers import build_admin_helpers
+    from lumica.domain.models import Group
+
+    def _as_utc(value):
+        if value is None:
+            return None
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    helpers = build_admin_helpers(
+        {
+            "User": User,
+            "Subscription": Subscription,
+            "Decimal": Decimal,
+            "InvalidOperation": InvalidOperation,
+            "datetime": datetime,
+            "timezone": timezone,
+            "_as_utc": _as_utc,
+            "utcnow": lambda: datetime.now(timezone.utc),
+            "jsonify": lambda *a, **k: (a, k),
+            "add_calendar_month": lambda base, months: base.replace(year=base.year + (base.month + months - 1) // 12, month=(base.month + months - 1) % 12 + 1),
+        }
+    )
+    apply_payload = helpers["_apply_admin_subscription_payload"]
+
+    factory = _factory()
+    with factory() as db:
+        owner = User(telegram_id="1", name="Owner")
+        db.add(owner)
+        db.flush()
+        group = Group(name="G", admin_user_id=owner.id)
+        db.add(group)
+        db.flush()
+        owner.group_id = group.id
+        member = User(telegram_id="2", name="Member", group_id=group.id)
+        solo = User(telegram_id="3", name="Solo")
+        with_day = User(telegram_id="4", name="WithDay")
+        db.add_all([member, solo, with_day])
+        db.flush()
+        db.add(Subscription(user_id=with_day.id, status="active", billing_day=7))
+        db.commit()
+
+        for user in (solo, member, owner, with_day):
+            assert apply_payload(db, user, {"access_until": "2030-01-15T23:59:59"}) is None
+        db.commit()
+
+        def day(user):
+            return db.query(Subscription).filter(Subscription.user_id == user.id).first().billing_day
+
+        assert day(solo) == 15
+        assert day(owner) == 15
+        assert day(member) is None
+        assert day(with_day) == 7

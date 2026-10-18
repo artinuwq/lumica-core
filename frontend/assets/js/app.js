@@ -179,6 +179,10 @@ const statusCard = document.getElementById("status-card");
         const workClientGroupListEl = document.getElementById("work-client-group-list");
         const workClientExtendLifetimeNoteEl = document.getElementById("work-client-extend-lifetime-note");
         const workSubDateBtnEl = document.getElementById("work-sub-date-btn");
+        const workSubTypeChipsEl = document.getElementById("work-sub-type-chips");
+        const workSubNotesSaveBtnEl = document.getElementById("work-sub-notes-save-btn");
+        const workSubNotesStatusEl = document.getElementById("work-sub-notes-status");
+        const workClientGroupStatusEl = document.getElementById("work-client-group-status");
         const workInboundsListEl = document.getElementById("work-inbounds-list");
         const workInboundDetailTitleEl = document.getElementById("work-inbound-detail-title");
         const workInboundDetailMetaEl = document.getElementById("work-inbound-detail-meta");
@@ -2942,6 +2946,9 @@ const statusCard = document.getElementById("status-card");
             if (workClientFreezeBtnEl) {
                 workClientFreezeBtnEl.textContent = sub?.is_frozen ? "Разморозить" : "Заморозить";
             }
+            workSubTypeChipsEl?.querySelectorAll("[data-sub-type]").forEach((btn) => {
+                btn.classList.toggle("active", btn.dataset.subType === (workSubscriptionTypeSelectEl?.value || "personal"));
+            });
 
             const lifetime = isSubscriptionLifetime(sub);
             workClientExtendLifetimeNoteEl?.classList.toggle("hidden", !lifetime);
@@ -2966,6 +2973,47 @@ const statusCard = document.getElementById("status-card");
             renderWorkClientGroup(overview);
         }
 
+        function setWorkGroupStatus(message, tone = "") {
+            if (!workClientGroupStatusEl) return;
+            workClientGroupStatusEl.classList.remove("success", "error");
+            if (!message) {
+                workClientGroupStatusEl.textContent = "";
+                workClientGroupStatusEl.classList.add("hidden");
+                return;
+            }
+            if (tone === "success" || tone === "error") workClientGroupStatusEl.classList.add(tone);
+            workClientGroupStatusEl.textContent = message;
+            workClientGroupStatusEl.classList.remove("hidden");
+        }
+
+        /** Добавляет в группу пользователя из общего списка (уже известные системе, без другой группы). */
+        async function addWorkGroupMember(group) {
+            setWorkGroupStatus("");
+            const taken = new Set((group?.members || []).map((m) => String(m.id)));
+            taken.add(String(workState.selectedUserId));
+            const candidates = new Map();
+            [...(workState.users || []), ...(workState.knownUsers || [])].forEach((user) => {
+                const key = String(user?.id ?? "");
+                if (!key || taken.has(key) || user?.group_id || candidates.has(key)) return;
+                candidates.set(key, user);
+            });
+            const picked = await openUiSheet({
+                title: "Добавить в группу",
+                searchable: true,
+                emptyText: "Нет пользователей, которых можно добавить: все уже состоят в группах.",
+                items: [...candidates.values()].map((user) => ({
+                    value: user.id,
+                    label: user.name || user.username || `Клиент #${user.id}`,
+                    meta: [user.username ? `@${user.username}` : "", user.telegram_id ? `ID ${user.telegram_id}` : ""].filter(Boolean),
+                })),
+            });
+            if (picked === null || picked === undefined) return;
+            await postJson(`${adminGroupsUrl}/${group.id}/members`, { user_id: Number(picked) });
+            await loadSelectedUserOverview();
+            await loadWorkClientsData();
+            setWorkGroupStatus("Участник добавлен в группу", "success");
+        }
+
         function renderWorkClientGroup(overview) {
             const groups = Array.isArray(overview?.administered_groups) ? overview.administered_groups : [];
             workClientGroupBtnEl?.classList.toggle("hidden", !groups.length);
@@ -2980,8 +3028,23 @@ const statusCard = document.getElementById("status-card");
             }
             groups.forEach((group) => {
                 const head = document.createElement("div");
-                head.className = "work-page-title";
-                head.textContent = group?.name || `Группа #${group?.id}`;
+                head.className = "form-card-head";
+                const headTitle = document.createElement("div");
+                headTitle.className = "work-page-title";
+                headTitle.textContent = group?.name || `Группа #${group?.id}`;
+                const addBtn = document.createElement("button");
+                addBtn.type = "button";
+                addBtn.className = "icon-add-btn";
+                addBtn.textContent = "+";
+                addBtn.setAttribute("aria-label", "Добавить участника");
+                addBtn.addEventListener("click", () => {
+                    addWorkGroupMember(group).catch((err) => {
+                        console.error("add group member error:", err);
+                        setWorkGroupStatus(err?.message || "Не удалось добавить участника", "error");
+                    });
+                });
+                head.appendChild(headTitle);
+                head.appendChild(addBtn);
                 workClientGroupListEl.appendChild(head);
                 const members = Array.isArray(group?.members) ? group.members : [];
                 if (!members.length) {
@@ -6305,11 +6368,10 @@ const statusCard = document.getElementById("status-card");
                 return;
             }
             await runWorkClientAction(async (userId) => {
+                // День оплаты здесь не трогаем: он задаётся датой в «Продлить».
                 const payload = {
                     price_amount: workSubPriceInputEl?.value?.trim() || null,
-                    billing_day: workSubBillingDayEl?.value?.trim() || null,
                     billing_details: workSubBillingDetailsEl?.value?.trim() || null,
-                    notes: workSubNotesEl?.value?.trim() || null,
                     subscription_type: String(workSubscriptionTypeSelectEl?.value || "personal"),
                 };
                 if (payload.subscription_type === "family_member") {
@@ -6320,6 +6382,51 @@ const statusCard = document.getElementById("status-card");
                 const result = await postJson(adminUserSubscriptionUrl(userId), payload);
                 renderWorkClientOverview(result?.overview || null);
             }, { successText: "Сохранено", errorText: "Не удалось сохранить" });
+        });
+
+        workSubTypeChipsEl?.addEventListener("click", (event) => {
+            const btn = event.target.closest("[data-sub-type]");
+            if (!btn || !workSubscriptionTypeSelectEl) return;
+            workSubscriptionTypeSelectEl.value = btn.dataset.subType;
+            workSubscriptionTypeSelectEl.dispatchEvent(new Event("change", { bubbles: true }));
+            workSubTypeChipsEl.querySelectorAll("[data-sub-type]").forEach((chip) => {
+                chip.classList.toggle("active", chip === btn);
+            });
+        });
+
+        function setWorkSubNotesStatus(message, tone = "") {
+            if (!workSubNotesStatusEl) return;
+            workSubNotesStatusEl.classList.remove("success", "error");
+            if (!message) {
+                workSubNotesStatusEl.textContent = "";
+                workSubNotesStatusEl.classList.add("hidden");
+                return;
+            }
+            if (tone === "success" || tone === "error") workSubNotesStatusEl.classList.add(tone);
+            workSubNotesStatusEl.textContent = message;
+            workSubNotesStatusEl.classList.remove("hidden");
+        }
+
+        workSubNotesSaveBtnEl?.addEventListener("click", async () => {
+            const userId = Number(workState.selectedUserId || 0);
+            if (!userId) return;
+            if (!workState.overview?.subscription) {
+                setWorkSubNotesStatus("Подписки пока нет. Сначала создайте её через «Продлить».", "error");
+                return;
+            }
+            workSubNotesSaveBtnEl.disabled = true;
+            try {
+                const result = await postJson(adminUserSubscriptionUrl(userId), {
+                    notes: workSubNotesEl?.value?.trim() || null,
+                });
+                renderWorkClientOverview(result?.overview || null);
+                setWorkSubNotesStatus("Сохранено", "success");
+            } catch (err) {
+                console.error("save notes error:", err);
+                setWorkSubNotesStatus(err?.message || "Не удалось сохранить", "error");
+            } finally {
+                workSubNotesSaveBtnEl.disabled = false;
+            }
         });
 
         workSubExtendBtnEl?.addEventListener("click", async () => {
@@ -6337,10 +6444,13 @@ const statusCard = document.getElementById("status-card");
         workSubDateBtnEl?.addEventListener("click", async () => {
             await runWorkClientAction(async (userId) => {
                 const accessUntil = validateSubscriptionDateValue(workSubCreateDateEl?.value);
-                const result = await postJson(adminUserSubscriptionUrl(userId), {
-                    status: "active",
-                    access_until: accessUntil,
-                });
+                const payload = { status: "active", access_until: accessUntil };
+                if (!isWorkClientGroupMember(workState.overview)) {
+                    // Выбранная вручную дата окончания определяет и день оплаты.
+                    const billingDay = Number(String(accessUntil).slice(8, 10));
+                    if (billingDay >= 1 && billingDay <= 31) payload.billing_day = billingDay;
+                }
+                const result = await postJson(adminUserSubscriptionUrl(userId), payload);
                 renderWorkClientOverview(result?.overview || null);
             }, { successText: "Дата окончания подписки обновлена", errorText: "Не удалось установить дату" });
         });

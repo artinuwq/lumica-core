@@ -558,6 +558,12 @@
                             <div id="work-existing-links" class="work-links-list">
                                 <div class="work-empty">Связи еще не загружены.</div>
                             </div>
+                            <div class="form-card">
+                                <div class="form-card-title">Прокси-ссылки и заметки</div>
+                                <textarea id="work-sub-notes" class="field-input field-textarea" rows="3" placeholder="Одна ссылка на строку: Telegram-прокси, SOCKS5 и т. д."></textarea>
+                                <button id="work-sub-notes-save-btn" type="button" class="work-btn work-btn-center">Сохранить</button>
+                                <div id="work-sub-notes-status" class="work-note hidden"></div>
+                            </div>
                         </section>
 
                         <section id="work-client-group-page" class="work-page hidden">
@@ -565,6 +571,7 @@
                                 <button class="work-back-btn" data-work-back="work-client-page">← Назад</button>
                                 <div class="work-page-title">Группа</div>
                             </div>
+                            <div id="work-client-group-status" class="work-note hidden"></div>
                             <div id="work-client-group-list" class="work-links-list">
                                 <div class="work-empty">Группа не загружена.</div>
                             </div>
@@ -757,7 +764,7 @@
         </section>
     </main>
 
-    <div id="work-client-actions-overlay" class="ui-sheet-overlay hidden" aria-hidden="true">
+    <div id="work-client-actions-overlay" class="ui-sheet-overlay ui-sheet-overlay-full hidden" aria-hidden="true">
         <div class="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="work-client-actions-title">
             <div class="ui-sheet-grip" aria-hidden="true"></div>
             <div class="ui-sheet-head">
@@ -787,35 +794,30 @@
                         </div>
                     </div>
                     <div class="field">
-                        <label class="field-label" for="work-sub-billing-day">День оплаты</label>
-                        <input id="work-sub-billing-day" class="field-input" type="number" inputmode="numeric" min="1" max="31" step="1" placeholder="1–31">
-                    </div>
-                    <div class="field">
                         <label class="field-label" for="work-sub-billing-details">Реквизиты</label>
                         <textarea id="work-sub-billing-details" class="field-input field-textarea" rows="2" placeholder="Банк и номер карты&#10;Имя получателя"></textarea>
                     </div>
-                    <details class="work-details">
-                        <summary>Тип подписки и заметки</summary>
-                        <div class="field">
-                            <select id="work-subscription-type-select" data-ui="sheet" data-sheet-title="Тип подписки">
-                                <option value="personal">Личная подписка</option>
-                                <option value="family_admin">Администратор семьи</option>
-                                <option value="family_member">Участник группы</option>
-                            </select>
-                        </div>
-                        <div id="work-sub-group-wrap" class="field hidden">
-                            <label class="field-label" for="work-sub-group-select">Семья</label>
-                            <select id="work-sub-group-select" data-ui="sheet" data-sheet-title="Выбери семью">
-                                <option value="">Выберите семью</option>
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label class="field-label" for="work-sub-notes">Прокси-ссылки и заметки</label>
-                            <textarea id="work-sub-notes" class="field-input field-textarea" rows="3" placeholder="Одна ссылка на строку: Telegram-прокси, SOCKS5 и т. д."></textarea>
-                        </div>
-                    </details>
-                    <button id="work-sub-save-btn" type="button" class="work-btn work-btn-primary work-btn-center">Сохранить</button>
                 </div>
+                <div class="form-card" data-hide-for-member>
+                    <div class="form-card-title">Тип подписки</div>
+                    <div id="work-sub-type-chips" class="work-chip-grid">
+                        <button type="button" class="work-chip" data-sub-type="personal">Личная</button>
+                        <button type="button" class="work-chip" data-sub-type="family_admin">Админ семьи</button>
+                        <button type="button" class="work-chip" data-sub-type="family_member">Участник</button>
+                    </div>
+                    <select id="work-subscription-type-select" class="hidden" aria-hidden="true" tabindex="-1">
+                        <option value="personal">Личная подписка</option>
+                        <option value="family_admin">Администратор семьи</option>
+                        <option value="family_member">Участник группы</option>
+                    </select>
+                    <div id="work-sub-group-wrap" class="field hidden">
+                        <label class="field-label" for="work-sub-group-select">Семья</label>
+                        <select id="work-sub-group-select" data-ui="sheet" data-sheet-title="Выбери семью">
+                            <option value="">Выберите семью</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="work-sub-save-btn" type="button" class="work-btn work-btn-primary work-btn-center" data-hide-for-member>Сохранить</button>
                 <div id="work-client-actions-status" class="work-note hidden"></div>
             </div>
         </div>

@@ -2243,3 +2243,36 @@
         .work-link-item-clickable {
             cursor: pointer;
         }
+
+        /* «Действия» открываются на весь экран */
+        .ui-sheet-overlay.ui-sheet-overlay-full {
+            align-items: stretch;
+            background: rgba(8, 12, 24, 0.98);
+            backdrop-filter: none;
+        }
+        .ui-sheet-overlay-full .ui-sheet {
+            max-width: none;
+            max-height: none;
+            height: 100%;
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+            padding-top: calc(0.9rem + var(--safe-top, 0px));
+            animation: ui-sheet-fade 0.18s ease;
+        }
+        .ui-sheet-overlay-full .ui-sheet-grip {
+            display: none;
+        }
+        .ui-sheet-overlay-full .work-modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        .work-chip-grid.work-chip-grid-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        #work-sub-type-chips {
+            margin-bottom: 0.4rem;
+        }
+        .work-page .form-card-head .work-page-title {
+            margin: 0;
+        }
