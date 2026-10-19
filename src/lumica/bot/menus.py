@@ -145,6 +145,8 @@ def format_subscription_message(
     if hide_billing:
         lines.append("Дату оплаты и стоимость семейной подписки видит только администратор группы.")
     else:
+        lines.append("Информация о вашей подписки")
+        lines.append("")
         lines.append(f"Дата оплаты до: {_fmt_until(subscription)}")
         lines.append(f"Цена: {_fmt_price(subscription.price_amount)}")
     lines.append("")
@@ -156,7 +158,7 @@ def format_subscription_message(
         lines.append(header)
         lines.append("<blockquote>" + "\n".join(f"<code>{html.escape(url)}</code>" for url in urls) + "</blockquote>")
     else:
-        lines.append("Ссылка на подписку пока не выдана. Напишите в рабочий аккаунт.")
+        lines.append("Ссылка на подписку пока не выдана. Напишите на рабочий аккаунт.")
     return "\n".join(lines)
 
 
@@ -166,7 +168,7 @@ def _display_name(user: User) -> str:
 
 def collect_subscription_messages(db, user: User | None) -> list[str]:
     if user is None:
-        return ["Вы ещё не зарегистрированы. Отправьте /start, чтобы оставить заявку."]
+        return ["Вы ещё не зарегистрированы."]
     group = db.query(Group).filter(Group.id == user.group_id).first() if user.group_id else None
     is_group_admin = bool(group and group_service.is_group_admin(user, group))
     hide_billing = bool(group and not is_group_admin)
