@@ -5,13 +5,11 @@
 
 from __future__ import annotations
 
-import os
-
 from aiogram import Router, types
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from lumica.domain.models import User
 from lumica.infra.db import SessionLocal
@@ -19,7 +17,7 @@ from lumica.services import applications as application_service
 from lumica.services import notifications
 from lumica.services.roles import is_authorized, load_role_bindings, role_allows
 from lumica.services import user_provisioning
-from .workspace import user_menu
+from .menus import answer_main_menu
 
 router = Router(name="onboarding")
 
@@ -29,13 +27,6 @@ _PROXY_CALLBACK_PREFIX = "app_proxy:"
 class ApplicationForm(StatesGroup):
     full_name = State()
     needs_proxy = State()
-
-
-def _webapp_keyboard() -> InlineKeyboardMarkup:
-    webapp_url = os.getenv("WEBAPP_URL", "https://example.com")
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Открыть mini app", web_app=WebAppInfo(url=webapp_url))]]
-    )
 
 
 def _proxy_keyboard() -> InlineKeyboardMarkup:
@@ -93,12 +84,7 @@ async def cmd_start(message: types.Message, state: FSMContext) -> None:
 
     user = _find_or_link_user(message.from_user)
     if user:
-        await message.answer(
-            "Здравствуйте! Здесь можно посмотреть подписку, статус инфраструктуры и связаться с поддержкой.",
-            reply_markup=user_menu(),
-        )
-        if _has_admin_mini_app_access(user, message.from_user.id):
-            await message.answer("Откройте панель управления.", reply_markup=_webapp_keyboard())
+        await answer_main_menu(message, is_admin=_has_admin_mini_app_access(user, message.from_user.id))
         return
 
     await state.set_state(ApplicationForm.full_name)

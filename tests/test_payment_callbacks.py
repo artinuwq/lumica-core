@@ -1,7 +1,8 @@
 from decimal import Decimal
 from types import SimpleNamespace
 
-from lumica.bot.workspace import _parse_payment_target, _subscription_message
+from lumica.bot.menus import format_subscription_message
+from lumica.bot.payments import _parse_payment_target
 
 
 def test_parse_single_subscription_payment_callback():
@@ -20,7 +21,7 @@ def test_parse_payment_callback_rejects_invalid_targets():
 def test_family_member_subscription_message_hides_billing_amount_and_date():
     subscription = SimpleNamespace(status="active", access_until=None, price_amount=Decimal("120"))
 
-    text = _subscription_message(subscription, "Подписка", hide_billing=True)
+    text = format_subscription_message(subscription, [], hide_billing=True)
 
     assert "120" not in text
     assert "только администратор" in text.lower()

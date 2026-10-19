@@ -14,6 +14,7 @@ class UpdateStatus:
     local_version: str = ""
     remote_version: str = ""
     network_error: bool = False
+    remote_subject: str = ""  # заголовок последнего коммита новой версии
 
     def to_dict(self) -> dict:
         return asdict(self)

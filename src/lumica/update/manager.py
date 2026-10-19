@@ -79,10 +79,11 @@ class UpdateManager:
         local_version = provider.describe(self.repo_dir, local_sha)
         remote_version = provider.describe(self.repo_dir, remote_sha)
         up_to_date = local_sha == remote_sha
+        remote_subject = "" if up_to_date else provider.subject(self.repo_dir, remote_sha)
         if up_to_date:
             message = f"Актуальная версия: {local_version} [{branch}]"
         else:
-            note = provider.subject(self.repo_dir, remote_sha)
+            note = remote_subject
             message = f"Доступно обновление [{branch}]: {local_version} -> {remote_version}"
             if note:
                 message += f" - {note}"
@@ -92,6 +93,7 @@ class UpdateManager:
         return UpdateStatus(
             branch, local_sha, remote_sha, up_to_date, dirty, message,
             local_version=local_version, remote_version=remote_version,
+            remote_subject=remote_subject,
         )
 
     def last_result(self) -> dict | None:
