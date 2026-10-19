@@ -1,4 +1,4 @@
-"""Monthly payment reminders at 15:30 Moscow time."""
+"""Monthly payment reminders (in the hour chosen by the payer, 15:00 Moscow by default)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from lumica.domain.models import Group, NotificationLog, Subscription, User
 from lumica.infra.db import SessionLocal
+from lumica.services.notification_settings import get_settings
 from lumica.services.notifications import already_sent, send_raw
 
 MOSCOW = ZoneInfo("Europe/Moscow")
@@ -15,8 +16,6 @@ MOSCOW = ZoneInfo("Europe/Moscow")
 
 def run_payment_due_reminders(now: datetime | None = None) -> None:
     now = now.astimezone(MOSCOW) if now else datetime.now(MOSCOW)
-    if now.hour != 15 or now.minute != 30:
-        return
     with SessionLocal() as db:
         subscriptions = (
             db.query(Subscription)
@@ -38,6 +37,9 @@ def run_payment_due_reminders(now: datetime | None = None) -> None:
                     continue
                 payer = db.query(User).filter(User.id == group.admin_user_id).first()
                 if not payer or not payer.telegram_id:
+                    continue
+                if now.hour < get_settings(payer)["expiry_hour"]:
+                    processed_groups.discard(group_id)
                     continue
                 admin_due = db.query(Subscription).filter(
                     Subscription.user_id == payer.id,
@@ -80,6 +82,8 @@ def run_payment_due_reminders(now: datetime | None = None) -> None:
                 db.add(NotificationLog(user_id=payer.id, key=key, success=1 if sent else 0))
                 continue
             if subscription.billing_day != now.day:
+                continue
+            if now.hour < get_settings(user)["expiry_hour"]:
                 continue
             key = f"payment_due:{subscription.id}:{now.date().isoformat()}"
             if already_sent(db, user.id, key):

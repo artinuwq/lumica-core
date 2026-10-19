@@ -1095,6 +1095,7 @@ const statusCard = document.getElementById("status-card");
         }
 
         function shouldShowTelegramBackButton() {
+            if (isWorkSheetOpen()) return true;
             const activeScreenId = getActiveScreenId();
 
             if (activeScreenId === "screen-connections") {
@@ -2986,32 +2987,14 @@ const statusCard = document.getElementById("status-card");
             workClientGroupStatusEl.classList.remove("hidden");
         }
 
-        /** Добавляет в группу пользователя из общего списка (уже известные системе, без другой группы). */
-        async function addWorkGroupMember(group) {
+        /** Участник добавляется той же формой, что и при создании пользователя. */
+        function openGroupMemberForm(group) {
             setWorkGroupStatus("");
-            const taken = new Set((group?.members || []).map((m) => String(m.id)));
-            taken.add(String(workState.selectedUserId));
-            const candidates = new Map();
-            [...(workState.users || []), ...(workState.knownUsers || [])].forEach((user) => {
-                const key = String(user?.id ?? "");
-                if (!key || taken.has(key) || user?.group_id || candidates.has(key)) return;
-                candidates.set(key, user);
-            });
-            const picked = await openUiSheet({
-                title: "Добавить в группу",
-                searchable: true,
-                emptyText: "Нет пользователей, которых можно добавить: все уже состоят в группах.",
-                items: [...candidates.values()].map((user) => ({
-                    value: user.id,
-                    label: user.name || user.username || `Клиент #${user.id}`,
-                    meta: [user.username ? `@${user.username}` : "", user.telegram_id ? `ID ${user.telegram_id}` : ""].filter(Boolean),
-                })),
-            });
-            if (picked === null || picked === undefined) return;
-            await postJson(`${adminGroupsUrl}/${group.id}/members`, { user_id: Number(picked) });
-            await loadSelectedUserOverview();
-            await loadWorkClientsData();
-            setWorkGroupStatus("Участник добавлен в группу", "success");
+            memberPageGroup = group;
+            const backBtn = document.querySelector("#work-user-member-page .work-back-btn");
+            if (backBtn) backBtn.dataset.workBack = "work-client-group-page";
+            workBackTargetByPage.set("work-user-member-page", "work-client-group-page");
+            switchWorkPage("work-user-member-page");
         }
 
         function renderWorkClientGroup(overview) {
@@ -3031,18 +3014,13 @@ const statusCard = document.getElementById("status-card");
                 head.className = "form-card-head";
                 const headTitle = document.createElement("div");
                 headTitle.className = "work-page-title";
-                headTitle.textContent = group?.name || `Группа #${group?.id}`;
+                headTitle.textContent = workGroupLabel(group, workState.overview?.user?.name || "");
                 const addBtn = document.createElement("button");
                 addBtn.type = "button";
                 addBtn.className = "icon-add-btn";
                 addBtn.textContent = "+";
                 addBtn.setAttribute("aria-label", "Добавить участника");
-                addBtn.addEventListener("click", () => {
-                    addWorkGroupMember(group).catch((err) => {
-                        console.error("add group member error:", err);
-                        setWorkGroupStatus(err?.message || "Не удалось добавить участника", "error");
-                    });
-                });
+                addBtn.addEventListener("click", () => openGroupMemberForm(group));
                 head.appendChild(headTitle);
                 head.appendChild(addBtn);
                 workClientGroupListEl.appendChild(head);
@@ -3481,6 +3459,8 @@ const statusCard = document.getElementById("status-card");
         // ---------- Создание пользователя ----------
         const createDraft = { bindings: [], members: [] };
         const memberDraft = { bindings: [] };
+        // Не null, когда форма участника открыта со страницы «Группа» существующего администратора.
+        let memberPageGroup = null;
 
         const SUBSCRIPTION_TYPE_LABELS = {
             personal: "Личная",
@@ -3789,14 +3769,19 @@ const statusCard = document.getElementById("status-card");
             }
         }
 
-        function saveMemberDraft() {
+        async function saveMemberDraft() {
+            const liveGroup = memberPageGroup;
             try {
                 const mode = String(workMemberModeEl?.value || "existing");
                 const member = { mode, bindings: memberDraft.bindings.slice() };
                 if (mode === "existing") {
                     const userId = Number(workMemberExistingSelectEl?.value || 0);
                     if (!userId) throw new Error("Выбери пользователя из списка");
-                    if (createDraft.members.some((item) => item.mode === "existing" && item.user_id === userId)) {
+                    if (liveGroup) {
+                        const inGroup = (liveGroup.members || []).some((m) => Number(m.id) === userId)
+                            || userId === Number(workState.selectedUserId);
+                        if (inGroup) throw new Error("Этот пользователь уже в группе");
+                    } else if (createDraft.members.some((item) => item.mode === "existing" && item.user_id === userId)) {
                         throw new Error("Этот пользователь уже добавлен");
                     }
                     const option = workMemberExistingSelectEl.options[workMemberExistingSelectEl.selectedIndex];
@@ -3814,6 +3799,22 @@ const statusCard = document.getElementById("status-card");
                     if (!name) throw new Error("Укажи имя пустого места");
                     member.name = name;
                     member.title = name;
+                }
+                if (liveGroup) {
+                    if (workMemberSaveEl) workMemberSaveEl.disabled = true;
+                    setFormNote(workMemberStatusEl, "Добавляем участника…");
+                    try {
+                        await createGroupMember(member, liveGroup.id);
+                    } finally {
+                        if (workMemberSaveEl) workMemberSaveEl.disabled = false;
+                        await loadSelectedUserOverview().catch(() => {});
+                        await loadWorkClientsData().catch(() => {});
+                    }
+                    setFormNote(workMemberStatusEl, "");
+                    memberPageGroup = null;
+                    switchWorkPage("work-client-group-page");
+                    setWorkGroupStatus(`Участник добавлен: ${member.title}`, "success");
+                    return;
                 }
                 createDraft.members.push(member);
                 renderStagedMembers();
@@ -3920,6 +3921,17 @@ const statusCard = document.getElementById("status-card");
             }
         }
 
+        /** «Семья Иван» вместо «Семья 1»: по имени администратора группы. */
+        function workGroupLabel(group, adminNameHint = "") {
+            const adminId = String(group?.admin_user_id ?? "");
+            const adminUser = adminId ? (workState.users || []).find((u) => String(u.id) === adminId) : null;
+            const adminMember = (group?.members || []).find((m) => m?.is_admin);
+            const adminName = String(
+                adminNameHint || adminUser?.name || adminUser?.username || adminMember?.name || adminMember?.username || ""
+            ).trim();
+            return adminName ? `Семья ${adminName}` : (group?.name || `Семья #${group?.id}`);
+        }
+
         function renderUserCreateGroups() {
             if (!workSubGroupSelectEl) return;
             const selectedId = workSubGroupSelectEl.value;
@@ -3927,7 +3939,9 @@ const statusCard = document.getElementById("status-card");
             (Array.isArray(workState.groups) ? workState.groups : []).forEach((group) => {
                 const option = document.createElement("option");
                 option.value = String(group.id);
-                option.textContent = group.name || `Семья #${group.id}`;
+                option.textContent = workGroupLabel(group);
+                const membersCount = Array.isArray(group.members) ? group.members.length : Number(group.members_count || 0);
+                if (membersCount) option.dataset.metaBottom = `Участников: ${membersCount}`;
                 workSubGroupSelectEl.appendChild(option);
             });
             if (workState.groups.some((group) => String(group.id) === selectedId)) {
@@ -4460,6 +4474,13 @@ const statusCard = document.getElementById("status-card");
             overlayEl.classList.toggle("hidden", !visible);
             overlayEl.setAttribute("aria-hidden", visible ? "false" : "true");
             document.body.classList.toggle("ui-sheet-open", isWorkSheetOpen() || isUiSheetOpen());
+            updateTelegramBackButton();
+        }
+
+        // В Telegram окно «Действия» закрывается системной кнопкой «назад»; крестик нужен
+        // только в браузере (без Telegram), поэтому там, где он не нужен, прячем его.
+        if (window.Telegram?.WebApp?.initData) {
+            workClientActionsCloseEl?.classList.add("hidden");
         }
 
         function closeWorkSheets() {
@@ -5949,6 +5970,10 @@ const statusCard = document.getElementById("status-card");
             addStagedBinding(memberDraft.bindings, workMemberBindingsListEl, workMemberStatusEl);
         });
         workUserMembersAddEl?.addEventListener("click", () => {
+            memberPageGroup = null;
+            const backBtn = document.querySelector("#work-user-member-page .work-back-btn");
+            if (backBtn) backBtn.dataset.workBack = "work-user-create-page";
+            workBackTargetByPage.set("work-user-member-page", "work-user-create-page");
             switchWorkPage("work-user-member-page");
         });
         workMemberSaveEl?.addEventListener("click", saveMemberDraft);

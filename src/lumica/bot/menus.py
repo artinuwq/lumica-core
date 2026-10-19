@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import os
 from decimal import Decimal, InvalidOperation
-from urllib.parse import quote
 
 from aiogram import Router, types
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
-from lumica.domain.models import Group, Subscription, SubscriptionVpnAccount, User, VpnAccount
+from lumica.domain.models import Group, Panel, Subscription, SubscriptionVpnAccount, User, VpnAccount
 from lumica.infra.db import SessionLocal
 from lumica.services import groups as group_service
+from lumica.services import subscription_links
 from lumica.services.roles import is_authorized, load_role_bindings, role_allows
 
 router = Router(name="menus")
@@ -96,33 +97,9 @@ def _fmt_until(subscription: Subscription) -> str:
     return subscription.access_until.strftime("%d.%m.%Y") if subscription.access_until else "не указана"
 
 
-def _build_subscription_url(explicit, sub_id) -> str | None:
-    value = str(explicit or "").strip()
-    if value.lower().startswith(("http://", "https://")):
-        return value
-    sid = str(sub_id or "").strip()
-    if not sid:
-        return None
-    sid_quoted = quote(sid)
-    subscription_base = os.getenv("PANEL_SUBSCRIPTION_BASE_URL", "").strip().rstrip("/")
-    public_base = os.getenv("PANEL_PUBLIC_BASE_URL", "").strip().rstrip("/")
-    template = os.getenv("PANEL_SUBSCRIPTION_URL_TEMPLATE", "").strip()
-    if template:
-        for base in (subscription_base, public_base, ""):
-            try:
-                candidate = template.format(sub_id=sid, base_url=base).strip()
-            except (KeyError, IndexError, ValueError):
-                break
-            if candidate.lower().startswith(("http://", "https://")):
-                return candidate
-    for base in (subscription_base, public_base):
-        if base:
-            return f"{base}/sub/{sid_quoted}"
-    return None
-
-
 def subscription_urls(db, subscription: Subscription) -> list[str]:
-    """Ссылки подписки (по одной на клиента панели; одинаковые склеиваются)."""
+    """Ссылки подписки (по одной на клиента панели; одинаковые склеиваются).
+    Логика та же, что в mini app: см. services/subscription_links.py."""
     accounts = (
         db.query(VpnAccount)
         .join(SubscriptionVpnAccount, SubscriptionVpnAccount.vpn_account_id == VpnAccount.id)
@@ -140,7 +117,15 @@ def subscription_urls(db, subscription: Subscription) -> list[str]:
     urls: list[str] = []
     for account in accounts:
         meta = account.meta_json if isinstance(account.meta_json, dict) else {}
-        url = _build_subscription_url(meta.get("sub_url"), meta.get("sub_id"))
+        extra_roots: list[str] = []
+        panel = db.query(Panel).filter(Panel.id == meta.get("panel_id")).first() if meta.get("panel_id") else None
+        root = subscription_links.panel_root(panel.base_url) if panel else None
+        if root:
+            extra_roots.append(root)
+        candidates = subscription_links.build_subscription_urls(
+            meta.get("sub_id"), meta.get("sub_url"), extra_roots=extra_roots
+        )
+        url = subscription_links.pick_subscription_url(candidates)
         if url and url not in urls:
             urls.append(url)
     return urls
@@ -214,10 +199,15 @@ def collect_subscription_messages(db, user: User | None) -> list[str]:
     return messages
 
 
-async def send_subscription_info(message: types.Message, tg_user: types.User) -> None:
+def _load_subscription_texts(telegram_id: int) -> list[str]:
     with SessionLocal() as db:
-        user = db.query(User).filter(User.telegram_id == str(tg_user.id)).first()
-        texts = collect_subscription_messages(db, user)
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+        return collect_subscription_messages(db, user)
+
+
+async def send_subscription_info(message: types.Message, tg_user: types.User) -> None:
+    # Проверка ссылок ходит в сеть - выполняем в потоке, чтобы не блокировать бота.
+    texts = await asyncio.to_thread(_load_subscription_texts, tg_user.id)
     for text in texts:
         await message.answer(text, parse_mode="HTML")
 
@@ -245,11 +235,6 @@ async def subscription_menu(query: CallbackQuery) -> None:
 @router.callback_query(lambda query: query.data == "menu:status")
 async def status_menu(query: CallbackQuery) -> None:
     await query.answer("Статус серверов доступен в Mini App.", show_alert=True)
-
-
-@router.callback_query(lambda query: query.data == "menu:settings")
-async def settings_menu(query: CallbackQuery) -> None:
-    await query.answer("Настройки скоро появятся.", show_alert=True)
 
 
 __all__ = [

@@ -7,6 +7,7 @@ from .chatops import resume_update_notice, router as chatops_router
 from .menus import router as menus_router
 from .onboarding import router as onboarding_router
 from .payments import router as payments_router
+from .settings import router as settings_router
 from .subscriptions import router as subscriptions_router
 from .workspace import router as workspace_router
 
@@ -19,6 +20,7 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.include_router(workspace_router)
     dp.include_router(menus_router)
     dp.include_router(payments_router)
+    dp.include_router(settings_router)
 
 
 async def start_bot():

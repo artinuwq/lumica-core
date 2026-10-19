@@ -20,7 +20,7 @@ def run_scheduler_forever() -> None:
 
     sync_interval = max(30, int(os.getenv("PANEL_SYNC_INTERVAL_SEC", "300")))
     expire_interval = max(60, int(os.getenv("EXPIRE_SUBSCRIPTIONS_INTERVAL_SEC", "3600")))
-    reminders_interval = max(300, int(os.getenv("REMINDERS_INTERVAL_SEC", "3600")))
+    reminders_interval = max(300, int(os.getenv("REMINDERS_INTERVAL_SEC", "600")))
     registry = PanelRegistry()
     next_sync = 0.0
     next_expire = 0.0

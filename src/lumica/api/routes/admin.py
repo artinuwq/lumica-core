@@ -4,6 +4,8 @@ from decimal import Decimal, InvalidOperation
 
 from lumica.domain.models import Application, AuthIdentity, MiniAppLaunch, Subscription, SubscriptionVpnAccount
 from lumica.services import user_provisioning
+from lumica.services import subscription_updates
+from lumica.services.notification_settings import is_silent
 from lumica.services.notifications import send_raw
 from lumica.services.user_audit import record_user_event
 
@@ -824,9 +826,11 @@ def register_admin_routes(app, deps):
             if not user:
                 return jsonify({"ok": False, "error": "User not found"}), 404
 
+            before_snapshot = subscription_updates.snapshot(_admin_latest_subscription(db, user.id))
             payload_err = _apply_admin_subscription_payload(db, user, body)
             if payload_err:
                 return payload_err
+            after_snapshot = subscription_updates.snapshot(_admin_latest_subscription(db, user.id))
 
             changes = {
                 key: ("updated" if key == "billing_details" else body.get(key))
@@ -846,6 +850,7 @@ def register_admin_routes(app, deps):
 
             db.commit()
             db.refresh(user)
+            subscription_updates.notify_subscription_updated(db, user, before_snapshot, after_snapshot)
             return jsonify({"ok": True, "overview": _serialize_admin_user_overview(db, user)})
 
     @app.get("/api/admin/users/by-telegram/<telegram_id>/overview")
@@ -2094,6 +2099,7 @@ def register_admin_routes(app, deps):
             if not user:
                 return jsonify({"ok": False, "error": "User not found"}), 404
             subscriptions = db.query(Subscription).filter(Subscription.user_id == user.id).all()
+            was_frozen = any(item.is_frozen for item in subscriptions)
             for subscription in subscriptions:
                 subscription.is_frozen = frozen
             accounts = db.query(VpnAccount).filter(VpnAccount.user_id == user.id).all()
@@ -2130,6 +2136,13 @@ def register_admin_routes(app, deps):
                 changes={"frozen": frozen, "failed_connections": len(failures)},
             )
             db.commit()
+            if subscriptions and was_frozen != frozen:
+                subscription_updates.notify_subscription_updated(
+                    db,
+                    user,
+                    {"status": "", "access_until": None, "price": None, "frozen": was_frozen},
+                    {"status": "", "access_until": None, "price": None, "frozen": frozen},
+                )
         return jsonify({"ok": not failures, "frozen": frozen, "failures": failures})
 
     @app.post("/api/admin/users/<int:user_id>/manual-extend")
@@ -2154,6 +2167,7 @@ def register_admin_routes(app, deps):
                 return jsonify({"ok": False, "error": "Subscription not found"}), 404
             next_payment = subscription.access_until
             telegram_id = user.telegram_id
+            silent_notice = is_silent(user, "payment_confirmed")
             record_user_event(
                 db,
                 actor_user_id=auth["user_id"],
@@ -2170,6 +2184,7 @@ def register_admin_routes(app, deps):
                 "Администратор подтвердил продление подписки, спасибо большое 💜\n\n"
                 + "Следующая оплата: "
                 + (next_payment.strftime("%d.%m.%Y") if next_payment else "не указана"),
+                silent=silent_notice,
             )
         return jsonify({"ok": True, "overview": overview, "notification_sent": notification_sent})
 

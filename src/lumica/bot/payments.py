@@ -23,6 +23,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from lumica.domain.models import AppSetting, Group, PaymentRequest, Subscription, User
 from lumica.infra.db import SessionLocal
+from lumica.services.notification_settings import is_silent
 from lumica.services.payments import add_calendar_month
 from lumica.services.roles import is_authorized, load_role_bindings
 
@@ -535,6 +536,7 @@ async def reject_payment(query: CallbackQuery, bot: Bot) -> None:
         item.reviewed_by = admin.id if admin else None
         item.reviewed_at = datetime.now(timezone.utc)
         telegram_id = payer.telegram_id if payer else None
+        silent = bool(payer and is_silent(payer, "payment_rejected"))
         db.commit()
     if telegram_id:
         try:
@@ -542,6 +544,7 @@ async def reject_payment(query: CallbackQuery, bot: Bot) -> None:
                 telegram_id,
                 "Оплата не засчитана. Если вы не знаете почему, обратитесь на рабочий аккаунт: " + support_url(),
                 reply_markup=menu_button(),
+                disable_notification=silent,
             )
         except TelegramAPIError:
             logger.exception("Could not notify payer about rejected payment %s", request_id)
@@ -583,6 +586,7 @@ async def extend_payment(query: CallbackQuery, bot: Bot) -> None:
         item.status = "extended"
         next_payment = max(new for _, _, new in changes)
         payer_telegram_id = payer.telegram_id
+        silent = is_silent(payer, "payment_confirmed")
         db.commit()
     if payer_telegram_id:
         try:
@@ -591,6 +595,7 @@ async def extend_payment(query: CallbackQuery, bot: Bot) -> None:
                 "Администратор подтвердил вашу оплату, спасибо большое 💜\n\n"
                 f"Следующая оплата: {next_payment:%d.%m.%Y}",
                 reply_markup=menu_button(),
+                disable_notification=silent,
             )
         except TelegramAPIError:
             logger.exception("Could not notify payer about extended payment %s", request_id)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from lumica.services.subscription_links import build_subscription_urls
+
 def build_vpn_helpers(deps):
     # Transitional dependency injection: helpers still depend on
     # legacy names while extraction to service classes continues.
@@ -271,56 +273,7 @@ def build_vpn_helpers(deps):
         return f"{base}#{quote(display_name, safe='')}"
 
     def _build_subscription_urls(sub_id: str | None, explicit_url: str | None = None) -> list[str]:
-        sid = str(sub_id or "").strip()
-        sid_quoted = quote(sid) if sid else ""
-        urls: list[str] = []
-
-        def _append_url(raw: str | None):
-            value = str(raw or "").strip()
-            if not value:
-                return
-            parsed_value = urlparse(value)
-            if parsed_value.scheme not in {"http", "https"}:
-                return
-            if value not in urls:
-                urls.append(value)
-
-        _append_url(explicit_url)
-
-        public_base = os.getenv("PANEL_PUBLIC_BASE_URL", "").strip().rstrip("/")
-        subscription_base = os.getenv("PANEL_SUBSCRIPTION_BASE_URL", "").strip().rstrip("/")
-        tpl = os.getenv("PANEL_SUBSCRIPTION_URL_TEMPLATE", "").strip()
-        if tpl:
-            for base_url in (subscription_base, public_base, ""):
-                try:
-                    _append_url(tpl.format(sub_id=sid, base_url=base_url))
-                except Exception as exc:
-                    app.logger.warning("invalid PANEL_SUBSCRIPTION_URL_TEMPLATE: %s", exc)
-                    break
-
-        if sid:
-            for base_url in (subscription_base, public_base):
-                if not base_url:
-                    continue
-                _append_url(f"{base_url}/sub/{sid_quoted}")
-                _append_url(f"{base_url}/subcrp/{sid_quoted}")
-
-            panel_base = os.getenv("PANEL_BASE_URL", "").strip()
-            parsed_base = urlparse(panel_base)
-            if parsed_base.scheme in {"http", "https"} and parsed_base.netloc:
-                root = f"{parsed_base.scheme}://{parsed_base.netloc}"
-                _append_url(f"{root}/sub/{sid_quoted}")
-                _append_url(f"{root}/subcrp/{sid_quoted}")
-
-            public_host = os.getenv("PUBLIC_VPN_HOST", "").strip()
-            sub_port = os.getenv("PANEL_SUBSCRIPTION_PORT", "").strip()
-            if public_host and sub_port:
-                _append_url(f"http://{public_host}:{sub_port}/sub/{sid_quoted}")
-                _append_url(f"http://{public_host}:{sub_port}/subcrp/{sid_quoted}")
-                _append_url(f"https://{public_host}:{sub_port}/sub/{sid_quoted}")
-                _append_url(f"https://{public_host}:{sub_port}/subcrp/{sid_quoted}")
-
-        return urls
+        return build_subscription_urls(sub_id, explicit_url, warn=app.logger.warning)
 
     def _normalize_account_protocol(raw_protocol: str | None) -> str:
         value = (raw_protocol or "").strip().lower()
