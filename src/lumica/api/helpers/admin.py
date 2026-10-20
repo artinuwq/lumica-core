@@ -650,6 +650,7 @@ def build_admin_helpers(deps):
         "_panels_status_payload": _panels_status_payload,
         "_get_or_create_user_by_telegram_id": _get_or_create_user_by_telegram_id,
         "_apply_admin_subscription_payload": _apply_admin_subscription_payload,
+        "_admin_latest_subscription": _admin_latest_subscription,
         "_delete_panel": _delete_panel,
         "_serialize_panel": _serialize_panel,
     }

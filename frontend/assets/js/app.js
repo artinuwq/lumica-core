@@ -685,8 +685,21 @@ const statusCard = document.getElementById("status-card");
             return "";
         }
 
+        // Пока открыто полноэкранное окно «Действия», в капсуле пишем только «Действия» (без имени клиента).
+        let workContextOverrideTitle = "";
+
         function updateWorkPageContext(pageId) {
             if (!workPageContextEl || !workPageContextPillEl) return;
+            if (workContextOverrideTitle) {
+                workPageContextEl.dataset.action = "";
+                workPageContextEl.classList.remove("clickable");
+                workPageContextPillEl.tabIndex = -1;
+                workPageContextPillEl.removeAttribute("role");
+                workPageContextPillEl.textContent = workContextOverrideTitle;
+                workPageContextPillEl.title = workContextOverrideTitle;
+                workPageContextEl.classList.remove("hidden");
+                return;
+            }
             if (!pageId || pageId === "work-menu-page") {
                 workPageContextEl.dataset.action = "";
                 workPageContextEl.classList.remove("clickable");
@@ -2873,6 +2886,15 @@ const statusCard = document.getElementById("status-card");
             }
         }
 
+        /** «18.11.2027» - только дата, как её задал администратор (без времени и без сдвига по часовому поясу). */
+        function fmtDateOnly(iso) {
+            const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+            if (match) return `${match[3]}.${match[2]}.${match[1]}`;
+            const d = new Date(iso);
+            if (!iso || Number.isNaN(d.getTime())) return "—";
+            return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+        }
+
         function fmtDateTime(iso) {
             if (!iso) return "—";
             const d = new Date(iso);
@@ -2929,7 +2951,7 @@ const statusCard = document.getElementById("status-card");
             if (ts < today.getTime()) {
                 throw new Error("Дата окончания не может быть в прошлом");
             }
-            return `${clean}T23:59:59`;
+            return `${clean}T23:55:00`; // действует весь выбранный день
         }
 
         function renderWorkSubscriptionControls(sub) {
@@ -2956,10 +2978,8 @@ const statusCard = document.getElementById("status-card");
             workClientManualExtendBtnEl?.classList.toggle("hidden", lifetime);
             workSubExtendWrapEl?.classList.toggle("hidden", lifetime);
             if (workSubCreateDateEl) {
-                const accessUntil = sub?.access_until ? new Date(sub.access_until) : null;
-                workSubCreateDateEl.value = accessUntil && !lifetime && !Number.isNaN(accessUntil.getTime())
-                    ? toInputDateValue(accessUntil)
-                    : defaultSubscriptionDateValue(30);
+                const untilDate = /^\d{4}-\d{2}-\d{2}/.exec(String(sub?.access_until || ""))?.[0] || "";
+                workSubCreateDateEl.value = untilDate && !lifetime ? untilDate : defaultSubscriptionDateValue(30);
             }
 
             if (workClientMemberNoteEl) {
@@ -3861,7 +3881,7 @@ const statusCard = document.getElementById("status-card");
                     notes: String(workUserNotesEl?.value || "").trim() || null,
                     subscription_type: type,
                 };
-                if (date) payload.access_until = `${date}T00:00:00+00:00`;
+                if (date) payload.access_until = `${date}T23:55:00`; // действует весь выбранный день
 
                 let userId;
                 let groupId = null;
@@ -4475,12 +4495,17 @@ const statusCard = document.getElementById("status-card");
             overlayEl.setAttribute("aria-hidden", visible ? "false" : "true");
             document.body.classList.toggle("ui-sheet-open", isWorkSheetOpen() || isUiSheetOpen());
             updateTelegramBackButton();
+            if (overlayEl === workClientActionsOverlayEl) {
+                workContextOverrideTitle = visible ? "Действия" : "";
+                updateWorkPageContext(getActiveWorkPageId());
+            }
         }
 
         // В Telegram окно «Действия» закрывается системной кнопкой «назад»; крестик нужен
         // только в браузере (без Telegram), поэтому там, где он не нужен, прячем его.
         if (window.Telegram?.WebApp?.initData) {
             workClientActionsCloseEl?.classList.add("hidden");
+            workClientActionsOverlayEl?.classList.add("ui-sheet-overlay-tg");
         }
 
         function closeWorkSheets() {
@@ -5220,7 +5245,7 @@ const statusCard = document.getElementById("status-card");
             renderWorkSubscriptionControls(sub);
 
             workClientSubStatusEl.textContent = subscriptionStatusLabel(sub);
-            workClientSubUntilEl.textContent = formatSubscriptionUntil(sub, fmtDateTime);
+            workClientSubUntilEl.textContent = formatSubscriptionUntil(sub, fmtDateOnly);
             workClientSubPriceEl.textContent = fmtMoney(sub?.price_amount);
         }
         async function loadSelectedUserOverview() {

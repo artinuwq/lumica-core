@@ -2276,3 +2276,17 @@
         .work-page .form-card-head .work-page-title {
             margin: 0;
         }
+
+        /* «Действия»: заголовок показывает капсула сверху, внутри окна его не дублируем */
+        .ui-sheet-overlay-full .ui-sheet-title {
+            display: none;
+        }
+        .ui-sheet-overlay-full .ui-sheet-head {
+            justify-content: flex-end;
+        }
+        .ui-sheet-overlay-tg .ui-sheet-head {
+            display: none;
+        }
+        .ui-sheet-overlay-tg .ui-sheet {
+            padding-top: calc(var(--safe-top, 0px) + 3.4rem);
+        }

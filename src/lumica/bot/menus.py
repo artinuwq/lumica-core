@@ -13,7 +13,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from lumica.domain.models import Group, Panel, Subscription, SubscriptionVpnAccount, User, VpnAccount
 from lumica.infra.db import SessionLocal
 from lumica.services import groups as group_service
-from lumica.services import subscription_links
+from lumica.services import subscription_links as subscription_links_module
 from lumica.services.roles import is_authorized, load_role_bindings, role_allows
 
 router = Router(name="menus")
@@ -108,9 +108,20 @@ def _fmt_until(subscription: Subscription) -> str:
     return subscription.access_until.strftime("%d.%m.%Y") if subscription.access_until else "не указана"
 
 
-def subscription_urls(db, subscription: Subscription) -> list[str]:
-    """Ссылки подписки (по одной на клиента панели; одинаковые склеиваются).
-    Логика та же, что в mini app: см. services/subscription_links.py."""
+def server_code(panel: Panel | None) -> str | None:
+    """Две буквы сервера для подписи: регион «de» -> «De», иначе начало названия."""
+    if panel is None:
+        return None
+    for source in (panel.region, panel.name):
+        letters = "".join(ch for ch in str(source or "") if ch.isalnum())[:2]
+        if letters:
+            return letters.capitalize()
+    return None
+
+
+def subscription_links(db, subscription: Subscription) -> list[tuple[str | None, str]]:
+    """Ссылки подписки как (подпись сервера, ссылка): по одной на клиента панели.
+    Логика выбора ссылки та же, что в mini app: см. services/subscription_links.py."""
     accounts = (
         db.query(VpnAccount)
         .join(SubscriptionVpnAccount, SubscriptionVpnAccount.vpn_account_id == VpnAccount.id)
@@ -125,51 +136,52 @@ def subscription_urls(db, subscription: Subscription) -> list[str]:
             .order_by(VpnAccount.id.asc())
             .all()
         )
-    urls: list[str] = []
+    links: list[tuple[str | None, str]] = []
+    seen: set[str] = set()
     for account in accounts:
         meta = account.meta_json if isinstance(account.meta_json, dict) else {}
-        extra_roots: list[str] = []
         panel = db.query(Panel).filter(Panel.id == meta.get("panel_id")).first() if meta.get("panel_id") else None
-        root = subscription_links.panel_root(panel.base_url) if panel else None
-        if root:
-            extra_roots.append(root)
-        candidates = subscription_links.build_subscription_urls(
+        extra_roots = [root] if panel and (root := subscription_links_module.panel_root(panel.base_url)) else []
+        candidates = subscription_links_module.build_subscription_urls(
             meta.get("sub_id"), meta.get("sub_url"), extra_roots=extra_roots
         )
-        url = subscription_links.pick_subscription_url(candidates)
-        if url and url not in urls:
-            urls.append(url)
-    return urls
+        url = subscription_links_module.pick_subscription_url(candidates)
+        if url and url not in seen:
+            seen.add(url)
+            links.append((server_code(panel), url))
+    return links
 
 
 def format_subscription_message(
     subscription: Subscription,
-    urls: list[str],
+    links: list,
     *,
     hide_billing: bool = False,
     owner_name: str | None = None,
 ) -> str:
-    """HTML-текст подписки: срок оплаты, цена и ссылки цитатой."""
+    """HTML-текст подписки.
+
+    Своя подписка: срок оплаты и цена, затем для каждого сервера подпись
+    «Сервер "De":» и ссылка цитатой. Подписка участника группы (её видит
+    администратор): имя участника и ссылки, без срока и цены."""
     lines: list[str] = []
     if owner_name:
-        lines.append(f"👤 {html.escape(owner_name)}")
-    if hide_billing:
-        lines.append("Дату оплаты и стоимость семейной подписки видит только администратор группы.")
+        lines += ["Подписка участника группы", f"👤 {html.escape(owner_name)}"]
     else:
-        lines.append("Информация о вашей подписки")
+        lines.append("Ваша подписка")
         lines.append("")
-        lines.append(f"Дата оплаты до: {_fmt_until(subscription)}")
-        lines.append(f"Цена: {_fmt_price(subscription.price_amount)}")
-    lines.append("")
-    if owner_name:
-        header = "Подписки:" if len(urls) > 1 else "Подписка:"
-    else:
-        header = "Ваши личные подписки:" if len(urls) > 1 else "Ваша личная подписка:"
-    if urls:
-        lines.append(header)
-        lines.append("<blockquote>" + "\n".join(f"<code>{html.escape(url)}</code>" for url in urls) + "</blockquote>")
-    else:
-        lines.append("Ссылка на подписку пока не выдана. Напишите на рабочий аккаунт.")
+        if hide_billing:
+            lines.append("Дату оплаты и стоимость семейной подписки видит только администратор группы.")
+        else:
+            lines.append(f"Дата оплаты до: {_fmt_until(subscription)}")
+            lines.append(f"Цена: {_fmt_price(subscription.price_amount)}")
+    entries = [(None, item) if isinstance(item, str) else item for item in links]
+    if not entries:
+        lines += ["", "Ссылка на подписку пока не выдана. Напишите в рабочий аккаунт."]
+        return "\n".join(lines)
+    for label, url in entries:
+        title = f'Сервер "{html.escape(label, quote=False)}":' if label else "Ссылка:"
+        lines += ["", title, f"<blockquote><code>{html.escape(url)}</code></blockquote>"]
     return "\n".join(lines)
 
 
@@ -179,7 +191,7 @@ def _display_name(user: User) -> str:
 
 def collect_subscription_messages(db, user: User | None) -> list[str]:
     if user is None:
-        return ["Вы ещё не зарегистрированы."]
+        return ["Вы ещё не зарегистрированы. Отправьте /start, чтобы оставить заявку."]
     group = db.query(Group).filter(Group.id == user.group_id).first() if user.group_id else None
     is_group_admin = bool(group and group_service.is_group_admin(user, group))
     hide_billing = bool(group and not is_group_admin)
@@ -197,7 +209,7 @@ def collect_subscription_messages(db, user: User | None) -> list[str]:
     if not own:
         messages.append("Подписок пока нет.")
     for item in own:
-        messages.append(format_subscription_message(item, subscription_urls(db, item), hide_billing=hide_billing))
+        messages.append(format_subscription_message(item, subscription_links(db, item), hide_billing=hide_billing))
 
     if is_group_admin:
         members = db.query(User).filter(User.group_id == group.id, User.id != user.id).order_by(User.id.asc()).all()
@@ -208,7 +220,7 @@ def collect_subscription_messages(db, user: User | None) -> list[str]:
                 messages.append(f"👤 {html.escape(name)}\nПодписки нет.")
                 continue
             for item in member_subs:
-                messages.append(format_subscription_message(item, subscription_urls(db, item), owner_name=name))
+                messages.append(format_subscription_message(item, subscription_links(db, item), owner_name=name))
     return messages
 
 
@@ -260,6 +272,8 @@ __all__ = [
     "answer_main_menu",
     "send_subscription_info",
     "format_subscription_message",
+    "server_code",
+    "subscription_links",
     "collect_subscription_messages",
     "is_admin_telegram_user",
     "webapp_url",

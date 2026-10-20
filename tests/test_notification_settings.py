@@ -283,6 +283,16 @@ def test_pick_prefers_working_candidate_and_falls_back_to_first(clean_env, monke
     assert subscription_links.pick_subscription_url([]) is None
 
 
+def test_server_label_uses_two_letters_of_region_then_name():
+    from lumica.bot import menus
+
+    assert menus.server_code(SimpleNamespace(region="de", name="Germany")) == "De"
+    assert menus.server_code(SimpleNamespace(region="FL", name="x")) == "Fl"
+    assert menus.server_code(SimpleNamespace(region=None, name="Финляндия")) == "Фи"
+    assert menus.server_code(SimpleNamespace(region="", name="")) is None
+    assert menus.server_code(None) is None
+
+
 def test_bot_finds_link_using_panel_root_when_no_env_is_configured(clean_env, monkeypatch):
     """Регрессия: клиент видел «ссылка не выдана», хотя админ видел её в mini app."""
     from lumica.bot import menus
@@ -302,5 +312,5 @@ def test_bot_finds_link_using_panel_root_when_no_env_is_configured(clean_env, mo
         db.add(SubscriptionVpnAccount(subscription_id=sub.id, vpn_account_id=account.id))
         db.commit()
         texts = menus.collect_subscription_messages(db, user)
-    assert "https://fi.example:2053/sub/abc" in texts[0]
+    assert 'Сервер "Fi":\n<blockquote><code>https://fi.example:2053/sub/abc</code>' in texts[0]
     assert "Ссылка на подписку пока не выдана" not in texts[0]

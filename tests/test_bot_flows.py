@@ -51,12 +51,11 @@ def test_subscription_message_quotes_links_and_pluralizes():
     sub = SimpleNamespace(
         status="active", access_until=datetime(2026, 11, 18), price_amount=Decimal("500.00"), id=1, user_id=1
     )
-    one = menus.format_subscription_message(sub, ["https://h/sub/a"])
-    assert "Дата оплаты до: 18.11.2026" in one and "Цена: 500 ₽" in one
-    assert "Ваша личная подписка:" in one
-    assert "<blockquote><code>https://h/sub/a</code></blockquote>" in one
-    two = menus.format_subscription_message(sub, ["https://h/sub/a", "https://h/sub/b"])
-    assert "Ваши личные подписки:" in two and two.count("<code>") == 2
+    one = menus.format_subscription_message(sub, [("De", "https://h/sub/a")])
+    assert one.startswith("Ваша подписка\n\nДата оплаты до: 18.11.2026\nЦена: 500 ₽")
+    assert 'Сервер "De":\n<blockquote><code>https://h/sub/a</code></blockquote>' in one
+    two = menus.format_subscription_message(sub, [("De", "https://h/sub/a"), ("Fl", "https://h/sub/b")])
+    assert 'Сервер "De":' in two and 'Сервер "Fl":' in two and two.count("<code>") == 2
     lifetime = SimpleNamespace(status="lifetime", access_until=None, price_amount=None, id=2, user_id=1)
     assert "Дата оплаты до: Бессрочно" in menus.format_subscription_message(lifetime, [])
 
@@ -88,7 +87,8 @@ def test_group_admin_gets_separate_message_for_each_member(monkeypatch):
         member_view = menus.collect_subscription_messages(db, kid)
     assert len(texts) == 3
     assert "Дата оплаты до" in texts[0]
-    assert texts[1].startswith("👤 Kid") and "https://panel.example/sub/abc" in texts[1]
+    assert texts[1].startswith("Подписка участника группы\n👤 Kid") and "https://panel.example/sub/abc" in texts[1]
+    assert "Дата оплаты" not in texts[1] and "Цена" not in texts[1]  # у участника только ссылки
     assert texts[2] == "👤 NoSub\nПодписки нет."
     assert len(member_view) == 1 and "только администратор" in member_view[0]
 
