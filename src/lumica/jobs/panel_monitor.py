@@ -154,32 +154,55 @@ def _format_snapshot(panel: Panel, snapshot: dict, updated_at: datetime) -> str:
     )
 
 
-def _telegram_call(method: str, payload: dict) -> dict | None:
+def _telegram_request(method: str, payload: dict) -> tuple[dict | None, str, bool]:
+    """Вызов Bot API: (ответ при успехе, текст ошибки, временная ли ошибка).
+
+    Временные ошибки (нет сети, 5xx, 429) отличаем от окончательных (400/403:
+    «message can't be edited» и т. п.), чтобы не удалять сообщения из-за сбоя сети."""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
-        return None
+        return None, "TELEGRAM_BOT_TOKEN is not set", True
     try:
         response = requests.post(
             f"https://api.telegram.org/bot{token}/{method}",
             json=payload,
             timeout=10,
         )
-        response.raise_for_status()
-        result = response.json()
-        return result if isinstance(result, dict) and result.get("ok") else None
-    except (requests.RequestException, ValueError):
-        return None
+    except requests.RequestException as exc:
+        return None, str(exc), True
+    try:
+        data = response.json()
+    except ValueError:
+        data = {}
+    data = data if isinstance(data, dict) else {}
+    if response.status_code < 400 and data.get("ok"):
+        return data, "", False
+    description = str(data.get("description") or getattr(response, "reason", "") or response.status_code)
+    return None, description, response.status_code >= 500 or response.status_code == 429
+
+
+def _telegram_call(method: str, payload: dict) -> dict | None:
+    result, _error, _transient = _telegram_request(method, payload)
+    return result
 
 
 def _topic_message(chat_id: str, thread_id: int, text: str, *, message_id: int | None = None) -> int | None:
+    """Обновляет сообщение мониторинга. Если Telegram больше не даёт его изменить
+    (слишком старое и т. п.), старое сообщение удаляется, а вместо него
+    публикуется новое - чтобы в теме не копились устаревшие снимки."""
     if message_id:
-        updated = _telegram_call("editMessageText", {
+        updated, error, transient = _telegram_request("editMessageText", {
             "chat_id": chat_id,
             "message_id": message_id,
             "text": text,
         })
         if updated:
             return message_id
+        lowered = error.lower()
+        if "message is not modified" in lowered or transient:
+            return message_id  # текст тот же или сбой сети: старое сообщение остаётся, повторим в следующий цикл
+        if "message to edit not found" not in lowered:  # если его уже нет - удалять нечего
+            _telegram_request("deleteMessage", {"chat_id": chat_id, "message_id": message_id})
     sent = _telegram_call("sendMessage", {
         "chat_id": chat_id,
         "message_thread_id": thread_id,
