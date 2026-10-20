@@ -59,6 +59,17 @@ def admin_menu() -> InlineKeyboardMarkup:
     ])
 
 
+NO_DETAILS_TEXT = "Реквизиты для вас пока не настроены. Напишите в рабочий аккаунт"
+
+
+def no_details_keyboard() -> InlineKeyboardMarkup:
+    """[Меню] [Аккаунт] - под сообщением, что реквизиты ещё не настроены."""
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Меню", callback_data="menu:main"),
+        InlineKeyboardButton(text="Аккаунт", url=support_url()),
+    ]])
+
+
 def menu_button() -> InlineKeyboardMarkup:
     """Одна кнопка «Меню» - возвращает в стандартное меню, как при приветствии."""
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Меню", callback_data="menu:main")]])
@@ -244,6 +255,8 @@ __all__ = [
     "user_menu",
     "admin_menu",
     "menu_button",
+    "no_details_keyboard",
+    "NO_DETAILS_TEXT",
     "answer_main_menu",
     "send_subscription_info",
     "format_subscription_message",

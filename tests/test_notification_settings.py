@@ -185,13 +185,44 @@ def test_update_notification_is_sent_silently_when_user_disabled_it(monkeypatch)
 
 # ------------------------------------------------------------ экран в боте
 
-def test_settings_screen_has_warning_and_toggles_work():
-    text, markup = bot_settings.render_settings(notification_settings.get_settings(SimpleNamespace(profile_data=None)))
-    assert "нельзя отключить" in text and "Настоятельно не рекомендуем" in text
-    rows = [[b.text for b in row] for row in markup.inline_keyboard]
-    assert rows[0] == ["9:00", "✅ 15:00", "21:00"]
-    assert rows[-1] == ["Меню"] and len(rows) == 6
+def _buttons(markup):
+    return [[button.text for button in row] for row in markup.inline_keyboard]
 
+
+def test_settings_main_lists_the_settings_by_name():
+    text, markup = bot_settings.render_main()
+    assert _buttons(markup) == [
+        ["Уведомление в день оплаты"], ["Уведомление до"], ["Статус оплаты"], ["Обновление подписки"], ["Меню"],
+    ]
+    assert [row[0].callback_data for row in markup.inline_keyboard[:4]] == [
+        "settings:open:day", "settings:open:before", "settings:open:payment", "settings:open:updates",
+    ]
+
+
+def test_settings_sections_show_status_and_matching_buttons():
+    defaults = notification_settings.get_settings(SimpleNamespace(profile_data=None))
+    day_text, day = bot_settings.render_section("day", defaults)
+    assert "15:00" in day_text and "нельзя отключить" in day_text
+    assert _buttons(day) == [["Назад"], ["9:00", "✅ 15:00", "21:00"]]
+
+    before_text, before = bot_settings.render_section("before", defaults)
+    assert "Уведомление до оплаты: выключено ✖️" in before_text
+    assert _buttons(before) == [["Назад", "Включить"]]
+
+    pay_text, pay = bot_settings.render_section("payment", defaults)
+    assert "При подтверждении: включено ✅" in pay_text and "При отказе: включено ✅" in pay_text
+    assert "Настоятельно не рекомендуем" in pay_text
+    assert _buttons(pay) == [["Назад"], ["Выключить при подтверждении"], ["Выключить при отказе"]]
+    off = dict(defaults, payment_rejected=False)
+    assert _buttons(bot_settings.render_section("payment", off)[1])[2] == ["Включить при отказе"]
+
+    upd_text, upd = bot_settings.render_section("updates", defaults)
+    assert "Уведомление об обновлении подписки: включено ✅" in upd_text
+    assert "Настоятельно не рекомендуем" in upd_text
+    assert _buttons(upd) == [["Назад", "Выключить"]]
+
+
+def test_settings_navigation_edits_one_message_and_saves_changes():
     factory = _factory()
     with factory() as db:
         db.add(User(telegram_id="9", name="Z"))
@@ -201,21 +232,26 @@ def test_settings_screen_has_warning_and_toggles_work():
     def press(data):
         message = SimpleNamespace(edit_text=AsyncMock(), answer=AsyncMock())
         query = SimpleNamespace(from_user=SimpleNamespace(id=9), data=data, message=message, answer=AsyncMock())
-        asyncio.run(bot_settings.change_setting(query))
-        return message
+        asyncio.run(bot_settings.settings_action(query))
+        return message, query
 
-    message = press("settings:hour:21")
-    assert message.edit_text.await_args.args[0].count("21:00") >= 1
+    message, _ = press("settings:open:payment")
+    assert message.edit_text.await_args.args[0].startswith("Уведомления о статусе оплаты")
+    message, _ = press("settings:toggle:payment_rejected")
+    assert "При отказе: выключено ✖️" in message.edit_text.await_args.args[0]  # остались на том же экране
     press("settings:toggle:remind_3d")
-    press("settings:toggle:payment_rejected")
+    message, _ = press("settings:hour:21")
+    assert message.edit_text.await_args.args[0].startswith("Уведомление в день оплаты: 21:00")
+    message, _ = press("settings:main")
+    assert message.edit_text.await_args.args[0].startswith("⚙️ Настройки уведомлений")
     with factory() as db:
-        user = db.query(User).one()
-        assert notification_settings.get_settings(user) == {
+        assert notification_settings.get_settings(db.query(User).one()) == {
             "expiry_hour": 21, "remind_3d": True, "payment_confirmed": True,
             "payment_rejected": False, "subscription_updates": True,
         }
-    bad = press("settings:hour:10")
+    bad, query = press("settings:hour:10")
     bad.edit_text.assert_not_awaited()
+    assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
 # ------------------------------------------------------------ ссылки подписки

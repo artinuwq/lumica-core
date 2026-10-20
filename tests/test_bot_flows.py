@@ -204,7 +204,12 @@ def test_missing_details_do_not_start_request(monkeypatch):
     _payment_db(monkeypatch, details=None)
     bot, state = _bot(), _state(42)
     asyncio.run(payments.pay_menu(_query(42, "menu:pay"), state, bot))
-    assert "Реквизиты пока не настроены" in bot.send_message.await_args.args[1]
+    sent = bot.send_message.await_args
+    assert sent.args[1] == "Реквизиты для вас пока не настроены. Напишите в рабочий аккаунт"
+    assert sent.args[1].count("http") == 0
+    buttons = sent.kwargs["reply_markup"].inline_keyboard[0]
+    assert [b.text for b in buttons] == ["Меню", "Аккаунт"]
+    assert buttons[0].callback_data == "menu:main" and buttons[1].url.startswith("https://t.me/")
     assert 42 not in payments._PENDING
 
 

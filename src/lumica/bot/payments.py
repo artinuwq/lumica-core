@@ -27,7 +27,7 @@ from lumica.services.notification_settings import is_silent
 from lumica.services.payments import add_calendar_month
 from lumica.services.roles import is_authorized, load_role_bindings
 
-from .menus import menu_button, support_url
+from .menus import NO_DETAILS_TEXT, menu_button, no_details_keyboard, support_url
 from .workspace import MOSCOW, WORKSPACE_KEY
 
 logger = logging.getLogger(__name__)
@@ -159,11 +159,7 @@ async def begin_payment_request(
 
     if not details:
         await query.answer()
-        await bot.send_message(
-            query.from_user.id,
-            "Реквизиты пока не настроены. Напишите в рабочий аккаунт: " + support_url(),
-            reply_markup=menu_button(),
-        )
+        await bot.send_message(query.from_user.id, NO_DETAILS_TEXT, reply_markup=no_details_keyboard())
         return
 
     # Занимаем слот до первого await, чтобы двойное нажатие не создало две заявки.
@@ -326,7 +322,7 @@ async def group_payment_details(query: CallbackQuery) -> None:
 
 async def _send_details(message: types.Message, details: str | None) -> None:
     if not details:
-        await message.answer("Реквизиты пока не настроены. Напишите в рабочий аккаунт: " + support_url())
+        await message.answer(NO_DETAILS_TEXT, reply_markup=no_details_keyboard())
         return
     await message.answer(
         f"Ваши реквизиты для оплаты:\n<blockquote>{html.escape(details)}</blockquote>", parse_mode="HTML"
