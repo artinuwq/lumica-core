@@ -32,9 +32,7 @@ def _buttons(markup):
 
 def test_user_and_admin_menus_have_requested_layout(monkeypatch):
     monkeypatch.delenv("WEBAPP_URL", raising=False)
-    assert _buttons(menus.user_menu()) == [
-        ["Подписка", "Оплатить"], ["Рабочий аккаунт", "Статус серверов"], ["Настройки"],
-    ]
+    assert _buttons(menus.user_menu()) == [["Подписка", "Оплатить"], ["Рабочий аккаунт", "Настройки"]]
     admin = menus.admin_menu()
     assert _buttons(admin) == [["Открыть mini app"], ["Подписка"], ["Настройки"]]
     assert admin.inline_keyboard[0][0].web_app.url == "https://lumica.duckdns.org/"
@@ -432,3 +430,90 @@ def test_new_bot_process_finishes_update_message_after_restart(monkeypatch, tmp_
     asyncio.run(chatops.resume_update_notice(bot))
     assert bot.edit_message_text.await_args.args[0] == "❌ Обновление не удалось\nновая версия не запустилась"
     assert not (tmp_path / chatops.NOTICE_FILE_NAME).exists()
+
+
+# --------------------------------------------- /menu, состояние серверов, прокси-ссылки
+
+def test_server_condition_thresholds():
+    assert menus.server_condition("green", 49.9, 79.9) == ("🟢", "отличное")
+    assert menus.server_condition("green", 50.0, 10.0) == ("🟡", "среднее")  # CPU не ниже 50%
+    assert menus.server_condition("green", 10.0, 80.0) == ("🟡", "среднее")  # RAM не ниже 80%
+    assert menus.server_condition("red", 1.0, 1.0) == ("🔴", "недоступен")
+    assert menus.server_condition("green", None, 30.0) == ("🟢", "доступен")
+
+
+def _menu_message():
+    answers = []
+    message = SimpleNamespace(
+        from_user=SimpleNamespace(id=42, full_name="Ivan", username="ivan"),
+        answer=AsyncMock(side_effect=lambda *a, **k: answers.append((a, k))),
+    )
+    return message, answers
+
+
+def test_user_menu_shows_all_servers_with_condition(monkeypatch):
+    from lumica.domain.models import Panel
+
+    factory = _factory()
+    with factory() as db:
+        db.add_all([
+            Panel(id="a", name="Финляндия", provider="3xui", auth_type="token", auth_secret_ref="x", base_url="https://h",
+                  health_status="green"),
+            Panel(id="b", name="Германия", provider="3xui", auth_type="token", auth_secret_ref="x", base_url="https://h",
+                  health_status="green"),
+            Panel(id="c", name="Нидерланды", provider="3xui", auth_type="token", auth_secret_ref="x", base_url="https://h",
+                  health_status="red"),
+            Panel(id="d", name="Выключен", provider="3xui", auth_type="token", auth_secret_ref="x", base_url="https://h",
+                  is_active=0, health_status="green"),
+            AppSetting(key=menus.PANEL_MONITOR_STATE_KEY, value_json={
+                "a": {"cpu": 12.0, "mem": 40.0}, "b": {"cpu": 71.0, "mem": 30.0}, "c": {"cpu": 1.0, "mem": 1.0},
+            }),
+        ])
+        db.commit()
+    monkeypatch.setattr(menus, "SessionLocal", factory)
+    message, answers = _menu_message()
+    asyncio.run(menus.answer_main_menu(message, is_admin=False))
+    (text,), kwargs = answers[0]
+    assert text.startswith(menus.USER_GREETING)
+    assert "🌍 Состояние серверов" in text
+    assert "🟢 Финляндия - отличное" in text
+    assert "🟡 Германия - среднее" in text
+    assert "🔴 Нидерланды - недоступен" in text
+    assert "Выключен" not in text
+    assert "Статус серверов" not in str(_buttons(kwargs["reply_markup"]))
+    # администратору блок серверов не показываем
+    admin_message, admin_answers = _menu_message()
+    asyncio.run(menus.answer_main_menu(admin_message, is_admin=True))
+    assert admin_answers[0][0][0] == menus.ADMIN_GREETING
+
+
+def test_menu_command_shows_menu_again(monkeypatch):
+    factory = _factory()
+    with factory() as db:
+        db.add(User(telegram_id="42", name="Ivan"))
+        db.commit()
+    monkeypatch.setattr(menus, "SessionLocal", factory)
+    monkeypatch.setattr(menus, "is_authorized", lambda *a, **k: False)
+    message, answers = _menu_message()
+    asyncio.run(menus.cmd_menu(message))
+    assert answers[0][0][0].startswith(menus.USER_GREETING)
+    assert _buttons(answers[0][1]["reply_markup"])[0] == ["Подписка", "Оплатить"]
+
+    stranger, stranger_answers = _menu_message()
+    stranger.from_user.id = 999
+    asyncio.run(menus.cmd_menu(stranger))
+    assert "/start" in stranger_answers[0][0][0]
+
+
+def test_subscription_message_ends_with_proxy_links_quote():
+    sub = SimpleNamespace(
+        status="active", access_until=datetime(2100, 5, 14), price_amount=Decimal("8"), id=1, user_id=1,
+        notes="tg://proxy?server=a&port=1\nsocks5://u:p@h:1080",
+    )
+    text = menus.format_subscription_message(sub, [("De", "https://h/sub/a")])
+    assert text.index('Сервер "De":') < text.index("Прокси-ссылки:")
+    assert text.endswith("<blockquote>tg://proxy?server=a&amp;port=1\nsocks5://u:p@h:1080</blockquote>")
+    member = menus.format_subscription_message(sub, [], owner_name="Kid")
+    assert "Прокси-ссылки:" in member and "Ссылка на подписку пока не выдана" not in member
+    no_notes = SimpleNamespace(**{**sub.__dict__, "notes": None})
+    assert "Прокси-ссылки" not in menus.format_subscription_message(no_notes, [("De", "https://h")])

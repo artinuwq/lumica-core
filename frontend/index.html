@@ -327,6 +327,11 @@
                                 <div id="work-member-bindings-list" class="binding-list"></div>
                             </div>
 
+                            <div class="form-card">
+                                <div class="form-card-title">Прокси-ссылки</div>
+                                <textarea id="work-member-notes" class="field-input field-textarea" rows="3" placeholder="Одна ссылка на строку: Telegram-прокси, SOCKS5 и т. д."></textarea>
+                            </div>
+
                             <button id="work-member-save" type="button" class="work-btn work-btn-primary work-btn-center">Добавить в группу</button>
                             <div id="work-member-status" class="work-note hidden"></div>
                         </section>
@@ -772,18 +777,17 @@
                 <button id="work-client-actions-close" type="button" class="ui-sheet-close" aria-label="Закрыть">&times;</button>
             </div>
             <div class="work-modal-body">
-                <div data-hide-for-member>
-                    <div class="field-label">Статус подписки</div>
+                <div class="form-card">
+                    <div class="form-card-title">Статус подписки</div>
                     <div id="work-client-status-chips" class="work-chip-grid">
                         <button type="button" class="work-chip" data-sub-status="active">Активна</button>
                         <button type="button" class="work-chip" data-sub-status="lifetime">Бессрочная</button>
                         <button type="button" class="work-chip" data-sub-status="paused">Пауза</button>
                         <button type="button" class="work-chip" data-sub-status="canceled">Отменена</button>
                         <button type="button" class="work-chip" data-sub-status="inactive">Неактивна</button>
+                        <button type="button" class="work-chip" data-sub-status="frozen">Заморожена</button>
                     </div>
                 </div>
-                <button id="work-client-freeze-btn" type="button" class="work-btn work-btn-center">Заморозить</button>
-                <button id="work-client-remove-member-btn" type="button" class="work-btn work-btn-center work-btn-danger hidden">Удалить из группы</button>
                 <div class="form-card" data-hide-for-member>
                     <div class="form-card-title">Цена и оплата</div>
                     <div class="field">
@@ -797,8 +801,9 @@
                         <label class="field-label" for="work-sub-billing-details">Реквизиты</label>
                         <textarea id="work-sub-billing-details" class="field-input field-textarea" rows="2" placeholder="Банк и номер карты&#10;Имя получателя"></textarea>
                     </div>
+                    <button id="work-sub-save-btn" type="button" class="work-btn work-btn-primary work-btn-center">Сохранить</button>
                 </div>
-                <div class="form-card" data-hide-for-member>
+                <div class="form-card">
                     <div class="form-card-title">Тип подписки</div>
                     <div id="work-sub-type-chips" class="work-chip-grid">
                         <button type="button" class="work-chip" data-sub-type="personal">Личная</button>
@@ -810,15 +815,52 @@
                         <option value="family_admin">Администратор семьи</option>
                         <option value="family_member">Участник группы</option>
                     </select>
+                    <div id="work-sub-current-group" class="field-hint hidden"></div>
                     <div id="work-sub-group-wrap" class="field hidden">
                         <label class="field-label" for="work-sub-group-select">Семья</label>
                         <select id="work-sub-group-select" data-ui="sheet" data-sheet-title="Выбери семью">
                             <option value="">Выберите семью</option>
                         </select>
                     </div>
+                    <button id="work-sub-type-save-btn" type="button" class="work-btn work-btn-primary work-btn-center">Сохранить</button>
+                    <button id="work-client-remove-member-btn" type="button" class="work-btn work-btn-center work-btn-danger hidden">Удалить из группы</button>
                 </div>
-                <button id="work-sub-save-btn" type="button" class="work-btn work-btn-primary work-btn-center" data-hide-for-member>Сохранить</button>
+                <button id="work-client-identity-btn" type="button" class="work-btn work-btn-center">Изменить идентификацию</button>
                 <div id="work-client-actions-status" class="work-note hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="work-client-identity-overlay" class="ui-sheet-overlay ui-sheet-overlay-full hidden" aria-hidden="true">
+        <div class="ui-sheet" role="dialog" aria-modal="true" aria-label="Изменить идентификацию">
+            <div class="ui-sheet-grip" aria-hidden="true"></div>
+            <div class="ui-sheet-head">
+                <div class="ui-sheet-title">Идентификация</div>
+                <button id="work-client-identity-close" type="button" class="ui-sheet-close" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="work-modal-body">
+                <div class="form-card">
+                    <div class="form-card-title">Данные клиента</div>
+                    <div class="field">
+                        <label class="field-label" for="work-client-identity-name">Имя (ник в списке)</label>
+                        <input id="work-client-identity-name" class="field-input" type="text" autocomplete="off" placeholder="Как подписать клиента">
+                    </div>
+                    <div class="field">
+                        <label class="field-label" for="work-client-identity-username">Username</label>
+                        <input id="work-client-identity-username" class="field-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="без @">
+                    </div>
+                    <div class="field">
+                        <label class="field-label" for="work-client-identity-telegram-id">Telegram ID</label>
+                        <input id="work-client-identity-telegram-id" class="field-input" type="text" inputmode="numeric" autocomplete="off" placeholder="только цифры">
+                    </div>
+                    <button id="work-client-identity-save" type="button" class="work-btn work-btn-primary work-btn-center">Сохранить</button>
+                </div>
+                <div class="form-card">
+                    <div class="form-card-title">Удаление клиента</div>
+                    <div class="field-hint">Строка клиента полностью стирается из базы вместе с его подписками и платежами. Клиенты на самих серверах не удаляются. Если это администратор семьи, группа сохранится, а администратором станет следующий участник.</div>
+                    <button id="work-client-identity-delete" type="button" class="work-btn work-btn-center work-btn-danger">Удалить клиента</button>
+                </div>
+                <div id="work-client-identity-status" class="work-note hidden"></div>
             </div>
         </div>
     </div>

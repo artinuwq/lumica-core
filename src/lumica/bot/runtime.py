@@ -2,6 +2,7 @@ import asyncio
 import os
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import BotCommand
 
 from .chatops import resume_update_notice, router as chatops_router
 from .menus import router as menus_router
@@ -31,6 +32,13 @@ async def start_bot():
     bot = Bot(token=token)
     dp = Dispatcher()
     register_handlers(dp)
+    try:  # подсказки в меню «/»: чтобы /menu и /subscription было легко найти
+        await bot.set_my_commands([
+            BotCommand(command="menu", description="Главное меню"),
+            BotCommand(command="subscription", description="Моя подписка"),
+        ])
+    except Exception:  # noqa: BLE001 - подсказки не критичны для работы бота
+        pass
     # Если бот перезапущен самим обновлением - дописываем итог в сообщение /update.
     resume_task = asyncio.create_task(resume_update_notice(bot))
     try:

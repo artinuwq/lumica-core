@@ -8,9 +8,10 @@ import os
 from decimal import Decimal, InvalidOperation
 
 from aiogram import Router, types
+from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
-from lumica.domain.models import Group, Panel, Subscription, SubscriptionVpnAccount, User, VpnAccount
+from lumica.domain.models import AppSetting, Group, Panel, Subscription, SubscriptionVpnAccount, User, VpnAccount
 from lumica.infra.db import SessionLocal
 from lumica.services import groups as group_service
 from lumica.services import subscription_links as subscription_links_module
@@ -45,9 +46,8 @@ def user_menu() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="Рабочий аккаунт", url=support_url()),
-            InlineKeyboardButton(text="Статус серверов", callback_data="menu:status"),
+            InlineKeyboardButton(text="Настройки", callback_data="menu:settings"),
         ],
-        [InlineKeyboardButton(text="Настройки", callback_data="menu:settings")],
     ])
 
 
@@ -81,11 +81,50 @@ def is_admin_telegram_user(user: User | None, telegram_id: int) -> bool:
     return is_authorized(telegram_id, "admin", load_role_bindings())
 
 
+# ---------------------------------------------------------- состояние серверов
+
+PANEL_MONITOR_STATE_KEY = "telegram.panel_monitor_state"
+EXCELLENT_CPU_BELOW = 50.0
+EXCELLENT_RAM_BELOW = 80.0
+
+
+def server_condition(health: str | None, cpu: float | None, ram: float | None) -> tuple[str, str]:
+    """(эмодзи, слово): недоступен / отличное / среднее / доступен (нет данных о нагрузке).
+
+    «Отличное» - CPU ниже 50% и RAM ниже 80%; если хотя бы одно условие не
+    выполнено - «среднее»."""
+    if str(health or "").lower() == "red":
+        return "🔴", "недоступен"
+    if cpu is None or ram is None:
+        return "🟢", "доступен"
+    if cpu < EXCELLENT_CPU_BELOW and ram < EXCELLENT_RAM_BELOW:
+        return "🟢", "отличное"
+    return "🟡", "среднее"
+
+
+def servers_status_text(db) -> str:
+    """Блок «Состояние серверов» для клиентов: все активные серверы сразу."""
+    row = db.query(AppSetting).filter(AppSetting.key == PANEL_MONITOR_STATE_KEY).first()
+    state = row.value_json if row and isinstance(row.value_json, dict) else {}
+    lines: list[str] = []
+    for panel in db.query(Panel).filter(Panel.is_active == 1).order_by(Panel.name.asc()).all():
+        entry = state.get(panel.id) if isinstance(state.get(panel.id), dict) else {}
+        health = panel.health_status or entry.get("health_status")
+        emoji, word = server_condition(health, entry.get("cpu"), entry.get("mem"))
+        lines.append(f"{emoji} {html.escape(panel.name)} - {word}")
+    if not lines:
+        return ""
+    return "🌍 Состояние серверов\n" + "\n".join(lines)
+
+
 async def answer_main_menu(message: types.Message, *, is_admin: bool) -> None:
     if is_admin:
         await message.answer(ADMIN_GREETING, reply_markup=admin_menu())
-    else:
-        await message.answer(USER_GREETING, reply_markup=user_menu())
+        return
+    with SessionLocal() as db:
+        servers = servers_status_text(db)
+    text = USER_GREETING + (f"\n\n{servers}" if servers else "")
+    await message.answer(text, reply_markup=user_menu(), parse_mode="HTML")
 
 
 # --------------------------------------------------------------- подписки
@@ -176,12 +215,15 @@ def format_subscription_message(
             lines.append(f"Дата оплаты до: {_fmt_until(subscription)}")
             lines.append(f"Цена: {_fmt_price(subscription.price_amount)}")
     entries = [(None, item) if isinstance(item, str) else item for item in links]
-    if not entries:
+    notes = str(getattr(subscription, "notes", None) or "").strip()
+    if not entries and not notes:
         lines += ["", "Ссылка на подписку пока не выдана. Напишите в рабочий аккаунт."]
         return "\n".join(lines)
     for label, url in entries:
         title = f'Сервер "{html.escape(label, quote=False)}":' if label else "Ссылка:"
         lines += ["", title, f"<blockquote><code>{html.escape(url)}</code></blockquote>"]
+    if notes:  # отдельные прокси-ссылки - в самом низу, цитатой
+        lines += ["", "Прокси-ссылки:", f"<blockquote>{html.escape(notes[:2500])}</blockquote>"]
     return "\n".join(lines)
 
 
@@ -239,6 +281,20 @@ async def send_subscription_info(message: types.Message, tg_user: types.User) ->
 
 # ------------------------------------------------------------------ колбэки
 
+@router.message(Command("menu"))
+async def cmd_menu(message: types.Message) -> None:
+    """/menu - показать главное меню ещё раз."""
+    if not message.from_user:
+        return
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.telegram_id == str(message.from_user.id)).first()
+        is_admin = is_admin_telegram_user(user, message.from_user.id)
+    if user is None and not is_admin:
+        await message.answer("Вы ещё не зарегистрированы. Отправьте /start, чтобы оставить заявку.")
+        return
+    await answer_main_menu(message, is_admin=is_admin)
+
+
 @router.callback_query(lambda query: query.data == "menu:main")
 async def menu_main(query: CallbackQuery) -> None:
     await query.answer()
@@ -259,7 +315,13 @@ async def subscription_menu(query: CallbackQuery) -> None:
 
 @router.callback_query(lambda query: query.data == "menu:status")
 async def status_menu(query: CallbackQuery) -> None:
-    await query.answer("Статус серверов доступен в Mini App.", show_alert=True)
+    """Кнопки в старых сообщениях: показываем то же состояние серверов."""
+    await query.answer()
+    if not query.message:
+        return
+    with SessionLocal() as db:
+        text = servers_status_text(db)
+    await query.message.answer(text or "Данные о серверах пока недоступны.", parse_mode="HTML")
 
 
 __all__ = [
@@ -276,5 +338,7 @@ __all__ = [
     "subscription_links",
     "collect_subscription_messages",
     "is_admin_telegram_user",
+    "servers_status_text",
+    "server_condition",
     "webapp_url",
 ]

@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from lumica.domain.models import Application, AuthIdentity, MiniAppLaunch, Subscription, SubscriptionVpnAccount
 from lumica.services import user_provisioning
 from lumica.services import subscription_updates
+from lumica.services import user_deletion
 from lumica.services.notification_settings import is_silent
 from lumica.services.notifications import send_raw
 from lumica.services.user_audit import record_user_event
@@ -2085,6 +2086,78 @@ def register_admin_routes(app, deps):
             db.delete(row)
             db.commit()
             return jsonify({"ok": True, "deleted": True})
+
+    @app.post("/api/admin/users/<int:user_id>/identity")
+    def admin_user_identity(user_id: int):
+        """Ручная правка имени, username и Telegram ID клиента."""
+        auth, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        try:
+            values = user_deletion.normalize_identity(body)
+        except user_deletion.IdentityError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return jsonify({"ok": False, "error": "User not found"}), 404
+            new_telegram_id = values.get("telegram_id")
+            if "telegram_id" in values and new_telegram_id:
+                clash = db.query(User).filter(User.telegram_id == new_telegram_id, User.id != user.id).first()
+                identity_clash = db.query(AuthIdentity).filter(
+                    AuthIdentity.provider == "telegram",
+                    AuthIdentity.provider_user_id == new_telegram_id,
+                    AuthIdentity.user_id != user.id,
+                ).first()
+                if clash or identity_clash:
+                    return jsonify({"ok": False, "error": "Этот Telegram ID уже занят другим пользователем"}), 409
+            changes = {
+                key: {"old": getattr(user, key), "new": value}
+                for key, value in values.items()
+                if getattr(user, key) != value
+            }
+            for key, value in values.items():
+                setattr(user, key, value)
+            if "telegram_id" in changes and new_telegram_id:
+                db.query(AuthIdentity).filter(
+                    AuthIdentity.user_id == user.id, AuthIdentity.provider == "telegram"
+                ).update({AuthIdentity.provider_user_id: new_telegram_id})
+            if changes:
+                record_user_event(
+                    db,
+                    actor_user_id=auth["user_id"],
+                    subject_user_id=user.id,
+                    action="user_identity_changed",
+                    changes=changes,
+                )
+            db.commit()
+            db.refresh(user)
+            return jsonify({"ok": True, "overview": _serialize_admin_user_overview(db, user)})
+
+    @app.delete("/api/admin/users/<int:user_id>")
+    def admin_user_delete(user_id: int):
+        """Полностью удаляет клиента (чистка мусорных записей). Себя удалить нельзя."""
+        auth, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        if auth["user_id"] == user_id:
+            return jsonify({"ok": False, "error": "Нельзя удалить самого себя"}), 400
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return jsonify({"ok": False, "error": "User not found"}), 404
+            deleted = {"id": user.id, "name": user.name, "username": user.username, "telegram_id": user.telegram_id}
+            summary = user_deletion.delete_user(db, user)
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=None,
+                action="user_deleted",
+                changes={"deleted": deleted, **summary},
+            )
+            db.commit()
+        return jsonify({"ok": True, **summary})
 
     @app.post("/api/admin/users/<int:user_id>/freeze")
     def admin_user_freeze(user_id: int):

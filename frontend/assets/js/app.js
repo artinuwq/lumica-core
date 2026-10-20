@@ -179,6 +179,23 @@ const statusCard = document.getElementById("status-card");
         const workClientGroupListEl = document.getElementById("work-client-group-list");
         const workClientExtendLifetimeNoteEl = document.getElementById("work-client-extend-lifetime-note");
         const workSubDateBtnEl = document.getElementById("work-sub-date-btn");
+        const workSubTypeSaveBtnEl = document.getElementById("work-sub-type-save-btn");
+        const workSubCurrentGroupEl = document.getElementById("work-sub-current-group");
+        const workMemberNotesEl = document.getElementById("work-member-notes");
+        const workClientIdentityBtnEl = document.getElementById("work-client-identity-btn");
+        const workClientIdentityOverlayEl = document.getElementById("work-client-identity-overlay");
+        const workClientIdentityCloseEl = document.getElementById("work-client-identity-close");
+        const workClientIdentityNameEl = document.getElementById("work-client-identity-name");
+        const workClientIdentityUsernameEl = document.getElementById("work-client-identity-username");
+        const workClientIdentityTelegramIdEl = document.getElementById("work-client-identity-telegram-id");
+        const workClientIdentitySaveEl = document.getElementById("work-client-identity-save");
+        const workClientIdentityDeleteEl = document.getElementById("work-client-identity-delete");
+        const workClientIdentityStatusEl = document.getElementById("work-client-identity-status");
+        // Полноэкранные окна: что писать в капсуле сверху, пока они открыты.
+        const fullscreenSheetTitles = new Map([
+            [workClientActionsOverlayEl, "Действия"],
+            [workClientIdentityOverlayEl, "Идентификация"],
+        ]);
         const workSubTypeChipsEl = document.getElementById("work-sub-type-chips");
         const workSubNotesSaveBtnEl = document.getElementById("work-sub-notes-save-btn");
         const workSubNotesStatusEl = document.getElementById("work-sub-notes-status");
@@ -2964,10 +2981,20 @@ const statusCard = document.getElementById("status-card");
 
             const currentStatus = normalizeSubscriptionStatus(sub?.status);
             workClientStatusChipsEl?.querySelectorAll("[data-sub-status]").forEach((btn) => {
-                btn.classList.toggle("active", !sub?.is_frozen && btn.dataset.subStatus === currentStatus);
+                const isFrozenChip = btn.dataset.subStatus === "frozen";
+                btn.classList.toggle(
+                    "active",
+                    isFrozenChip ? Boolean(sub?.is_frozen) : (!sub?.is_frozen && btn.dataset.subStatus === currentStatus)
+                );
+                // Участнику группы доступна только заморозка.
+                btn.classList.toggle("hidden", memberMode && !isFrozenChip);
             });
-            if (workClientFreezeBtnEl) {
-                workClientFreezeBtnEl.textContent = sub?.is_frozen ? "Разморозить" : "Заморозить";
+            if (workSubCurrentGroupEl) {
+                const ownGroup = overview?.group;
+                workSubCurrentGroupEl.classList.toggle("hidden", !ownGroup);
+                workSubCurrentGroupEl.textContent = ownGroup
+                    ? `Сейчас в группе: ${workGroupLabel(ownGroup, ownGroup.admin_name || "")}`
+                    : "";
             }
             workSubTypeChipsEl?.querySelectorAll("[data-sub-type]").forEach((btn) => {
                 btn.classList.toggle("active", btn.dataset.subType === (workSubscriptionTypeSelectEl?.value || "personal"));
@@ -3460,7 +3487,7 @@ const statusCard = document.getElementById("status-card");
         }
 
         function enhanceWorkSelects() {
-            document.querySelectorAll("#screen-work select").forEach(enhanceSelect);
+            document.querySelectorAll("#screen-work select, #work-client-actions-overlay select[data-ui]").forEach(enhanceSelect);
         }
 
         function setFormNote(el, message, tone = "") {
@@ -3652,6 +3679,7 @@ const statusCard = document.getElementById("status-card");
 
         function resetMemberForm() {
             memberDraft.bindings = [];
+            if (workMemberNotesEl) workMemberNotesEl.value = "";
             [workMemberIdentityEl, workMemberNameEl].forEach((el) => {
                 if (el) el.value = "";
             });
@@ -3793,7 +3821,11 @@ const statusCard = document.getElementById("status-card");
             const liveGroup = memberPageGroup;
             try {
                 const mode = String(workMemberModeEl?.value || "existing");
-                const member = { mode, bindings: memberDraft.bindings.slice() };
+                const member = {
+                    mode,
+                    bindings: memberDraft.bindings.slice(),
+                    notes: String(workMemberNotesEl?.value || "").trim(),
+                };
                 if (mode === "existing") {
                     const userId = Number(workMemberExistingSelectEl?.value || 0);
                     if (!userId) throw new Error("Выбери пользователя из списка");
@@ -3845,7 +3877,9 @@ const statusCard = document.getElementById("status-card");
         }
 
         async function createGroupMember(member, groupId) {
-            const base = { subscription_type: "family_member", group_id: groupId, notes: null };
+            const base = { subscription_type: "family_member", group_id: groupId };
+            // Заметки отправляем только если они есть: иначе у существующего клиента они бы стёрлись.
+            if (member.notes) base.notes = member.notes;
             let userId;
             if (member.mode === "existing") {
                 const result = await postJson(adminUserSubscriptionUrl(member.user_id), base);
@@ -4485,7 +4519,7 @@ const statusCard = document.getElementById("status-card");
         }
 
         function isWorkSheetOpen() {
-            return [workPanelAccessOverlayEl, workClientActionsOverlayEl, workClientExtendOverlayEl]
+            return [workPanelAccessOverlayEl, workClientActionsOverlayEl, workClientExtendOverlayEl, workClientIdentityOverlayEl]
                 .some((el) => el && !el.classList.contains("hidden"));
         }
 
@@ -4495,8 +4529,8 @@ const statusCard = document.getElementById("status-card");
             overlayEl.setAttribute("aria-hidden", visible ? "false" : "true");
             document.body.classList.toggle("ui-sheet-open", isWorkSheetOpen() || isUiSheetOpen());
             updateTelegramBackButton();
-            if (overlayEl === workClientActionsOverlayEl) {
-                workContextOverrideTitle = visible ? "Действия" : "";
+            if (fullscreenSheetTitles.has(overlayEl)) {
+                workContextOverrideTitle = visible ? fullscreenSheetTitles.get(overlayEl) : "";
                 updateWorkPageContext(getActiveWorkPageId());
             }
         }
@@ -4506,12 +4540,15 @@ const statusCard = document.getElementById("status-card");
         if (window.Telegram?.WebApp?.initData) {
             workClientActionsCloseEl?.classList.add("hidden");
             workClientActionsOverlayEl?.classList.add("ui-sheet-overlay-tg");
+            workClientIdentityCloseEl?.classList.add("hidden");
+            workClientIdentityOverlayEl?.classList.add("ui-sheet-overlay-tg");
         }
 
         function closeWorkSheets() {
             toggleWorkPanelAccessSection(false);
             setWorkSheetVisible(workClientActionsOverlayEl, false);
             setWorkSheetVisible(workClientExtendOverlayEl, false);
+            setWorkSheetVisible(workClientIdentityOverlayEl, false);
         }
 
         /** Настройки доступа открываются отдельным всплывающим окном (а не списком вниз по странице). */
@@ -5903,6 +5940,10 @@ const statusCard = document.getElementById("status-card");
             const btn = event.target.closest("[data-sub-status]");
             if (!btn) return;
             const status = String(btn.dataset.subStatus || "");
+            if (status === "frozen") {
+                await toggleWorkClientFreeze();
+                return;
+            }
             const sub = workState.overview?.subscription || null;
             const label = SUBSCRIPTION_STATUS_LABELS[status] || status;
             if (!sub && status !== "lifetime") {
@@ -5917,27 +5958,22 @@ const statusCard = document.getElementById("status-card");
             }, { successText: `Статус подписки: ${label}`, errorText: "Не удалось сменить статус" });
         });
 
-        workClientFreezeBtnEl?.addEventListener("click", async () => {
+        async function toggleWorkClientFreeze() {
             const frozen = Boolean(workState.overview?.subscription?.is_frozen);
             if (!window.confirm(`Подтвердить: ${frozen ? "разморозить" : "заморозить"} пользователя?`)) return;
-            workClientFreezeBtnEl.disabled = true;
-            try {
-                await runWorkClientAction(async (userId) => {
-                    const response = await postJson(`${adminUsersUrl}/${userId}/freeze`, { frozen: !frozen });
-                    const failures = Array.isArray(response?.failures) ? response.failures : [];
-                    await loadSelectedUserOverview();
-                    await loadSelectedUserBindings();
-                    if (failures.length) {
-                        throw new Error(`Обновлено не всё: ${failures.length} подключений не изменены.`);
-                    }
-                }, {
-                    successText: frozen ? "Пользователь разморожен" : "Подписки пользователя заморожены",
-                    errorText: "Не удалось изменить состояние пользователя",
-                });
-            } finally {
-                workClientFreezeBtnEl.disabled = false;
-            }
-        });
+            await runWorkClientAction(async (userId) => {
+                const response = await postJson(`${adminUsersUrl}/${userId}/freeze`, { frozen: !frozen });
+                const failures = Array.isArray(response?.failures) ? response.failures : [];
+                await loadSelectedUserOverview();
+                await loadSelectedUserBindings();
+                if (failures.length) {
+                    throw new Error(`Обновлено не всё: ${failures.length} подключений не изменены.`);
+                }
+            }, {
+                successText: frozen ? "Пользователь разморожен" : "Подписки пользователя заморожены",
+                errorText: "Не удалось изменить состояние пользователя",
+            });
+        }
 
         workClientRemoveMemberBtnEl?.addEventListener("click", async () => {
             const group = workState.overview?.group;
@@ -6419,11 +6455,17 @@ const statusCard = document.getElementById("status-card");
             }
             await runWorkClientAction(async (userId) => {
                 // День оплаты здесь не трогаем: он задаётся датой в «Продлить».
-                const payload = {
+                const result = await postJson(adminUserSubscriptionUrl(userId), {
                     price_amount: workSubPriceInputEl?.value?.trim() || null,
                     billing_details: workSubBillingDetailsEl?.value?.trim() || null,
-                    subscription_type: String(workSubscriptionTypeSelectEl?.value || "personal"),
-                };
+                });
+                renderWorkClientOverview(result?.overview || null);
+            }, { successText: "Цена и реквизиты сохранены", errorText: "Не удалось сохранить" });
+        });
+
+        workSubTypeSaveBtnEl?.addEventListener("click", async () => {
+            await runWorkClientAction(async (userId) => {
+                const payload = { subscription_type: String(workSubscriptionTypeSelectEl?.value || "personal") };
                 if (payload.subscription_type === "family_member") {
                     const groupId = Number(workSubGroupSelectEl?.value || 0);
                     if (!groupId) throw new Error("Выбери семью для участника");
@@ -6431,7 +6473,68 @@ const statusCard = document.getElementById("status-card");
                 }
                 const result = await postJson(adminUserSubscriptionUrl(userId), payload);
                 renderWorkClientOverview(result?.overview || null);
-            }, { successText: "Сохранено", errorText: "Не удалось сохранить" });
+                await loadWorkClientsData();
+            }, { successText: "Тип подписки сохранён", errorText: "Не удалось сохранить тип подписки" });
+        });
+
+        // ---- «Изменить идентификацию»: ник, username, Telegram ID и удаление клиента
+        function setWorkIdentityStatus(message, tone = "") {
+            setFormNote(workClientIdentityStatusEl, message, tone);
+        }
+
+        workClientIdentityBtnEl?.addEventListener("click", () => {
+            const user = workState.overview?.user || {};
+            if (workClientIdentityNameEl) workClientIdentityNameEl.value = user.name || "";
+            if (workClientIdentityUsernameEl) workClientIdentityUsernameEl.value = user.username || "";
+            if (workClientIdentityTelegramIdEl) workClientIdentityTelegramIdEl.value = user.telegram_id || "";
+            setWorkIdentityStatus("");
+            setWorkSheetVisible(workClientActionsOverlayEl, false);
+            setWorkSheetVisible(workClientIdentityOverlayEl, true);
+        });
+        workClientIdentityCloseEl?.addEventListener("click", () => setWorkSheetVisible(workClientIdentityOverlayEl, false));
+
+        workClientIdentitySaveEl?.addEventListener("click", async () => {
+            const userId = Number(workState.selectedUserId || 0);
+            if (!userId) return;
+            workClientIdentitySaveEl.disabled = true;
+            setWorkIdentityStatus("Сохраняем…");
+            try {
+                const result = await postJson(`${adminUsersUrl}/${userId}/identity`, {
+                    name: workClientIdentityNameEl?.value?.trim() || "",
+                    username: workClientIdentityUsernameEl?.value?.trim() || "",
+                    telegram_id: workClientIdentityTelegramIdEl?.value?.trim() || "",
+                });
+                renderWorkClientOverview(result?.overview || null);
+                await loadWorkClientsData();
+                setWorkIdentityStatus("Сохранено", "success");
+            } catch (err) {
+                console.error("save identity error:", err);
+                setWorkIdentityStatus(err?.message || "Не удалось сохранить", "error");
+            } finally {
+                workClientIdentitySaveEl.disabled = false;
+            }
+        });
+
+        workClientIdentityDeleteEl?.addEventListener("click", async () => {
+            const userId = Number(workState.selectedUserId || 0);
+            if (!userId) return;
+            const user = workState.overview?.user || {};
+            const label = user.name || (user.username ? `@${user.username}` : `#${userId}`);
+            if (!window.confirm(`Удалить клиента «${label}» полностью? Это нельзя отменить.`)) return;
+            if (!window.confirm("Точно удалить? Подписки и платежи клиента тоже будут стёрты.")) return;
+            workClientIdentityDeleteEl.disabled = true;
+            try {
+                await deleteJson(`${adminUsersUrl}/${userId}`);
+                closeWorkSheets();
+                workState.selectedUserId = null;
+                switchWorkPage("work-clients-page");
+                await loadWorkClientsData();
+            } catch (err) {
+                console.error("delete user error:", err);
+                setWorkIdentityStatus(err?.message || "Не удалось удалить клиента", "error");
+            } finally {
+                workClientIdentityDeleteEl.disabled = false;
+            }
         });
 
         workSubTypeChipsEl?.addEventListener("click", (event) => {

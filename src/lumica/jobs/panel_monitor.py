@@ -79,6 +79,13 @@ def _uptime_text(value) -> str:
     return f"{days} д {hours:02} ч {minutes:02} мин" if days else f"{hours} ч {minutes:02} мин"
 
 
+def _to_float(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _observatory_unhealthy(payload) -> bool | None:
     observations = []
     pending = [payload]
@@ -330,6 +337,9 @@ def run_panel_monitoring(registry: PanelRegistry | None = None, now: datetime | 
                 "text": content,
                 "alerts": alerts,
                 "update": {"run_id": update_run_id, "state": update_state},
+                # Для бота («Состояние серверов»): нагрузка из последнего снимка.
+                "cpu": _to_float(status.get("cpu")),
+                "mem": memory_percent,
             }
             refreshed += 1
 

@@ -23,7 +23,7 @@ SCRIPT = textwrap.dedent(
     from datetime import datetime, timedelta, timezone
     from lumica.api import create_app
     from lumica.api.app import _token_hash
-    from lumica.domain.models import AuthSession, Subscription, User
+    from lumica.domain.models import AuthSession, Group, Subscription, User
     from lumica.infra.db import SessionLocal
     app = create_app()
     app.before_request_funcs[None] = []  # CSRF здесь не проверяем
@@ -35,7 +35,13 @@ SCRIPT = textwrap.dedent(
                            expires_at=datetime.now(timezone.utc) + timedelta(days=1), init_data="{}"))
         db.add(Subscription(user_id=client.id, status="active", access_until=datetime(2030, 10, 18),
                             price_amount=500, billing_day=7))
-        db.commit(); cid = client.id
+        db.flush()
+        other = User(telegram_id="3", name="Other")
+        db.add(other); db.flush()
+        group = Group(name="Fam", admin_user_id=client.id)
+        db.add(group); db.flush()
+        client.group_id = group.id; other.group_id = group.id
+        db.commit(); cid = client.id; oid = other.id; aid = admin.id
     c = app.test_client(); c.set_cookie("session", "tok")
     out = {}
     for name, payload in {
@@ -47,6 +53,15 @@ SCRIPT = textwrap.dedent(
     out["manual_extend"] = c.post(f"/api/admin/users/{cid}/manual-extend", json={"confirmed": True, "months": 1}).status_code
     out["freeze"] = c.post(f"/api/admin/users/{cid}/freeze", json={"frozen": True}).status_code
     out["overview"] = c.get(f"/api/admin/users/{cid}/overview").status_code
+    out["identity"] = c.post(f"/api/admin/users/{cid}/identity",
+                             json={"name": "New Name", "username": "@new_user", "telegram_id": "555"}).status_code
+    out["identity_duplicate"] = c.post(f"/api/admin/users/{cid}/identity", json={"telegram_id": "1"}).status_code
+    out["identity_bad_username"] = c.post(f"/api/admin/users/{cid}/identity", json={"username": "a"}).status_code
+    out["delete_self"] = c.delete(f"/api/admin/users/{aid}").status_code
+    out["delete_client"] = c.delete(f"/api/admin/users/{cid}").status_code
+    with SessionLocal() as db:
+        out["client_gone"] = db.query(User).filter(User.id == cid).first() is None
+        out["new_group_admin"] = db.query(Group).one().admin_user_id == oid
     print("RESULT" + json.dumps(out))
     """
 )
@@ -61,4 +76,6 @@ def test_admin_subscription_endpoints_do_not_crash_in_the_real_app():
     assert line, done.stderr[-2000:]
     assert json.loads(line[len("RESULT"):]) == {
         "details": 200, "extend_months": 200, "date": 200, "manual_extend": 200, "freeze": 200, "overview": 200,
+        "identity": 200, "identity_duplicate": 409, "identity_bad_username": 400,
+        "delete_self": 400, "delete_client": 200, "client_gone": True, "new_group_admin": True,
     }
