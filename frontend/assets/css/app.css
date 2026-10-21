@@ -2299,3 +2299,72 @@
         .work-panel-tile-green .work-panel-tile-value {
             color: #7df0ae;
         }
+
+        /* Капсула сверху: фиолетовая при обновлении, зелёная при активных фильтрах */
+        .work-page-pill.busy {
+            border-color: rgba(190, 140, 255, 0.75);
+            background: rgba(52, 28, 92, 0.94);
+            box-shadow: 0 8px 20px rgba(24, 8, 52, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+        .work-page-pill.busy::before {
+            background: linear-gradient(135deg, #d9a8ff, #a06bff);
+            box-shadow: 0 0 10px rgba(170, 110, 255, 0.6);
+        }
+        .work-page-pill.filtered:not(.busy) {
+            border-color: rgba(80, 220, 150, 0.7);
+            background: rgba(14, 56, 40, 0.94);
+            box-shadow: 0 8px 20px rgba(4, 28, 18, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+        .work-page-pill.filtered:not(.busy)::before {
+            background: linear-gradient(135deg, #8ff5c0, #3fd68a);
+            box-shadow: 0 0 10px rgba(63, 214, 138, 0.6);
+        }
+        .work-page-pill {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
+
+        /* Фильтры клиентов */
+        .work-filter-range {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+        }
+        .work-filter-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.6rem;
+            margin: 0.1rem 0 0.5rem;
+            padding: 0.4rem 0.7rem;
+            border-radius: 0.7rem;
+            background: rgba(52, 199, 120, 0.14);
+            border: 1px solid rgba(70, 215, 140, 0.45);
+            color: #b8f5d3;
+            font-size: 0.8rem;
+        }
+        .work-filter-summary.hidden {
+            display: none;
+        }
+        .work-filter-summary-reset {
+            border: none;
+            background: transparent;
+            color: #7df0ae;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .work-client-group-header {
+            margin: 0.6rem 0 0.25rem;
+            padding-left: 0.2rem;
+            color: rgba(219, 234, 255, 0.7);
+            font-size: 0.74rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+        .work-client-card.work-client-card-member {
+            margin-left: 0.9rem;
+            border-left: 2px solid rgba(125, 140, 255, 0.55);
+        }

@@ -195,10 +195,26 @@ const statusCard = document.getElementById("status-card");
         const workClientIdentitySaveEl = document.getElementById("work-client-identity-save");
         const workClientIdentityDeleteEl = document.getElementById("work-client-identity-delete");
         const workClientIdentityStatusEl = document.getElementById("work-client-identity-status");
+        const workClientsFiltersOverlayEl = document.getElementById("work-clients-filters-overlay");
+        const workClientsFiltersCloseEl = document.getElementById("work-clients-filters-close");
+        const workFilterPriceMinEl = document.getElementById("work-filter-price-min");
+        const workFilterPriceMaxEl = document.getElementById("work-filter-price-max");
+        const workFilterServersEl = document.getElementById("work-filter-servers");
+        const workFilterResetEl = document.getElementById("work-filter-reset");
+        const workFilterApplyEl = document.getElementById("work-filter-apply");
+        const workClientFilterSummaryEl = document.getElementById("work-client-filter-summary");
+        const workClientFilterSummaryTextEl = document.getElementById("work-client-filter-summary-text");
+        const workClientFilterSummaryResetEl = document.getElementById("work-client-filter-summary-reset");
+        // Фильтры списка клиентов: внутри категории - «или», между категориями - «и».
+        const clientFilters = {
+            types: new Set(), days: new Set(), payment: new Set(), status: new Set(), servers: new Set(),
+            priceMin: "", priceMax: "",
+        };
         // Полноэкранные окна: что писать в капсуле сверху, пока они открыты.
         const fullscreenSheetTitles = new Map([
             [workClientActionsOverlayEl, "Действия"],
             [workClientIdentityOverlayEl, "Идентификация"],
+            [workClientsFiltersOverlayEl, "Фильтры"],
         ]);
         const workSubTypeChipsEl = document.getElementById("work-sub-type-chips");
         const workSubNotesSaveBtnEl = document.getElementById("work-sub-notes-save-btn");
@@ -711,6 +727,7 @@ const statusCard = document.getElementById("status-card");
 
         function updateWorkPageContext(pageId) {
             if (!workPageContextEl || !workPageContextPillEl) return;
+            workPageContextPillEl.classList.remove("busy", "filtered");
             if (workContextOverrideTitle) {
                 workPageContextEl.dataset.action = "";
                 workPageContextEl.classList.remove("clickable");
@@ -740,11 +757,8 @@ const statusCard = document.getElementById("status-card");
             }
             const action = resolveWorkContextAction(pageId);
             const isBusyForAction = Boolean(action) && workPageActionBusy && action === workPageActionCurrent;
-            const displayTitle = isBusyForAction
-                ? `${title} ⟳`
-                : action
-                    ? `${title} 🔄`
-                    : title;
+            // Значка обновления нет: при нажатии капсула становится фиолетовой, пока идёт обновление.
+            const displayTitle = title;
 
             workPageContextEl.dataset.action = action || "";
             workPageContextEl.classList.toggle("clickable", Boolean(action) && !workPageActionBusy);
@@ -756,6 +770,9 @@ const statusCard = document.getElementById("status-card");
             }
             workPageContextPillEl.textContent = displayTitle;
             workPageContextPillEl.title = displayTitle;
+            workPageContextPillEl.classList.toggle("busy", isBusyForAction);
+            // Зелёная капсула = на странице клиентов включены фильтры.
+            workPageContextPillEl.classList.toggle("filtered", pageId === "work-clients-page" && hasActiveClientFilters());
             workPageContextEl.classList.remove("hidden");
         }
 
@@ -3247,7 +3264,7 @@ const statusCard = document.getElementById("status-card");
             }
 
             const query = String(workClientSearchEl?.value || "").trim().toLowerCase();
-            const filtered = query
+            const searched = query
                 ? workState.users.filter((user) => {
                     const name = String(user?.name || "").toLowerCase();
                     const username = String(user?.username || "").toLowerCase();
@@ -3256,62 +3273,277 @@ const statusCard = document.getElementById("status-card");
                     return [name, username, telegramId, id].some((value) => value.includes(query));
                 })
                 : workState.users;
+            const filtered = searched.filter(clientMatchesFilters);
+            updateClientFilterSummary(filtered.length, workState.users.length);
 
             if (!filtered.length) {
                 const empty = document.createElement("div");
                 empty.className = "work-empty";
-                empty.textContent = "Ничего не найдено.";
+                empty.textContent = hasActiveClientFilters() ? "Нет клиентов под выбранные фильтры." : "Ничего не найдено.";
                 workClientCardsEl.appendChild(empty);
                 return;
             }
 
-            filtered.forEach((user) => {
-                const card = document.createElement("button");
-                card.type = "button";
-                card.className = "work-client-card";
-                card.dataset.userId = String(user.id);
+            // Только групповые: показываем семьями - администратор, а под ним его участники.
+            if (clientFilters.types.size === 1 && clientFilters.types.has("group")) {
+                renderGroupedClientCards(filtered);
+                return;
+            }
+            filtered.forEach((user) => workClientCardsEl.appendChild(buildClientCard(user)));
+        }
 
-                const head = document.createElement("div");
-                head.className = "work-client-card-head";
+        function buildClientCard(user, { member = false } = {}) {
+            const card = document.createElement("button");
+            card.type = "button";
+            card.className = member ? "work-client-card work-client-card-member" : "work-client-card";
+            card.dataset.userId = String(user.id);
 
-                const title = document.createElement("div");
-                title.className = "work-client-card-title";
-                title.textContent = user.name || user.username || `Клиент #${user.id}`;
-                head.appendChild(title);
+            const head = document.createElement("div");
+            head.className = "work-client-card-head";
 
-                const chips = document.createElement("div");
-                chips.className = "work-client-card-chips";
-                const typeLabel = SUBSCRIPTION_TYPE_LABELS[user.subscription_type];
-                if (typeLabel) {
-                    const chip = document.createElement("span");
-                    chip.className = "work-chip";
-                    chip.textContent = typeLabel;
-                    chips.appendChild(chip);
-                }
-                const status = String(user.subscription_status || "").toLowerCase();
-                if (status && !["active", "lifetime"].includes(status)) {
-                    const chip = document.createElement("span");
-                    chip.className = "work-chip work-chip-warn";
-                    chip.textContent = status;
-                    chips.appendChild(chip);
-                }
-                if (chips.children.length) head.appendChild(chips);
+            const title = document.createElement("div");
+            title.className = "work-client-card-title";
+            title.textContent = user.name || user.username || `Клиент #${user.id}`;
+            head.appendChild(title);
 
-                const sub = document.createElement("div");
-                sub.className = "work-client-card-sub";
-                const username = String(user.username || "").replace(/^@/, "");
-                sub.textContent = `${username ? `@${username}` : "без username"} · ID ${user.telegram_id || "—"}`;
+            const chips = document.createElement("div");
+            chips.className = "work-client-card-chips";
+            const typeLabel = SUBSCRIPTION_TYPE_LABELS[user.subscription_type];
+            if (typeLabel) {
+                const chip = document.createElement("span");
+                chip.className = "work-chip";
+                chip.textContent = typeLabel;
+                chips.appendChild(chip);
+            }
+            const status = String(user.subscription_status || "").toLowerCase();
+            if (status && !["active", "lifetime"].includes(status)) {
+                const chip = document.createElement("span");
+                chip.className = "work-chip work-chip-warn";
+                chip.textContent = status;
+                chips.appendChild(chip);
+            }
+            if (chips.children.length) head.appendChild(chips);
 
-                card.appendChild(head);
-                card.appendChild(sub);
-                card.addEventListener("click", () => {
-                    openWorkClientPage(user.id).catch((err) => {
-                        console.error("open client error:", err);
-                    });
+            const sub = document.createElement("div");
+            sub.className = "work-client-card-sub";
+            const username = String(user.username || "").replace(/^@/, "");
+            sub.textContent = `${username ? `@${username}` : "без username"} · ID ${user.telegram_id || "—"}`;
+
+            card.appendChild(head);
+            card.appendChild(sub);
+            card.addEventListener("click", () => {
+                openWorkClientPage(user.id).catch((err) => {
+                    console.error("open client error:", err);
                 });
-                workClientCardsEl.appendChild(card);
+            });
+            return card;
+        }
+
+        /** Семьи подряд: заголовок, администратор, затем его участники. */
+        function renderGroupedClientCards(users) {
+            const byGroup = new Map();
+            users.forEach((user) => {
+                const key = user.group_id || 0;
+                if (!byGroup.has(key)) byGroup.set(key, []);
+                byGroup.get(key).push(user);
+            });
+            const entries = [...byGroup.entries()].map(([groupId, items]) => {
+                const admin = items.find((u) => u.is_group_admin)
+                    || (workState.users || []).find((u) => u.group_id === groupId && u.is_group_admin)
+                    || null;
+                return { groupId, items, admin };
+            });
+            const adminLabel = (entry) => String(entry.admin?.name || entry.admin?.username || "").toLowerCase();
+            entries.sort((a, b) => adminLabel(a).localeCompare(adminLabel(b)) || a.groupId - b.groupId);
+            entries.forEach(({ groupId, items, admin }) => {
+                const header = document.createElement("div");
+                header.className = "work-client-group-header";
+                const adminName = admin?.name || admin?.username || "";
+                header.textContent = groupId ? `Семья ${adminName}`.trim() : "Без группы";
+                workClientCardsEl.appendChild(header);
+                const ordered = [
+                    ...items.filter((u) => u.is_group_admin),
+                    ...items.filter((u) => !u.is_group_admin).sort((a, b) => a.id - b.id),
+                ];
+                ordered.forEach((user) => {
+                    workClientCardsEl.appendChild(buildClientCard(user, { member: !user.is_group_admin }));
+                });
             });
         }
+
+        // ---------- Фильтры клиентов ----------
+        const CLIENT_PAYMENT_SOON_DAYS = 14;
+
+        function hasActiveClientFilters() {
+            const f = clientFilters;
+            return Boolean(
+                f.types.size || f.days.size || f.payment.size || f.status.size || f.servers.size
+                || f.priceMin !== "" || f.priceMax !== ""
+            );
+        }
+
+        function parseDateOnlyLocal(iso) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+            return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+        }
+
+        function clientIsGroupMember(user) {
+            return Boolean(user?.group_id) && !user?.is_group_admin;
+        }
+
+        /** Цена, день оплаты и срок клиента. Участник группы без своих данных платит через администратора. */
+        function clientBilling(user) {
+            let source = user;
+            const hasOwn = Number(user?.price_amount) > 0 || Number(user?.billing_day) > 0;
+            if (clientIsGroupMember(user) && !hasOwn) {
+                const admin = (workState.users || []).find((u) => u.group_id === user.group_id && u.is_group_admin);
+                if (admin) source = admin;
+            }
+            const rawPrice = source?.price_amount;
+            return {
+                price: rawPrice === null || rawPrice === undefined || rawPrice === "" ? null : Number(rawPrice),
+                day: Number(source?.billing_day) || null,
+                until: parseDateOnlyLocal(source?.access_until),
+                lifetime: String(source?.subscription_status || "").toLowerCase() === "lifetime",
+            };
+        }
+
+        /** paid - оплачено надолго; pending - оплата в ближайшие две недели (или сегодня); overdue - просрочено. */
+        function clientPaymentState(billing) {
+            if (billing.lifetime) return "paid";
+            if (!billing.until) return null;
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const days = Math.round((billing.until - today) / 86400000);
+            if (days < 0) return "overdue";
+            return days <= CLIENT_PAYMENT_SOON_DAYS ? "pending" : "paid";
+        }
+
+        function clientStatusKey(user) {
+            return user?.is_frozen ? "frozen" : String(user?.subscription_status || "").toLowerCase();
+        }
+
+        function clientMatchesFilters(user) {
+            const f = clientFilters;
+            if (f.types.size) {
+                const isGroup = Boolean(user.group_id) || (user.subscription_type && user.subscription_type !== "personal");
+                if (!f.types.has(isGroup ? "group" : "personal")) return false;
+            }
+            const billing = clientBilling(user);
+            if (f.priceMin !== "" || f.priceMax !== "") {
+                if (billing.price === null || Number.isNaN(billing.price)) return false;
+                if (f.priceMin !== "" && billing.price < Number(f.priceMin)) return false;
+                if (f.priceMax !== "" && billing.price > Number(f.priceMax)) return false;
+            }
+            if (f.days.size) {
+                const key = billing.day === 15 ? "15" : billing.day === 30 ? "30" : (billing.day ? "other" : null);
+                if (!key || !f.days.has(key)) return false;
+            }
+            if (f.payment.size) {
+                const state = clientPaymentState(billing);
+                if (!state || !f.payment.has(state)) return false;
+            }
+            if (f.status.size && !f.status.has(clientStatusKey(user))) return false;
+            if (f.servers.size && !(user.servers || []).some((server) => f.servers.has(server.code))) return false;
+            return true;
+        }
+
+        function updateClientFilterSummary(shown, total) {
+            if (!workClientFilterSummaryEl) return;
+            const active = hasActiveClientFilters();
+            workClientFilterSummaryEl.classList.toggle("hidden", !active);
+            if (active && workClientFilterSummaryTextEl) {
+                workClientFilterSummaryTextEl.textContent = `Фильтры включены · найдено ${shown} из ${total}`;
+            }
+        }
+
+        function renderClientFilterChips() {
+            if (workFilterServersEl) {
+                const codes = [...new Set((workState.users || []).flatMap((u) => (u.servers || []).map((s) => s.code)).filter(Boolean))].sort();
+                workFilterServersEl.innerHTML = "";
+                if (!codes.length) {
+                    const hint = document.createElement("div");
+                    hint.className = "field-hint";
+                    hint.textContent = "Серверы появятся, когда у клиентов будут подписки на них.";
+                    workFilterServersEl.appendChild(hint);
+                }
+                codes.forEach((code) => {
+                    const chip = document.createElement("button");
+                    chip.type = "button";
+                    chip.className = "work-chip";
+                    chip.dataset.filterValue = code;
+                    chip.textContent = code;
+                    workFilterServersEl.appendChild(chip);
+                });
+            }
+            workClientsFiltersOverlayEl?.querySelectorAll("[data-filter-group]").forEach((group) => {
+                const selected = clientFilters[group.dataset.filterGroup];
+                group.querySelectorAll("[data-filter-value]").forEach((chip) => {
+                    chip.classList.toggle("active", Boolean(selected?.has(chip.dataset.filterValue)));
+                });
+            });
+        }
+
+        // Поля цены обновляем только при открытии и сбросе, чтобы не перебивать ввод пользователя.
+        function syncClientFilterPriceInputs() {
+            if (workFilterPriceMinEl) workFilterPriceMinEl.value = clientFilters.priceMin;
+            if (workFilterPriceMaxEl) workFilterPriceMaxEl.value = clientFilters.priceMax;
+        }
+
+        function updateClientFilterCount() {
+            if (!workFilterApplyEl) return;
+            const count = (workState.users || []).filter(clientMatchesFilters).length;
+            workFilterApplyEl.textContent = hasActiveClientFilters() ? `Показать (${count})` : "Показать";
+        }
+
+        function onClientFiltersChanged() {
+            renderClientFilterChips();
+            renderWorkClientCards();
+            updateClientFilterCount();
+            updateWorkPageContext(getActiveWorkPageId());
+        }
+
+        function resetClientFilters() {
+            ["types", "days", "payment", "status", "servers"].forEach((key) => clientFilters[key].clear());
+            clientFilters.priceMin = "";
+            clientFilters.priceMax = "";
+            syncClientFilterPriceInputs();
+            onClientFiltersChanged();
+        }
+
+        function openClientFilters() {
+            syncClientFilterPriceInputs();
+            renderClientFilterChips();
+            updateClientFilterCount();
+            setWorkSheetVisible(workClientsFiltersOverlayEl, true);
+        }
+
+        workClientsFiltersOverlayEl?.addEventListener("click", (event) => {
+            if (event.target === workClientsFiltersOverlayEl) {
+                setWorkSheetVisible(workClientsFiltersOverlayEl, false);
+                return;
+            }
+            const chip = event.target.closest("[data-filter-value]");
+            const group = chip?.closest("[data-filter-group]");
+            const selected = group ? clientFilters[group.dataset.filterGroup] : null;
+            if (!chip || !selected) return;
+            const value = chip.dataset.filterValue;
+            if (selected.has(value)) selected.delete(value);
+            else selected.add(value);
+            onClientFiltersChanged();
+        });
+        workFilterPriceMinEl?.addEventListener("input", () => {
+            clientFilters.priceMin = workFilterPriceMinEl.value.trim();
+            onClientFiltersChanged();
+        });
+        workFilterPriceMaxEl?.addEventListener("input", () => {
+            clientFilters.priceMax = workFilterPriceMaxEl.value.trim();
+            onClientFiltersChanged();
+        });
+        workFilterResetEl?.addEventListener("click", resetClientFilters);
+        workClientFilterSummaryResetEl?.addEventListener("click", resetClientFilters);
+        workFilterApplyEl?.addEventListener("click", () => setWorkSheetVisible(workClientsFiltersOverlayEl, false));
+        workClientsFiltersCloseEl?.addEventListener("click", () => setWorkSheetVisible(workClientsFiltersOverlayEl, false));
 
         // ---------- UI-кит: bottom sheet и красивые селекты ----------
         const uiSheetState = { resolve: null, items: [], selected: "", emptyText: "" };
@@ -4553,8 +4785,10 @@ const statusCard = document.getElementById("status-card");
         }
 
         function isWorkSheetOpen() {
-            return [workPanelAccessOverlayEl, workClientActionsOverlayEl, workClientExtendOverlayEl, workClientIdentityOverlayEl]
-                .some((el) => el && !el.classList.contains("hidden"));
+            return [
+                workPanelAccessOverlayEl, workClientActionsOverlayEl, workClientExtendOverlayEl,
+                workClientIdentityOverlayEl, workClientsFiltersOverlayEl,
+            ].some((el) => el && !el.classList.contains("hidden"));
         }
 
         function setWorkSheetVisible(overlayEl, visible) {
@@ -4576,6 +4810,8 @@ const statusCard = document.getElementById("status-card");
             workClientActionsOverlayEl?.classList.add("ui-sheet-overlay-tg");
             workClientIdentityCloseEl?.classList.add("hidden");
             workClientIdentityOverlayEl?.classList.add("ui-sheet-overlay-tg");
+            workClientsFiltersCloseEl?.classList.add("hidden");
+            workClientsFiltersOverlayEl?.classList.add("ui-sheet-overlay-tg");
         }
 
         function closeWorkSheets() {
@@ -4583,6 +4819,7 @@ const statusCard = document.getElementById("status-card");
             setWorkSheetVisible(workClientActionsOverlayEl, false);
             setWorkSheetVisible(workClientExtendOverlayEl, false);
             setWorkSheetVisible(workClientIdentityOverlayEl, false);
+            setWorkSheetVisible(workClientsFiltersOverlayEl, false);
         }
 
         /** Настройки доступа открываются отдельным всплывающим окном (а не списком вниз по странице). */
@@ -5782,7 +6019,35 @@ const statusCard = document.getElementById("status-card");
                 console.error("screen menu context action key error:", err);
             });
         });
+        // Удержание капсулы на странице клиентов открывает фильтры, обычное нажатие обновляет список.
+        let workPillPressTimer = null;
+        let workPillLongPressFired = false;
+        const cancelWorkPillPress = () => {
+            if (workPillPressTimer) {
+                clearTimeout(workPillPressTimer);
+                workPillPressTimer = null;
+            }
+        };
+        workPageContextPillEl?.addEventListener("pointerdown", () => {
+            if (getActiveWorkPageId() !== "work-clients-page" || workContextOverrideTitle) return;
+            workPillLongPressFired = false;
+            cancelWorkPillPress();
+            workPillPressTimer = setTimeout(() => {
+                workPillPressTimer = null;
+                workPillLongPressFired = true;
+                window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("medium");
+                openClientFilters();
+            }, 550);
+        });
+        ["pointerup", "pointerleave", "pointercancel"].forEach((name) => {
+            workPageContextPillEl?.addEventListener(name, cancelWorkPillPress);
+        });
+        workPageContextPillEl?.addEventListener("contextmenu", (event) => event.preventDefault());
         workPageContextPillEl?.addEventListener("click", () => {
+            if (workPillLongPressFired) {  // это отпускание после долгого нажатия, обновлять не нужно
+                workPillLongPressFired = false;
+                return;
+            }
             runWorkPageContextAction().catch((err) => {
                 console.error("work page context action click error:", err);
             });

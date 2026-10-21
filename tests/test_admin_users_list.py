@@ -216,3 +216,40 @@ def test_extending_sets_billing_day_only_when_missing_and_not_for_group_members(
         assert day(owner) == 15
         assert day(member) is None
         assert day(with_day) == 7
+
+
+def test_users_list_exposes_data_for_filters():
+    from datetime import datetime
+    from decimal import Decimal
+
+    from lumica.domain.models import Group, Panel, VpnAccount
+
+    factory = _factory()
+    with factory() as db:
+        panel_de = Panel(id="p-de", name="Germany", provider="3xui", auth_type="token", auth_secret_ref="x",
+                         base_url="https://h", region="de")
+        owner = User(telegram_id="1", name="Owner")
+        kid = User(telegram_id="2", name="Kid")
+        solo = User(telegram_id="3", name="Solo")
+        db.add_all([panel_de, owner, kid, solo])
+        db.flush()
+        group = Group(name="G", admin_user_id=owner.id)
+        db.add(group)
+        db.flush()
+        owner.group_id = kid.group_id = group.id
+        db.add_all([
+            Subscription(user_id=owner.id, status="active", price_amount=Decimal("300"), billing_day=15,
+                         access_until=datetime(2030, 5, 14), is_frozen=True),
+            Subscription(user_id=kid.id, status="paused"),
+            Subscription(user_id=solo.id, status="active"),
+            VpnAccount(user_id=owner.id, protocol="vless", status="active", meta_json={"panel_id": "p-de"}),
+            VpnAccount(user_id=solo.id, protocol="vless", status="active", meta_json={"panel_id": "missing"}),
+        ])
+        db.commit()
+    response = _create_test_app(factory, FakeRegistry()).test_client().get("/api/admin/users")
+    by_name = {u["name"]: u for u in response.get_json()["users"]}
+    assert by_name["Owner"]["is_group_admin"] is True and by_name["Kid"]["is_group_admin"] is False
+    assert by_name["Owner"]["price_amount"] == "300.00" and by_name["Owner"]["billing_day"] == 15
+    assert by_name["Owner"]["access_until"] == "2030-05-14T00:00:00" and by_name["Owner"]["is_frozen"] is True
+    assert by_name["Owner"]["servers"] == [{"id": "p-de", "code": "De", "name": "Germany"}]
+    assert by_name["Solo"]["servers"] == [] and by_name["Kid"]["servers"] == []

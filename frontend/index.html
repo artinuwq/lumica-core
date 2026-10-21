@@ -199,6 +199,10 @@
                             <div class="work-bind">
                                 <input id="work-client-search" type="text" placeholder="Поиск по имени, @username или Telegram ID">
                             </div>
+                            <div id="work-client-filter-summary" class="work-filter-summary hidden">
+                                <span id="work-client-filter-summary-text"></span>
+                                <button id="work-client-filter-summary-reset" type="button" class="work-filter-summary-reset">Сбросить</button>
+                            </div>
                             <div id="work-client-cards" class="work-client-cards">
                                 <div class="work-empty">Загрузка списка пользователей...</div>
                             </div>
@@ -828,6 +832,71 @@
                 </div>
                 <button id="work-client-identity-btn" type="button" class="work-btn work-btn-center">Изменить идентификацию</button>
                 <div id="work-client-actions-status" class="work-note hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="work-clients-filters-overlay" class="ui-sheet-overlay ui-sheet-overlay-full hidden" aria-hidden="true">
+        <div class="ui-sheet" role="dialog" aria-modal="true" aria-label="Фильтры клиентов">
+            <div class="ui-sheet-grip" aria-hidden="true"></div>
+            <div class="ui-sheet-head">
+                <div class="ui-sheet-title">Фильтры</div>
+                <button id="work-clients-filters-close" type="button" class="ui-sheet-close" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="work-modal-body">
+                <div class="form-card">
+                    <div class="form-card-title">Тип подписки</div>
+                    <div class="work-chip-grid work-chip-grid-2" data-filter-group="types">
+                        <button type="button" class="work-chip" data-filter-value="personal">Личная</button>
+                        <button type="button" class="work-chip" data-filter-value="group">Групповая</button>
+                    </div>
+                </div>
+                <div class="form-card">
+                    <div class="form-card-title">Стоимость</div>
+                    <div class="work-filter-range">
+                        <input id="work-filter-price-min" class="field-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="от, ₽">
+                        <input id="work-filter-price-max" class="field-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="до, ₽">
+                    </div>
+                    <div class="field-hint">Точная сумма: укажите одно и то же число в обоих полях.</div>
+                </div>
+                <div class="form-card">
+                    <div class="form-card-title">День оплаты</div>
+                    <div class="work-chip-grid" data-filter-group="days">
+                        <button type="button" class="work-chip" data-filter-value="15">15-е</button>
+                        <button type="button" class="work-chip" data-filter-value="30">30-е</button>
+                        <button type="button" class="work-chip" data-filter-value="other">Другой</button>
+                    </div>
+                </div>
+                <div class="form-card">
+                    <div class="form-card-title">Статус платежа</div>
+                    <div class="work-chip-grid" data-filter-group="payment">
+                        <button type="button" class="work-chip" data-filter-value="paid">Оплачен</button>
+                        <button type="button" class="work-chip" data-filter-value="overdue">Просрочен</button>
+                        <button type="button" class="work-chip" data-filter-value="pending">Ожидается</button>
+                    </div>
+                    <div class="field-hint">«Ожидается» - оплата наступает в ближайшие две недели.</div>
+                </div>
+                <div class="form-card">
+                    <div class="form-card-title">Статус подписки</div>
+                    <div class="work-chip-grid" data-filter-group="status">
+                        <button type="button" class="work-chip" data-filter-value="active">Активна</button>
+                        <button type="button" class="work-chip" data-filter-value="lifetime">Бессрочная</button>
+                        <button type="button" class="work-chip" data-filter-value="paused">Пауза</button>
+                        <button type="button" class="work-chip" data-filter-value="frozen">Заморожена</button>
+                        <button type="button" class="work-chip" data-filter-value="canceled">Отменена</button>
+                        <button type="button" class="work-chip" data-filter-value="inactive">Неактивна</button>
+                    </div>
+                </div>
+                <div class="form-card">
+                    <div class="form-card-title">Сервер</div>
+                    <div id="work-filter-servers" class="work-chip-grid" data-filter-group="servers">
+                        <div class="field-hint">Серверы появятся, когда у клиентов будут подписки на них.</div>
+                    </div>
+                </div>
+                <div class="work-bind-actions work-bind-actions-row">
+                    <button id="work-filter-reset" type="button" class="work-btn work-btn-center">Сбросить</button>
+                    <button id="work-filter-apply" type="button" class="work-btn work-btn-primary work-btn-center">Показать</button>
+                </div>
             </div>
         </div>
     </div>

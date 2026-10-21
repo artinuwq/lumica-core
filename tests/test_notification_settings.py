@@ -192,8 +192,9 @@ def _buttons(markup):
 def test_settings_main_lists_the_settings_by_name():
     text, markup = bot_settings.render_main()
     assert _buttons(markup) == [
-        ["Уведомление в день оплаты"], ["Уведомление до"], ["Статус оплаты"], ["Обновление подписки"], ["Меню"],
+        ["Уведомление в день оплаты"], ["Уведомление до"], ["Статус оплаты"], ["Обновление подписки"], ["Назад"],
     ]
+    assert markup.inline_keyboard[-1][0].callback_data == "menu:back"  # назад = главное меню в этом же сообщении
     assert [row[0].callback_data for row in markup.inline_keyboard[:4]] == [
         "settings:open:day", "settings:open:before", "settings:open:payment", "settings:open:updates",
     ]
@@ -314,3 +315,17 @@ def test_bot_finds_link_using_panel_root_when_no_env_is_configured(clean_env, mo
         texts = menus.collect_subscription_messages(db, user)
     assert 'Сервер "Fi":\n<blockquote><code>https://fi.example:2053/sub/abc</code>' in texts[0]
     assert "Ссылка на подписку пока не выдана" not in texts[0]
+
+
+def test_menu_settings_button_turns_the_menu_into_settings(monkeypatch):
+    factory = _factory()
+    with factory() as db:
+        db.add(User(telegram_id="9", name="Z"))
+        db.commit()
+    monkeypatch.setattr(bot_settings, "SessionLocal", factory)
+    message = SimpleNamespace(edit_text=AsyncMock(), answer=AsyncMock())
+    query = SimpleNamespace(from_user=SimpleNamespace(id=9), data="menu:settings", message=message, answer=AsyncMock())
+    asyncio.run(bot_settings.open_settings(query))
+    message.edit_text.assert_awaited_once()
+    assert message.edit_text.await_args.args[0].startswith("⚙️ Настройки уведомлений")
+    message.answer.assert_not_awaited()  # отдельное сообщение не отправляется

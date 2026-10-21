@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
-from lumica.domain.models import Application, AuthIdentity, MiniAppLaunch, Subscription, SubscriptionVpnAccount
+from lumica.domain.models import (
+    Application, AuthIdentity, Group, MiniAppLaunch, Panel, Subscription, SubscriptionVpnAccount, User, VpnAccount,
+)
 from lumica.services import user_provisioning
 from lumica.services import subscription_updates
 from lumica.services import user_deletion
+from lumica.services.panel_labels import server_code
 from lumica.services.notification_settings import is_silent
 from lumica.services.notifications import send_raw
 from lumica.services.user_audit import record_user_event
@@ -538,6 +541,20 @@ def register_admin_routes(app, deps):
                 .distinct()
                 .all()
             }
+            group_admins = {row.id: row.admin_user_id for row in db.query(Group).all()}
+            panels_by_id = {panel.id: panel for panel in db.query(Panel).all()}
+            servers_by_user: dict[int, dict[str, dict]] = {}
+            for account_user_id, account_meta, account_status in db.query(
+                VpnAccount.user_id, VpnAccount.meta_json, VpnAccount.status
+            ).all():
+                panel = panels_by_id.get(account_meta.get("panel_id")) if isinstance(account_meta, dict) else None
+                if panel is None or (account_status or "").lower() != "active":
+                    continue
+                servers_by_user.setdefault(account_user_id, {})[panel.id] = {
+                    "id": panel.id,
+                    "code": server_code(panel),
+                    "name": panel.name,
+                }
             users: list[dict] = []
             for u in db.query(User).order_by(User.id.asc()).all():
                 profile = u.profile_data if isinstance(u.profile_data, dict) else {}
@@ -556,6 +573,13 @@ def register_admin_routes(app, deps):
                         "group_id": u.group_id,
                         "subscription_type": subscription_type or "personal",
                         "subscription_status": sub.status if sub else None,
+                        # Данные для фильтров списка клиентов.
+                        "is_group_admin": bool(u.group_id and group_admins.get(u.group_id) == u.id),
+                        "is_frozen": bool(sub.is_frozen) if sub else False,
+                        "price_amount": str(sub.price_amount) if sub and sub.price_amount is not None else None,
+                        "billing_day": sub.billing_day if sub else None,
+                        "access_until": sub.access_until.isoformat() if sub and sub.access_until else None,
+                        "servers": list(servers_by_user.get(u.id, {}).values()),
                     }
                 )
             return jsonify({"ok": True, "users": users})

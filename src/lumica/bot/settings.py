@@ -55,7 +55,8 @@ def _back() -> list[InlineKeyboardButton]:
 
 def render_main() -> tuple[str, InlineKeyboardMarkup]:
     rows = [[InlineKeyboardButton(text=title, callback_data=f"settings:open:{section}")] for section, title in MAIN_BUTTONS]
-    rows.append([InlineKeyboardButton(text="Меню", callback_data="menu:main")])
+    # «Назад» возвращает главное меню в этом же сообщении (как со страницей статуса серверов).
+    rows.append([InlineKeyboardButton(text="Назад", callback_data="menu:back")])
     return "⚙️ Настройки уведомлений\n\nВыберите, что настроить.", InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -123,8 +124,10 @@ async def _show(query: CallbackQuery, text: str, markup: InlineKeyboardMarkup, *
     try:
         await query.message.edit_text(text, reply_markup=markup)
     except TelegramAPIError as exc:
-        if "not modified" not in str(exc).lower():
-            logger.warning("Could not edit settings message: %s", exc)
+        if "not modified" in str(exc).lower():
+            return
+        logger.warning("Could not edit settings message, sending a new one: %s", exc)
+        await query.message.answer(text, reply_markup=markup)
 
 
 @router.callback_query(lambda query: query.data == "menu:settings")
@@ -138,7 +141,7 @@ async def open_settings(query: CallbackQuery) -> None:
         return
     await query.answer()
     text, markup = render_main()
-    await _show(query, text, markup, edit=False)
+    await _show(query, text, markup, edit=True)
 
 
 @router.callback_query(lambda query: (query.data or "").startswith("settings:"))

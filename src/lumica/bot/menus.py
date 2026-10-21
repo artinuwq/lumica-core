@@ -16,6 +16,7 @@ from lumica.domain.models import AppSetting, Group, Panel, Subscription, Subscri
 from lumica.infra.db import SessionLocal
 from lumica.services import groups as group_service
 from lumica.services import subscription_links as subscription_links_module
+from lumica.services.panel_labels import server_code
 from lumica.services.roles import is_authorized, load_role_bindings, role_allows
 
 router = Router(name="menus")
@@ -163,17 +164,6 @@ def _fmt_until(subscription: Subscription) -> str:
     if (subscription.status or "").strip().lower() == "lifetime":
         return "Бессрочно"
     return subscription.access_until.strftime("%d.%m.%Y") if subscription.access_until else "не указана"
-
-
-def server_code(panel: Panel | None) -> str | None:
-    """Две буквы сервера для подписи: регион «de» -> «De», иначе начало названия."""
-    if panel is None:
-        return None
-    for source in (panel.region, panel.name):
-        letters = "".join(ch for ch in str(source or "") if ch.isalnum())[:2]
-        if letters:
-            return letters.capitalize()
-    return None
 
 
 def subscription_links(db, subscription: Subscription) -> list[tuple[str | None, str]]:
