@@ -90,7 +90,23 @@ def build_auth_helpers(deps):
                     "admin_user_id": own_group.admin_user_id,
                     "admin_name": _display_name(group_admin) if group_admin else None,
                     "is_admin": own_group.admin_user_id == user.id,
+                    "admin_subscription": None,
                 }
+                admin_subscription = (
+                    _latest_subscription(db, own_group.admin_user_id) if own_group.admin_user_id else None
+                )
+                if admin_subscription:
+                    # Участник группы платит через администратора: показываем его срок и цену.
+                    group_info["admin_subscription"] = {
+                        "status": admin_subscription.status,
+                        "access_until": admin_subscription.access_until.isoformat()
+                        if admin_subscription.access_until
+                        else None,
+                        "price_amount": str(admin_subscription.price_amount)
+                        if admin_subscription.price_amount is not None
+                        else None,
+                        "billing_day": admin_subscription.billing_day,
+                    }
 
         administered_groups = []
         for admin_group in db.query(_Group).filter(_Group.admin_user_id == user.id).order_by(_Group.id.asc()).all():

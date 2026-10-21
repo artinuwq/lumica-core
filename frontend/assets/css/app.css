@@ -2290,3 +2290,12 @@
         .ui-sheet-overlay-tg .ui-sheet {
             padding-top: calc(var(--safe-top, 0px) + 3.4rem);
         }
+
+        /* Участник группы: срок и цена приходят от администратора - плитки зелёные */
+        .work-panel-tile.work-panel-tile-green {
+            background: rgba(52, 199, 120, 0.16);
+            border-color: rgba(70, 215, 140, 0.55);
+        }
+        .work-panel-tile-green .work-panel-tile-value {
+            color: #7df0ae;
+        }

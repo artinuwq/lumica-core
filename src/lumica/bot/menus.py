@@ -8,6 +8,7 @@ import os
 from decimal import Decimal, InvalidOperation
 
 from aiogram import Router, types
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
@@ -21,8 +22,10 @@ router = Router(name="menus")
 
 DEFAULT_WEBAPP_URL = "https://lumica.duckdns.org/"
 USER_GREETING = (
-    "Здравствуйте! Здесь вы можете посмотреть подписки, статус инфраструктуры и связаться с поддержкой."
+    "Здравствуйте! Добро пожаловать в инфраструктуру Lumica. Здесь вы можете посмотреть подписки, "
+    "статус инфраструктуры и связаться с поддержкой."
 )
+HELP_TEXT = "Здесь будет справка."
 ADMIN_GREETING = "Добро пожаловать в Lumica"
 
 
@@ -41,13 +44,14 @@ def support_url() -> str:
 def user_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Подписка", callback_data="menu:subscription"),
-            InlineKeyboardButton(text="Оплатить", callback_data="menu:pay"),
+            InlineKeyboardButton(text="📋 Подписка", callback_data="menu:subscription"),
+            InlineKeyboardButton(text="💳 Оплатить", callback_data="menu:pay"),
         ],
         [
-            InlineKeyboardButton(text="Рабочий аккаунт", url=support_url()),
-            InlineKeyboardButton(text="Настройки", callback_data="menu:settings"),
+            InlineKeyboardButton(text="🖥 Статус серверов", callback_data="menu:status"),
+            InlineKeyboardButton(text="🌐 Центр Lumica", callback_data="menu:help"),
         ],
+        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="menu:settings")],
     ])
 
 
@@ -68,6 +72,11 @@ def no_details_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="Меню", callback_data="menu:main"),
         InlineKeyboardButton(text="Аккаунт", url=support_url()),
     ]])
+
+
+def page_back_keyboard(label: str) -> InlineKeyboardMarkup:
+    """Кнопка внизу «страницы» (статус серверов, справка): возвращает в меню, меняя это же сообщение."""
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, callback_data="menu:back")]])
 
 
 def menu_button() -> InlineKeyboardMarkup:
@@ -117,14 +126,23 @@ def servers_status_text(db) -> str:
     return "🌍 Состояние серверов\n" + "\n".join(lines)
 
 
+def main_menu_content(is_admin: bool) -> tuple[str, InlineKeyboardMarkup]:
+    return (ADMIN_GREETING, admin_menu()) if is_admin else (USER_GREETING, user_menu())
+
+
 async def answer_main_menu(message: types.Message, *, is_admin: bool) -> None:
-    if is_admin:
-        await message.answer(ADMIN_GREETING, reply_markup=admin_menu())
+    text, markup = main_menu_content(is_admin)
+    await message.answer(text, reply_markup=markup)
+
+
+async def _show_page(query: CallbackQuery, text: str, markup: InlineKeyboardMarkup) -> None:
+    """Меняет текущее сообщение на «страницу»; если изменить нельзя - отправляет новое."""
+    if not query.message:
         return
-    with SessionLocal() as db:
-        servers = servers_status_text(db)
-    text = USER_GREETING + (f"\n\n{servers}" if servers else "")
-    await message.answer(text, reply_markup=user_menu(), parse_mode="HTML")
+    try:
+        await query.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    except TelegramAPIError:
+        await query.message.answer(text, reply_markup=markup, parse_mode="HTML")
 
 
 # --------------------------------------------------------------- подписки
@@ -315,13 +333,31 @@ async def subscription_menu(query: CallbackQuery) -> None:
 
 @router.callback_query(lambda query: query.data == "menu:status")
 async def status_menu(query: CallbackQuery) -> None:
-    """Кнопки в старых сообщениях: показываем то же состояние серверов."""
+    """Страница «Статус серверов»: сообщение меняется на статус, внизу кнопка [Меню]."""
     await query.answer()
-    if not query.message:
-        return
     with SessionLocal() as db:
         text = servers_status_text(db)
-    await query.message.answer(text or "Данные о серверах пока недоступны.", parse_mode="HTML")
+    await _show_page(query, text or "Данные о серверах пока недоступны.", page_back_keyboard("Меню"))
+
+
+@router.callback_query(lambda query: query.data == "menu:help")
+async def help_menu(query: CallbackQuery) -> None:
+    """«Центр Lumica»: справка появится позже, пока заглушка с кнопкой [Назад]."""
+    await query.answer()
+    await _show_page(query, HELP_TEXT, page_back_keyboard("Назад"))
+
+
+@router.callback_query(lambda query: query.data == "menu:back")
+async def back_to_menu(query: CallbackQuery) -> None:
+    """Возврат на главное меню в этом же сообщении."""
+    await query.answer()
+    if not query.from_user:
+        return
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.telegram_id == str(query.from_user.id)).first()
+        is_admin = is_admin_telegram_user(user, query.from_user.id)
+    text, markup = main_menu_content(is_admin)
+    await _show_page(query, text, markup)
 
 
 __all__ = [
@@ -329,6 +365,8 @@ __all__ = [
     "user_menu",
     "admin_menu",
     "menu_button",
+    "page_back_keyboard",
+    "main_menu_content",
     "no_details_keyboard",
     "NO_DETAILS_TEXT",
     "answer_main_menu",

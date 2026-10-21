@@ -179,6 +179,10 @@ const statusCard = document.getElementById("status-card");
         const workClientGroupListEl = document.getElementById("work-client-group-list");
         const workClientExtendLifetimeNoteEl = document.getElementById("work-client-extend-lifetime-note");
         const workSubDateBtnEl = document.getElementById("work-sub-date-btn");
+        const workClientActionsRowEl = document.getElementById("work-client-actions-row");
+        const workClientNavRowEl = document.getElementById("work-client-nav-row");
+        const workClientSubscriptionsBtnEl = document.getElementById("work-client-subscriptions-btn");
+        const workClientToAdminBtnEl = document.getElementById("work-client-to-admin-btn");
         const workSubTypeSaveBtnEl = document.getElementById("work-sub-type-save-btn");
         const workSubCurrentGroupEl = document.getElementById("work-sub-current-group");
         const workMemberNotesEl = document.getElementById("work-member-notes");
@@ -2978,6 +2982,9 @@ const statusCard = document.getElementById("status-card");
                 el.classList.toggle("hidden", memberMode);
             });
             workClientRemoveMemberBtnEl?.classList.toggle("hidden", !memberMode);
+            // Участнику группы блок статуса подписки не нужен совсем.
+            workClientStatusChipsEl?.closest(".form-card")?.classList.toggle("hidden", memberMode);
+            applyWorkClientLayout(memberMode);
 
             const currentStatus = normalizeSubscriptionStatus(sub?.status);
             workClientStatusChipsEl?.querySelectorAll("[data-sub-status]").forEach((btn) => {
@@ -3043,6 +3050,33 @@ const statusCard = document.getElementById("status-card");
             workBackTargetByPage.set("work-user-member-page", "work-client-group-page");
             switchWorkPage("work-user-member-page");
         }
+
+        /** Обычный клиент: [Действия][Продлить] / [Подписки][Группа].
+         * Участник группы: [Действия][Подписки] / [К Администратору] (продлевает администратор). */
+        function applyWorkClientLayout(memberMode) {
+            if (!workClientActionsRowEl || !workClientNavRowEl) return;
+            if (memberMode) {
+                workClientActionsRowEl.replaceChildren(workClientActionsBtnEl, workClientSubscriptionsBtnEl);
+                workClientNavRowEl.replaceChildren(workClientToAdminBtnEl);
+                workClientExtendBtnEl?.classList.add("hidden");
+                workClientGroupBtnEl?.classList.add("hidden");
+                workClientToAdminBtnEl?.classList.remove("hidden");
+            } else {
+                workClientActionsRowEl.replaceChildren(workClientActionsBtnEl, workClientExtendBtnEl);
+                workClientNavRowEl.replaceChildren(workClientSubscriptionsBtnEl, workClientGroupBtnEl);
+                workClientExtendBtnEl?.classList.remove("hidden");
+                workClientToAdminBtnEl?.classList.add("hidden");
+            }
+        }
+
+        workClientToAdminBtnEl?.addEventListener("click", () => {
+            const adminId = workState.overview?.group?.admin_user_id;
+            if (!adminId) return;
+            openWorkClientPage(adminId).catch((err) => {
+                console.error("open group admin error:", err);
+                setWorkClientActionStatus(err?.message || "Не удалось открыть профиль администратора", "error");
+            });
+        });
 
         function renderWorkClientGroup(overview) {
             const groups = Array.isArray(overview?.administered_groups) ? overview.administered_groups : [];
@@ -5281,9 +5315,17 @@ const statusCard = document.getElementById("status-card");
             setWorkClientRoleStatus("");
             renderWorkSubscriptionControls(sub);
 
+            const viaAdmin = isWorkClientGroupMember(overview);
+            const adminSub = viaAdmin ? (overview?.group?.admin_subscription || null) : null;
             workClientSubStatusEl.textContent = subscriptionStatusLabel(sub);
-            workClientSubUntilEl.textContent = formatSubscriptionUntil(sub, fmtDateOnly);
-            workClientSubPriceEl.textContent = fmtMoney(sub?.price_amount);
+            // Участник группы платит через администратора: срок и цену берём у него (плитки зелёные).
+            workClientSubUntilEl.textContent = viaAdmin
+                ? (adminSub ? formatSubscriptionUntil(adminSub, fmtDateOnly) : "—")
+                : formatSubscriptionUntil(sub, fmtDateOnly);
+            workClientSubPriceEl.textContent = viaAdmin ? fmtMoney(adminSub?.price_amount) : fmtMoney(sub?.price_amount);
+            [workClientSubUntilEl, workClientSubPriceEl].forEach((el) => {
+                el.closest(".work-panel-tile")?.classList.toggle("work-panel-tile-green", viaAdmin);
+            });
         }
         async function loadSelectedUserOverview() {
             if (!workState.selectedUserId) {
@@ -5318,7 +5360,11 @@ const statusCard = document.getElementById("status-card");
                 updateWorkPageContext("work-client-page");
             }
             workClientNameEl.textContent = title;
-            workClientMetaEl.textContent = `${user.id} · ${user.username ? `@${user.username}` : "—"}`;
+            workClientMetaEl.textContent = [
+                user.id,
+                user.username ? `@${user.username}` : "—",
+                user.telegram_id ? `TG ${user.telegram_id}` : "",
+            ].filter(Boolean).join(" · ");
             if (workClientRoleSelectEl) {
                 workClientRoleSelectEl.value = String(user.role || "user").toLowerCase();
             }

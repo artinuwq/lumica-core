@@ -32,7 +32,10 @@ def _buttons(markup):
 
 def test_user_and_admin_menus_have_requested_layout(monkeypatch):
     monkeypatch.delenv("WEBAPP_URL", raising=False)
-    assert _buttons(menus.user_menu()) == [["Подписка", "Оплатить"], ["Рабочий аккаунт", "Настройки"]]
+    assert _buttons(menus.user_menu()) == [
+        ["📋 Подписка", "💳 Оплатить"], ["🖥 Статус серверов", "🌐 Центр Lumica"], ["⚙️ Настройки"],
+    ]
+    assert menus.USER_GREETING.startswith("Здравствуйте! Добро пожаловать в инфраструктуру Lumica.")
     admin = menus.admin_menu()
     assert _buttons(admin) == [["Открыть mini app"], ["Подписка"], ["Настройки"]]
     assert admin.inline_keyboard[0][0].web_app.url == "https://lumica.duckdns.org/"
@@ -451,40 +454,79 @@ def _menu_message():
     return message, answers
 
 
-def test_user_menu_shows_all_servers_with_condition(monkeypatch):
+def _page_query(user_id=42):
+    message = SimpleNamespace(edit_text=AsyncMock(), answer=AsyncMock())
+    query = SimpleNamespace(
+        from_user=SimpleNamespace(id=user_id, full_name="Ivan", username="ivan"),
+        data="x", message=message, answer=AsyncMock(),
+    )
+    return query, message
+
+
+def test_server_status_is_a_page_that_replaces_the_message(monkeypatch):
     from lumica.domain.models import Panel
 
     factory = _factory()
     with factory() as db:
         db.add_all([
-            Panel(id="a", name="Финляндия", provider="3xui", auth_type="token", auth_secret_ref="x", base_url="https://h",
-                  health_status="green"),
-            Panel(id="b", name="Германия", provider="3xui", auth_type="token", auth_secret_ref="x", base_url="https://h",
-                  health_status="green"),
-            Panel(id="c", name="Нидерланды", provider="3xui", auth_type="token", auth_secret_ref="x", base_url="https://h",
-                  health_status="red"),
-            Panel(id="d", name="Выключен", provider="3xui", auth_type="token", auth_secret_ref="x", base_url="https://h",
-                  is_active=0, health_status="green"),
+            Panel(id="a", name="Финляндия", provider="3xui", auth_type="token", auth_secret_ref="x",
+                  base_url="https://h", health_status="green"),
+            Panel(id="b", name="Германия", provider="3xui", auth_type="token", auth_secret_ref="x",
+                  base_url="https://h", health_status="green"),
+            Panel(id="c", name="Нидерланды", provider="3xui", auth_type="token", auth_secret_ref="x",
+                  base_url="https://h", health_status="red"),
+            Panel(id="d", name="Выключен", provider="3xui", auth_type="token", auth_secret_ref="x",
+                  base_url="https://h", is_active=0, health_status="green"),
             AppSetting(key=menus.PANEL_MONITOR_STATE_KEY, value_json={
                 "a": {"cpu": 12.0, "mem": 40.0}, "b": {"cpu": 71.0, "mem": 30.0}, "c": {"cpu": 1.0, "mem": 1.0},
             }),
+            User(telegram_id="42", name="Ivan"),
         ])
         db.commit()
     monkeypatch.setattr(menus, "SessionLocal", factory)
-    message, answers = _menu_message()
-    asyncio.run(menus.answer_main_menu(message, is_admin=False))
-    (text,), kwargs = answers[0]
-    assert text.startswith(menus.USER_GREETING)
-    assert "🌍 Состояние серверов" in text
+    monkeypatch.setattr(menus, "is_authorized", lambda *a, **k: False)
+
+    query, message = _page_query()
+    asyncio.run(menus.status_menu(query))
+    text = message.edit_text.await_args.args[0]
+    assert text.startswith("🌍 Состояние серверов")
     assert "🟢 Финляндия - отличное" in text
     assert "🟡 Германия - среднее" in text
     assert "🔴 Нидерланды - недоступен" in text
     assert "Выключен" not in text
-    assert "Статус серверов" not in str(_buttons(kwargs["reply_markup"]))
-    # администратору блок серверов не показываем
-    admin_message, admin_answers = _menu_message()
-    asyncio.run(menus.answer_main_menu(admin_message, is_admin=True))
-    assert admin_answers[0][0][0] == menus.ADMIN_GREETING
+    markup = message.edit_text.await_args.kwargs["reply_markup"]
+    assert _buttons(markup) == [["Меню"]] and markup.inline_keyboard[0][0].callback_data == "menu:back"
+    message.answer.assert_not_awaited()  # то же сообщение, новых нет
+
+    # [Меню] возвращает главное меню тем же сообщением
+    back_query, back_message = _page_query()
+    asyncio.run(menus.back_to_menu(back_query))
+    assert back_message.edit_text.await_args.args[0] == menus.USER_GREETING
+    assert _buttons(back_message.edit_text.await_args.kwargs["reply_markup"])[0] == ["📋 Подписка", "💳 Оплатить"]
+
+
+def test_help_center_is_a_placeholder_page_with_back_button(monkeypatch):
+    factory = _factory()
+    with factory() as db:
+        db.add(User(telegram_id="42", name="Ivan"))
+        db.commit()
+    monkeypatch.setattr(menus, "SessionLocal", factory)
+    monkeypatch.setattr(menus, "is_authorized", lambda *a, **k: False)
+    query, message = _page_query()
+    asyncio.run(menus.help_menu(query))
+    assert message.edit_text.await_args.args[0] == "Здесь будет справка."
+    markup = message.edit_text.await_args.kwargs["reply_markup"]
+    assert _buttons(markup) == [["Назад"]] and markup.inline_keyboard[0][0].callback_data == "menu:back"
+    back_query, back_message = _page_query()
+    asyncio.run(menus.back_to_menu(back_query))
+    assert back_message.edit_text.await_args.args[0] == menus.USER_GREETING
+
+
+def test_admin_menu_unchanged_and_has_no_server_block(monkeypatch):
+    message, answers = _menu_message()
+    asyncio.run(menus.answer_main_menu(message, is_admin=True))
+    assert answers[0][0][0] == menus.ADMIN_GREETING
+    assert _buttons(answers[0][1]["reply_markup"]) == [["Открыть mini app"], ["Подписка"], ["Настройки"]]
 
 
 def test_menu_command_shows_menu_again(monkeypatch):
@@ -496,8 +538,8 @@ def test_menu_command_shows_menu_again(monkeypatch):
     monkeypatch.setattr(menus, "is_authorized", lambda *a, **k: False)
     message, answers = _menu_message()
     asyncio.run(menus.cmd_menu(message))
-    assert answers[0][0][0].startswith(menus.USER_GREETING)
-    assert _buttons(answers[0][1]["reply_markup"])[0] == ["Подписка", "Оплатить"]
+    assert answers[0][0][0] == menus.USER_GREETING
+    assert _buttons(answers[0][1]["reply_markup"])[0] == ["📋 Подписка", "💳 Оплатить"]
 
     stranger, stranger_answers = _menu_message()
     stranger.from_user.id = 999
