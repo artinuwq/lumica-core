@@ -7,7 +7,8 @@ from lumica.domain.models import (
 )
 from lumica.services import user_provisioning
 from lumica.services import subscription_updates
-from lumica.services import user_deletion
+from lumica.services import broadcasts, user_deletion
+from lumica.services.operator_events import USER_EVENTS_TOPIC, post_to_topic as post_operator_topic
 from lumica.services.panel_labels import server_code
 from lumica.services.notification_settings import is_silent
 from lumica.services.notifications import send_raw
@@ -2110,6 +2111,70 @@ def register_admin_routes(app, deps):
             db.delete(row)
             db.commit()
             return jsonify({"ok": True, "deleted": True})
+
+    @app.post("/api/admin/broadcasts")
+    def admin_broadcast():
+        """Рассылка от имени бота выбранным клиентам (Markdown в тексте)."""
+        auth, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        type_key = str(body.get("type") or "").strip()
+        text = str(body.get("text") or "").strip()
+        raw_ids = body.get("user_ids")
+        if type_key not in broadcasts.BROADCAST_TYPES:
+            return jsonify({"ok": False, "error": "Выберите тип сообщения"}), 400
+        if not text:
+            return jsonify({"ok": False, "error": "Введите текст рассылки"}), 400
+        if len(text) > broadcasts.MAX_TEXT_LENGTH:
+            return jsonify({"ok": False, "error": f"Текст слишком длинный (максимум {broadcasts.MAX_TEXT_LENGTH} символов)"}), 400
+        try:
+            user_ids = list(dict.fromkeys(int(value) for value in (raw_ids or [])))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Некорректный список получателей"}), 400
+        if not user_ids:
+            return jsonify({"ok": False, "error": "Выберите получателей"}), 400
+        if len(user_ids) > broadcasts.MAX_RECIPIENTS:
+            return jsonify({"ok": False, "error": f"Слишком много получателей (максимум {broadcasts.MAX_RECIPIENTS})"}), 400
+        with SessionLocal() as db:
+            found = {row.id: row for row in db.query(User).filter(User.id.in_(user_ids)).all()}
+            recipients = [found[uid] for uid in user_ids if uid in found]
+            if not recipients:
+                return jsonify({"ok": False, "error": "Получатели не найдены"}), 404
+            actor = db.query(User).filter(User.id == auth["user_id"]).first()
+            result = broadcasts.send_broadcast(recipients, type_key, text)
+            log_text = broadcasts.format_log(actor, type_key, text, recipients, result.failed)
+            log_posted = post_operator_topic(USER_EVENTS_TOPIC, log_text, parse_mode="HTML")
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=None,
+                action="broadcast_sent",
+                changes={
+                    "type": type_key,
+                    "total": len(recipients),
+                    "sent": len(result.sent),
+                    "failed": len(result.failed),
+                },
+            )
+            db.commit()
+            return jsonify(
+                {
+                    "ok": True,
+                    "total": len(recipients),
+                    "sent": len(result.sent),
+                    "failed": [
+                        {
+                            "user_id": user.id,
+                            "name": user.name,
+                            "username": user.username,
+                            "reason": reason,
+                        }
+                        for user, reason in result.failed
+                    ],
+                    "log_posted": bool(log_posted),
+                }
+            )
 
     @app.post("/api/admin/users/<int:user_id>/identity")
     def admin_user_identity(user_id: int):

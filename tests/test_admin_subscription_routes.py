@@ -53,6 +53,21 @@ SCRIPT = textwrap.dedent(
     out["manual_extend"] = c.post(f"/api/admin/users/{cid}/manual-extend", json={"confirmed": True, "months": 1}).status_code
     out["freeze"] = c.post(f"/api/admin/users/{cid}/freeze", json={"frozen": True}).status_code
     out["overview"] = c.get(f"/api/admin/users/{cid}/overview").status_code
+    import requests as _requests
+    sent_to = []
+    class _Resp:
+        status_code = 200
+        def json(self): return {"ok": True}
+    def _fake_post(url, json=None, timeout=None):
+        sent_to.append((json or {}).get("chat_id")); return _Resp()
+    _requests.post = _fake_post
+    os.environ["TELEGRAM_BOT_TOKEN"] = "t"
+    import lumica.services.broadcasts as _b
+    _b.SEND_INTERVAL_SECONDS = 0
+    out["broadcast"] = c.post("/api/admin/broadcasts", json={"type": "ad", "text": "**Hi**", "user_ids": [cid, oid]}).get_json()
+    out["broadcast_sent_to"] = sorted(x for x in sent_to if x)
+    out["broadcast_bad_type"] = c.post("/api/admin/broadcasts", json={"type": "x", "text": "a", "user_ids": [cid]}).status_code
+    out["broadcast_no_users"] = c.post("/api/admin/broadcasts", json={"type": "ad", "text": "a", "user_ids": []}).status_code
     out["identity"] = c.post(f"/api/admin/users/{cid}/identity",
                              json={"name": "New Name", "username": "@new_user", "telegram_id": "555"}).status_code
     out["identity_duplicate"] = c.post(f"/api/admin/users/{cid}/identity", json={"telegram_id": "1"}).status_code
@@ -76,6 +91,8 @@ def test_admin_subscription_endpoints_do_not_crash_in_the_real_app():
     assert line, done.stderr[-2000:]
     assert json.loads(line[len("RESULT"):]) == {
         "details": 200, "extend_months": 200, "date": 200, "manual_extend": 200, "freeze": 200, "overview": 200,
+        "broadcast": {"ok": True, "total": 2, "sent": 2, "failed": [], "log_posted": False},
+        "broadcast_sent_to": ["2", "3"], "broadcast_bad_type": 400, "broadcast_no_users": 400,
         "identity": 200, "identity_duplicate": 409, "identity_bad_username": 400,
         "delete_self": 400, "delete_client": 200, "client_gone": True, "new_group_admin": True,
     }

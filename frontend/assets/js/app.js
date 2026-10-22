@@ -61,6 +61,7 @@ const statusCard = document.getElementById("status-card");
         const adminSettingsUrl = `${window.location.origin}/api/admin/settings`;
         const adminSettingUrl = (settingKey) => `${adminSettingsUrl}/${encodeURIComponent(settingKey)}`;
         const adminPanelsUrl = `${window.location.origin}/api/admin/panels`;
+        const adminBroadcastsUrl = `${window.location.origin}/api/admin/broadcasts`;
         const adminPanelsTestUrl = `${window.location.origin}/api/admin/panels/test-connection`;
         const adminPanelUpdateUrl = (panelId) => `${adminPanelsUrl}/${encodeURIComponent(panelId)}`;
         const adminPanelMetricsUrl = (panelId) => `${adminPanelsUrl}/${encodeURIComponent(panelId)}/metrics`;
@@ -206,10 +207,44 @@ const statusCard = document.getElementById("status-card");
         const workClientFilterSummaryTextEl = document.getElementById("work-client-filter-summary-text");
         const workClientFilterSummaryResetEl = document.getElementById("work-client-filter-summary-reset");
         // Фильтры списка клиентов: внутри категории - «или», между категориями - «и».
-        const clientFilters = {
+        const newClientFilters = () => ({
             types: new Set(), days: new Set(), payment: new Set(), status: new Set(), servers: new Set(),
             priceMin: "", priceMax: "",
+        });
+        const clientFilters = newClientFilters();
+        const recipientFilters = newClientFilters();  // свои фильтры на экране выбора получателей
+        // Какие страницы умеют фильтры (долгое нажатие на капсулу) и как перерисовать их список.
+        const filterContexts = {
+            "work-clients-page": { filters: clientFilters, rerender: () => renderWorkClientCards() },
+            "work-broadcast-recipients-page": { filters: recipientFilters, rerender: () => renderRecipientList() },
         };
+        let activeFilterPage = "work-clients-page";
+        const activeFilters = () => filterContexts[activeFilterPage].filters;
+        const workSelectionBarEl = document.getElementById("work-selection-bar");
+        const workSelectionAllEl = document.getElementById("work-selection-all");
+        const workSelectionClearEl = document.getElementById("work-selection-clear");
+        const workSelectionConfirmEl = document.getElementById("work-selection-confirm");
+        const workRecipientListEl = document.getElementById("work-recipient-list");
+        const workRecipientSearchEl = document.getElementById("work-recipient-search");
+        const workRecipientFilterSummaryEl = document.getElementById("work-recipient-filter-summary");
+        const workRecipientFilterSummaryTextEl = document.getElementById("work-recipient-filter-summary-text");
+        const workRecipientFilterSummaryResetEl = document.getElementById("work-recipient-filter-summary-reset");
+        const workAdminNotificationsBtnEl = document.getElementById("work-admin-notifications-btn");
+        const workBroadcastTypesEl = document.getElementById("work-broadcast-types");
+        const workBroadcastSummaryEl = document.getElementById("work-broadcast-recipients-summary");
+        const workBroadcastPickEl = document.getElementById("work-broadcast-pick");
+        const workBroadcastTextEl = document.getElementById("work-broadcast-text");
+        const workBroadcastSendEl = document.getElementById("work-broadcast-send");
+        const workBroadcastStatusEl = document.getElementById("work-broadcast-status");
+        const workBroadcastResultEl = document.getElementById("work-broadcast-result");
+        const workBroadcastResultTextEl = document.getElementById("work-broadcast-result-text");
+        const workBroadcastResultListEl = document.getElementById("work-broadcast-result-list");
+        const workCenterModalEl = document.getElementById("work-center-modal");
+        const workCenterModalTitleEl = document.getElementById("work-center-modal-title");
+        const workCenterModalTextEl = document.getElementById("work-center-modal-text");
+        const workCenterModalListEl = document.getElementById("work-center-modal-list");
+        const workCenterModalActionsEl = document.getElementById("work-center-modal-actions");
+        const broadcastState = { type: "", recipientIds: [], selected: new Set(), sending: false };
         // Полноэкранные окна: что писать в капсуле сверху, пока они открыты.
         const fullscreenSheetTitles = new Map([
             [workClientActionsOverlayEl, "Действия"],
@@ -462,6 +497,9 @@ const statusCard = document.getElementById("status-card");
             ["work-panel-detail-page", "Панель"],
             ["work-panel-inbounds-page", "Подключения"],
             ["work-panel-clients-page", "Клиенты"],
+            ["work-admin-page", "Администрирование"],
+            ["work-broadcast-page", "Рассылка"],
+            ["work-broadcast-recipients-page", "Получатели"],
             ["work-client-page", "Клиент"],
             ["work-client-connections-page", "Подписки"],
             ["work-client-group-page", "Группа"],
@@ -703,6 +741,9 @@ const statusCard = document.getElementById("status-card");
             if (pageId === "work-panels-page") {
                 return "refresh-work-panels";
             }
+            if (pageId === "work-broadcast-recipients-page") {
+                return "refresh-work-clients";
+            }
             if (pageId === "work-inbound-detail-page") {
                 return "";
             }
@@ -772,7 +813,10 @@ const statusCard = document.getElementById("status-card");
             workPageContextPillEl.title = displayTitle;
             workPageContextPillEl.classList.toggle("busy", isBusyForAction);
             // Зелёная капсула = на странице клиентов включены фильтры.
-            workPageContextPillEl.classList.toggle("filtered", pageId === "work-clients-page" && hasActiveClientFilters());
+            workPageContextPillEl.classList.toggle(
+                "filtered",
+                Boolean(filterContexts[pageId]) && hasActiveClientFilters(filterContexts[pageId].filters)
+            );
             workPageContextEl.classList.remove("hidden");
         }
 
@@ -789,6 +833,7 @@ const statusCard = document.getElementById("status-card");
             try {
                 if (action === "refresh-work-clients") {
                     await loadWorkClientsData();
+                    renderRecipientList();
                 } else if (action === "sync-work-inbounds") {
                     await postJson(adminSyncInboundsUrl);
                     const inboundsResp = await fetchJson(adminInboundsUrl, false);
@@ -1090,7 +1135,7 @@ const statusCard = document.getElementById("status-card");
          * админа это вкладки «Пользователи» и «Сервера» (они же нижнее меню). */
         function isWorkRootPage(pageId) {
             if (pageId === "work-menu-page") return true;
-            return adminOnlyMode && (pageId === "work-clients-page" || pageId === "work-panels-page");
+            return adminOnlyMode && ["work-clients-page", "work-panels-page", "work-admin-page"].includes(pageId);
         }
 
         function handleTelegramBack() {
@@ -3273,7 +3318,7 @@ const statusCard = document.getElementById("status-card");
                     return [name, username, telegramId, id].some((value) => value.includes(query));
                 })
                 : workState.users;
-            const filtered = searched.filter(clientMatchesFilters);
+            const filtered = searched.filter((user) => clientMatchesFilters(user));
             updateClientFilterSummary(filtered.length, workState.users.length);
 
             if (!filtered.length) {
@@ -3374,8 +3419,8 @@ const statusCard = document.getElementById("status-card");
         // ---------- Фильтры клиентов ----------
         const CLIENT_PAYMENT_SOON_DAYS = 14;
 
-        function hasActiveClientFilters() {
-            const f = clientFilters;
+        function hasActiveClientFilters(filters = clientFilters) {
+            const f = filters;
             return Boolean(
                 f.types.size || f.days.size || f.payment.size || f.status.size || f.servers.size
                 || f.priceMin !== "" || f.priceMax !== ""
@@ -3423,8 +3468,8 @@ const statusCard = document.getElementById("status-card");
             return user?.is_frozen ? "frozen" : String(user?.subscription_status || "").toLowerCase();
         }
 
-        function clientMatchesFilters(user) {
-            const f = clientFilters;
+        function clientMatchesFilters(user, filters = clientFilters) {
+            const f = filters;
             if (f.types.size) {
                 const isGroup = Boolean(user.group_id) || (user.subscription_type && user.subscription_type !== "personal");
                 if (!f.types.has(isGroup ? "group" : "personal")) return false;
@@ -3448,12 +3493,15 @@ const statusCard = document.getElementById("status-card");
             return true;
         }
 
-        function updateClientFilterSummary(shown, total) {
-            if (!workClientFilterSummaryEl) return;
-            const active = hasActiveClientFilters();
-            workClientFilterSummaryEl.classList.toggle("hidden", !active);
-            if (active && workClientFilterSummaryTextEl) {
-                workClientFilterSummaryTextEl.textContent = `Фильтры включены · найдено ${shown} из ${total}`;
+        function updateClientFilterSummary(
+            shown, total, filters = clientFilters,
+            summaryEl = workClientFilterSummaryEl, textEl = workClientFilterSummaryTextEl,
+        ) {
+            if (!summaryEl) return;
+            const active = hasActiveClientFilters(filters);
+            summaryEl.classList.toggle("hidden", !active);
+            if (active && textEl) {
+                textEl.textContent = `Фильтры включены · найдено ${shown} из ${total}`;
             }
         }
 
@@ -3477,7 +3525,7 @@ const statusCard = document.getElementById("status-card");
                 });
             }
             workClientsFiltersOverlayEl?.querySelectorAll("[data-filter-group]").forEach((group) => {
-                const selected = clientFilters[group.dataset.filterGroup];
+                const selected = activeFilters()[group.dataset.filterGroup];
                 group.querySelectorAll("[data-filter-value]").forEach((chip) => {
                     chip.classList.toggle("active", Boolean(selected?.has(chip.dataset.filterValue)));
                 });
@@ -3486,32 +3534,37 @@ const statusCard = document.getElementById("status-card");
 
         // Поля цены обновляем только при открытии и сбросе, чтобы не перебивать ввод пользователя.
         function syncClientFilterPriceInputs() {
-            if (workFilterPriceMinEl) workFilterPriceMinEl.value = clientFilters.priceMin;
-            if (workFilterPriceMaxEl) workFilterPriceMaxEl.value = clientFilters.priceMax;
+            const f = activeFilters();
+            if (workFilterPriceMinEl) workFilterPriceMinEl.value = f.priceMin;
+            if (workFilterPriceMaxEl) workFilterPriceMaxEl.value = f.priceMax;
         }
 
         function updateClientFilterCount() {
             if (!workFilterApplyEl) return;
-            const count = (workState.users || []).filter(clientMatchesFilters).length;
-            workFilterApplyEl.textContent = hasActiveClientFilters() ? `Показать (${count})` : "Показать";
+            const filters = activeFilters();
+            const count = (workState.users || []).filter((user) => clientMatchesFilters(user, filters)).length;
+            workFilterApplyEl.textContent = hasActiveClientFilters(filters) ? `Показать (${count})` : "Показать";
         }
 
         function onClientFiltersChanged() {
             renderClientFilterChips();
-            renderWorkClientCards();
+            filterContexts[activeFilterPage].rerender();
             updateClientFilterCount();
             updateWorkPageContext(getActiveWorkPageId());
         }
 
-        function resetClientFilters() {
-            ["types", "days", "payment", "status", "servers"].forEach((key) => clientFilters[key].clear());
-            clientFilters.priceMin = "";
-            clientFilters.priceMax = "";
+        function resetClientFilters(pageKey = activeFilterPage) {
+            activeFilterPage = pageKey;
+            const f = activeFilters();
+            ["types", "days", "payment", "status", "servers"].forEach((key) => f[key].clear());
+            f.priceMin = "";
+            f.priceMax = "";
             syncClientFilterPriceInputs();
             onClientFiltersChanged();
         }
 
-        function openClientFilters() {
+        function openClientFilters(pageId = getActiveWorkPageId()) {
+            if (filterContexts[pageId]) activeFilterPage = pageId;
             syncClientFilterPriceInputs();
             renderClientFilterChips();
             updateClientFilterCount();
@@ -3525,7 +3578,7 @@ const statusCard = document.getElementById("status-card");
             }
             const chip = event.target.closest("[data-filter-value]");
             const group = chip?.closest("[data-filter-group]");
-            const selected = group ? clientFilters[group.dataset.filterGroup] : null;
+            const selected = group ? activeFilters()[group.dataset.filterGroup] : null;
             if (!chip || !selected) return;
             const value = chip.dataset.filterValue;
             if (selected.has(value)) selected.delete(value);
@@ -3533,17 +3586,281 @@ const statusCard = document.getElementById("status-card");
             onClientFiltersChanged();
         });
         workFilterPriceMinEl?.addEventListener("input", () => {
-            clientFilters.priceMin = workFilterPriceMinEl.value.trim();
+            activeFilters().priceMin = workFilterPriceMinEl.value.trim();
             onClientFiltersChanged();
         });
         workFilterPriceMaxEl?.addEventListener("input", () => {
-            clientFilters.priceMax = workFilterPriceMaxEl.value.trim();
+            activeFilters().priceMax = workFilterPriceMaxEl.value.trim();
             onClientFiltersChanged();
         });
-        workFilterResetEl?.addEventListener("click", resetClientFilters);
-        workClientFilterSummaryResetEl?.addEventListener("click", resetClientFilters);
+        workFilterResetEl?.addEventListener("click", () => resetClientFilters());
+        workClientFilterSummaryResetEl?.addEventListener("click", () => resetClientFilters("work-clients-page"));
+        workRecipientFilterSummaryResetEl?.addEventListener("click", () => resetClientFilters("work-broadcast-recipients-page"));
         workFilterApplyEl?.addEventListener("click", () => setWorkSheetVisible(workClientsFiltersOverlayEl, false));
         workClientsFiltersCloseEl?.addEventListener("click", () => setWorkSheetVisible(workClientsFiltersOverlayEl, false));
+
+        // ---------- Администрирование: рассылка ----------
+        const BROADCAST_TYPE_LABELS = { ad: "Реклама", news: "Новости", important: "Важное", maintenance: "Технические работы" };
+
+        function pluralRu(n, forms) {
+            const mod100 = Math.abs(n) % 100;
+            const mod10 = mod100 % 10;
+            if (mod100 > 10 && mod100 < 20) return forms[2];
+            if (mod10 === 1) return forms[0];
+            if (mod10 >= 2 && mod10 <= 4) return forms[1];
+            return forms[2];
+        }
+
+        const peopleText = (n) => `${n} ${pluralRu(n, ["человек", "человека", "человек"])}`;
+
+        function isCenterModalOpen() {
+            return Boolean(workCenterModalEl && !workCenterModalEl.classList.contains("hidden"));
+        }
+
+        let centerModalResolve = null;
+
+        function closeCenterModal(result = "cancel") {
+            if (!isCenterModalOpen()) return;
+            workCenterModalEl.classList.add("hidden");
+            workCenterModalEl.setAttribute("aria-hidden", "true");
+            const resolve = centerModalResolve;
+            centerModalResolve = null;
+            if (resolve) resolve(result);
+            updateTelegramBackButton();
+        }
+
+        /** Окно по центру экрана. rows - строки кнопок: [{id, label, variant, toggleList}]. Возвращает id нажатой кнопки. */
+        function askCenterModal({ title, text = "", listLines = null, rows }) {
+            if (!workCenterModalEl) return Promise.resolve("cancel");
+            closeCenterModal("cancel");
+            workCenterModalTitleEl.textContent = title;
+            workCenterModalTextEl.textContent = text;
+            workCenterModalListEl.innerHTML = "";
+            workCenterModalListEl.classList.add("hidden");
+            (listLines || []).forEach((line) => {
+                const item = document.createElement("div");
+                item.textContent = line;
+                workCenterModalListEl.appendChild(item);
+            });
+            workCenterModalActionsEl.innerHTML = "";
+            rows.forEach((row) => {
+                const rowEl = document.createElement("div");
+                rowEl.className = "work-modal-row";
+                row.forEach((btn) => {
+                    const el = document.createElement("button");
+                    el.type = "button";
+                    el.className = `work-modal-btn ${btn.variant || ""}`.trim();
+                    el.textContent = btn.label;
+                    el.addEventListener("click", () => {
+                        if (btn.toggleList) {
+                            const hidden = workCenterModalListEl.classList.toggle("hidden");
+                            el.textContent = hidden ? btn.label : "Скрыть список";
+                            return;
+                        }
+                        closeCenterModal(btn.id);
+                    });
+                    rowEl.appendChild(el);
+                });
+                workCenterModalActionsEl.appendChild(rowEl);
+            });
+            workCenterModalEl.classList.remove("hidden");
+            workCenterModalEl.setAttribute("aria-hidden", "false");
+            updateTelegramBackButton();
+            return new Promise((resolve) => {
+                centerModalResolve = resolve;
+            });
+        }
+
+        function recipientLabel(user) {
+            return user?.name || (user?.username ? `@${user.username}` : `Клиент #${user?.id}`);
+        }
+
+        function recipientCanReceive(user) {
+            return /^\d+$/.test(String(user?.telegram_id || "").trim());
+        }
+
+        function visibleRecipients() {
+            const query = String(workRecipientSearchEl?.value || "").trim().toLowerCase();
+            return (workState.users || []).filter((user) => {
+                if (query) {
+                    const haystack = [user?.name, user?.username, user?.telegram_id, user?.id]
+                        .map((value) => String(value || "").toLowerCase());
+                    if (!haystack.some((value) => value.includes(query))) return false;
+                }
+                return clientMatchesFilters(user, recipientFilters);
+            });
+        }
+
+        function updateSelectionBar() {
+            const count = broadcastState.selected.size;
+            if (workSelectionConfirmEl) {
+                workSelectionConfirmEl.disabled = count === 0;
+                workSelectionConfirmEl.textContent = count ? `✓ ${count}` : "✓";
+            }
+        }
+
+        function renderRecipientList() {
+            if (!workRecipientListEl) return;
+            workRecipientListEl.innerHTML = "";
+            const all = workState.users || [];
+            const list = visibleRecipients();
+            updateClientFilterSummary(
+                list.length, all.length, recipientFilters,
+                workRecipientFilterSummaryEl, workRecipientFilterSummaryTextEl
+            );
+            if (!list.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = all.length ? "Никого не найдено." : "Список клиентов пуст.";
+                workRecipientListEl.appendChild(empty);
+                updateSelectionBar();
+                return;
+            }
+            list.forEach((user) => {
+                const canReceive = recipientCanReceive(user);
+                const row = document.createElement("button");
+                row.type = "button";
+                row.className = "work-recipient-row";
+                row.dataset.userId = String(user.id);
+                row.classList.toggle("selected", broadcastState.selected.has(user.id));
+                row.classList.toggle("disabled", !canReceive);
+                const username = String(user.username || "").replace(/^@/, "");
+                const sub = !canReceive ? "нет Telegram ID" : (username ? `@${username}` : "");
+                row.innerHTML = `
+                    <span class="work-recipient-check" aria-hidden="true">✓</span>
+                    <span class="work-recipient-avatar" aria-hidden="true">👤</span>
+                    <span class="work-recipient-text">
+                        <div class="work-recipient-name"></div>
+                        <div class="work-recipient-sub"></div>
+                    </span>`;
+                row.querySelector(".work-recipient-name").textContent = recipientLabel(user);
+                const subEl = row.querySelector(".work-recipient-sub");
+                subEl.textContent = sub;
+                if (!sub) subEl.remove();
+                row.addEventListener("click", () => {
+                    if (!canReceive) return;
+                    if (broadcastState.selected.has(user.id)) broadcastState.selected.delete(user.id);
+                    else broadcastState.selected.add(user.id);
+                    row.classList.toggle("selected", broadcastState.selected.has(user.id));
+                    updateSelectionBar();
+                });
+                workRecipientListEl.appendChild(row);
+            });
+            updateSelectionBar();
+        }
+
+        workRecipientSearchEl?.addEventListener("input", renderRecipientList);
+        workSelectionAllEl?.addEventListener("click", () => {
+            visibleRecipients().filter(recipientCanReceive).forEach((user) => broadcastState.selected.add(user.id));
+            renderRecipientList();
+        });
+        workSelectionClearEl?.addEventListener("click", () => {
+            broadcastState.selected.clear();
+            renderRecipientList();
+        });
+        workSelectionConfirmEl?.addEventListener("click", async () => {
+            const ids = [...broadcastState.selected];
+            if (!ids.length) return;
+            const byId = new Map((workState.users || []).map((user) => [user.id, user]));
+            const choice = await askCenterModal({
+                title: "Выбор получателей",
+                text: `Вы выбрали ${peopleText(ids.length)} для рассылки`,
+                listLines: ids.map((id, i) => `${i + 1}. ${recipientLabel(byId.get(id) || { id })}`),
+                rows: [
+                    [{ id: "list", label: "Список", toggleList: true }],
+                    [{ id: "cancel", label: "Отменить" }, { id: "confirm", label: "Подтвердить", variant: "primary" }],
+                ],
+            });
+            if (choice !== "confirm") return;  // отмена - остаёмся на выборе людей
+            broadcastState.recipientIds = ids;
+            switchWorkPage("work-broadcast-page");
+        });
+
+        function setBroadcastStatus(message, tone = "") {
+            setFormNote(workBroadcastStatusEl, message, tone);
+        }
+
+        function renderBroadcastPage() {
+            workBroadcastTypesEl?.querySelectorAll("[data-broadcast-type]").forEach((chip) => {
+                chip.classList.toggle("active", chip.dataset.broadcastType === broadcastState.type);
+            });
+            const count = broadcastState.recipientIds.length;
+            if (workBroadcastSummaryEl) {
+                workBroadcastSummaryEl.textContent = count ? `Выбрано: ${peopleText(count)}` : "Не выбраны";
+            }
+            if (workBroadcastPickEl) {
+                workBroadcastPickEl.textContent = count ? "Изменить получателей" : "Выбрать получателей";
+            }
+        }
+
+        workBroadcastTypesEl?.addEventListener("click", (event) => {
+            const chip = event.target.closest("[data-broadcast-type]");
+            if (!chip) return;
+            broadcastState.type = chip.dataset.broadcastType;
+            renderBroadcastPage();
+        });
+        workBroadcastPickEl?.addEventListener("click", () => switchWorkPage("work-broadcast-recipients-page"));
+        workAdminNotificationsBtnEl?.addEventListener("click", () => switchWorkPage("work-broadcast-page"));
+
+        workBroadcastSendEl?.addEventListener("click", async () => {
+            if (broadcastState.sending) return;
+            const type = broadcastState.type;
+            const text = String(workBroadcastTextEl?.value || "").trim();
+            const ids = broadcastState.recipientIds.slice();
+            if (!type) return setBroadcastStatus("Выберите тип сообщения", "error");
+            if (!ids.length) return setBroadcastStatus("Выберите получателей", "error");
+            if (!text) return setBroadcastStatus("Введите текст рассылки", "error");
+            setBroadcastStatus("");
+            const choice = await askCenterModal({
+                title: "Отправить рассылку?",
+                text: `Тип: ${BROADCAST_TYPE_LABELS[type]}\nПолучателей: ${ids.length}`,
+                rows: [[{ id: "cancel", label: "Отмена" }, { id: "send", label: "Отправить", variant: "primary" }]],
+            });
+            if (choice !== "send") return;
+            broadcastState.sending = true;
+            workBroadcastSendEl.disabled = true;
+            setBroadcastStatus("Отправляем…");
+            try {
+                const result = await postJson(adminBroadcastsUrl, { type, text, user_ids: ids });
+                renderBroadcastResult(result);
+                if (workBroadcastTextEl) workBroadcastTextEl.value = "";  // чтобы случайно не отправить повторно
+                setBroadcastStatus("");
+            } catch (err) {
+                console.error("broadcast error:", err);
+                setBroadcastStatus(err?.message || "Не удалось отправить рассылку", "error");
+            } finally {
+                broadcastState.sending = false;
+                workBroadcastSendEl.disabled = false;
+            }
+        });
+
+        function renderBroadcastResult(result) {
+            if (!workBroadcastResultEl) return;
+            const failed = Array.isArray(result?.failed) ? result.failed : [];
+            workBroadcastResultEl.classList.remove("hidden");
+            if (workBroadcastResultTextEl) {
+                workBroadcastResultTextEl.textContent =
+                    `Доставлено: ${result?.sent ?? 0} из ${result?.total ?? 0}`
+                    + (failed.length ? ` · не доставлено: ${failed.length}` : "")
+                    + (result?.log_posted ? "" : " · лог в группу не отправлен");
+            }
+            if (workBroadcastResultListEl) {
+                workBroadcastResultListEl.innerHTML = "";
+                failed.forEach((item) => {
+                    const row = document.createElement("div");
+                    row.className = "work-link-item";
+                    const title = document.createElement("div");
+                    title.className = "work-link-item-title";
+                    title.textContent = item.name || (item.username ? `@${item.username}` : `#${item.user_id}`);
+                    const sub = document.createElement("div");
+                    sub.className = "work-link-item-sub";
+                    sub.textContent = item.reason || "—";
+                    row.appendChild(title);
+                    row.appendChild(sub);
+                    workBroadcastResultListEl.appendChild(row);
+                });
+            }
+        }
 
         // ---------- UI-кит: bottom sheet и красивые селекты ----------
         const uiSheetState = { resolve: null, items: [], selected: "", emptyText: "" };
@@ -4788,7 +5105,7 @@ const statusCard = document.getElementById("status-card");
             return [
                 workPanelAccessOverlayEl, workClientActionsOverlayEl, workClientExtendOverlayEl,
                 workClientIdentityOverlayEl, workClientsFiltersOverlayEl,
-            ].some((el) => el && !el.classList.contains("hidden"));
+            ].some((el) => el && !el.classList.contains("hidden")) || isCenterModalOpen();
         }
 
         function setWorkSheetVisible(overlayEl, visible) {
@@ -4820,6 +5137,7 @@ const statusCard = document.getElementById("status-card");
             setWorkSheetVisible(workClientExtendOverlayEl, false);
             setWorkSheetVisible(workClientIdentityOverlayEl, false);
             setWorkSheetVisible(workClientsFiltersOverlayEl, false);
+            closeCenterModal("cancel");
         }
 
         /** Настройки доступа открываются отдельным всплывающим окном (а не списком вниз по странице). */
@@ -5748,10 +6066,24 @@ const statusCard = document.getElementById("status-card");
             if (adminOnlyMode) {
                 const activeTab = next.includes("panel") || next.includes("inbound")
                     ? "work-panels-page"
-                    : "work-clients-page";
+                    : (next === "work-admin-page" || next.startsWith("work-broadcast"))
+                        ? "work-admin-page"
+                        : "work-clients-page";
                 adminPageButtons.forEach((button) => {
                     button.classList.toggle("active", button.dataset.adminPage === activeTab);
                 });
+                // На экране выбора получателей вместо вкладок - панель [Выделить всех] [Снять] [✓].
+                const selecting = next === "work-broadcast-recipients-page";
+                adminBottomNavEl?.classList.toggle("hidden", selecting);
+                workSelectionBarEl?.classList.toggle("hidden", !selecting);
+                if (selecting && current !== "work-broadcast-recipients-page") {
+                    broadcastState.selected = new Set(broadcastState.recipientIds);
+                    if (!(workState.users || []).length) {
+                        loadWorkClientsData().then(renderRecipientList).catch((err) => console.error("load recipients error:", err));
+                    }
+                    renderRecipientList();
+                }
+                if (next === "work-broadcast-page") renderBroadcastPage();
             }
             const hideWorkHeaders = next !== "work-menu-page";
             setTopbarVisibility(hideWorkHeaders);
@@ -6022,25 +6354,34 @@ const statusCard = document.getElementById("status-card");
         // Удержание капсулы на странице клиентов открывает фильтры, обычное нажатие обновляет список.
         let workPillPressTimer = null;
         let workPillLongPressFired = false;
+        const stopPillPressing = () => setTimeout(() => document.body.classList.remove("pill-pressing"), 350);
         const cancelWorkPillPress = () => {
             if (workPillPressTimer) {
                 clearTimeout(workPillPressTimer);
                 workPillPressTimer = null;
             }
+            stopPillPressing();
         };
         workPageContextPillEl?.addEventListener("pointerdown", () => {
-            if (getActiveWorkPageId() !== "work-clients-page" || workContextOverrideTitle) return;
+            const pageId = getActiveWorkPageId();
+            if (!filterContexts[pageId] || workContextOverrideTitle) return;
             workPillLongPressFired = false;
             cancelWorkPillPress();
+            // Пока палец на капсуле, браузер не должен начинать выделять текст.
+            document.body.classList.add("pill-pressing");
             workPillPressTimer = setTimeout(() => {
                 workPillPressTimer = null;
                 workPillLongPressFired = true;
+                window.getSelection?.()?.removeAllRanges?.();
                 window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("medium");
-                openClientFilters();
+                openClientFilters(pageId);
             }, 550);
         });
         ["pointerup", "pointerleave", "pointercancel"].forEach((name) => {
             workPageContextPillEl?.addEventListener(name, cancelWorkPillPress);
+        });
+        document.addEventListener("selectstart", (event) => {
+            if (document.body.classList.contains("pill-pressing")) event.preventDefault();
         });
         workPageContextPillEl?.addEventListener("contextmenu", (event) => event.preventDefault());
         workPageContextPillEl?.addEventListener("click", () => {

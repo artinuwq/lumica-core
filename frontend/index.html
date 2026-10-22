@@ -422,6 +422,67 @@
                             </div>
                         </section>
 
+                        <section id="work-admin-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
+                                <div class="work-page-title">Администрирование</div>
+                            </div>
+                            <div class="work-actions">
+                                <button id="work-admin-notifications-btn" type="button" class="work-action-link">
+                                    <span class="work-action-link-label">Уведомления</span>
+                                    <span class="work-action-link-chevron" aria-hidden="true">›</span>
+                                </button>
+                            </div>
+                        </section>
+
+                        <section id="work-broadcast-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-admin-page">← Назад</button>
+                                <div class="work-page-title">Рассылка</div>
+                            </div>
+                            <div class="form-card">
+                                <div class="form-card-title">Тип сообщения</div>
+                                <div id="work-broadcast-types" class="work-chip-grid work-chip-grid-2">
+                                    <button type="button" class="work-chip" data-broadcast-type="ad">Реклама</button>
+                                    <button type="button" class="work-chip" data-broadcast-type="news">Новости</button>
+                                    <button type="button" class="work-chip" data-broadcast-type="important">Важное</button>
+                                    <button type="button" class="work-chip" data-broadcast-type="maintenance">Технические работы</button>
+                                </div>
+                            </div>
+                            <div class="form-card">
+                                <div class="form-card-title">Получатели</div>
+                                <div id="work-broadcast-recipients-summary" class="field-hint">Не выбраны</div>
+                                <button id="work-broadcast-pick" type="button" class="work-btn work-btn-center">Выбрать получателей</button>
+                            </div>
+                            <div class="form-card">
+                                <div class="form-card-title">Сообщение</div>
+                                <textarea id="work-broadcast-text" class="field-input field-textarea" rows="8" maxlength="3500" placeholder="Текст рассылки"></textarea>
+                                <div class="field-hint">Поддерживается Markdown: **жирный**, *курсив*, `код`, [ссылка](https://…), &gt; цитата.</div>
+                            </div>
+                            <button id="work-broadcast-send" type="button" class="work-btn work-btn-primary work-btn-center">Отправить</button>
+                            <div id="work-broadcast-status" class="work-note hidden"></div>
+                            <div id="work-broadcast-result" class="form-card hidden">
+                                <div class="form-card-title">Итог рассылки</div>
+                                <div id="work-broadcast-result-text" class="field-hint"></div>
+                                <div id="work-broadcast-result-list" class="work-links-list"></div>
+                            </div>
+                        </section>
+
+                        <section id="work-broadcast-recipients-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-broadcast-page">← Назад</button>
+                                <div class="work-page-title">Получатели</div>
+                            </div>
+                            <div class="work-bind">
+                                <input id="work-recipient-search" type="text" placeholder="Поиск по имени или @username">
+                            </div>
+                            <div id="work-recipient-filter-summary" class="work-filter-summary hidden">
+                                <span id="work-recipient-filter-summary-text"></span>
+                                <button id="work-recipient-filter-summary-reset" type="button" class="work-filter-summary-reset">Сбросить</button>
+                            </div>
+                            <div id="work-recipient-list" class="work-recipient-list"></div>
+                        </section>
+
                         <section id="work-panels-page" class="work-page hidden">
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-menu-page">← Назад</button>
@@ -764,11 +825,20 @@
                         <span class="icon">👥</span>
                         <span>Пользователи</span>
                     </button>
+                    <button class="nav-btn" type="button" data-admin-page="work-admin-page">
+                        <span class="icon">🛠</span>
+                        <span>Админ</span>
+                    </button>
                     <button class="nav-btn" type="button" data-admin-page="work-panels-page">
                         <span class="icon">▤</span>
                         <span>Сервера</span>
                     </button>
                 </nav>
+                <div class="bottom-nav selection-bar hidden" id="work-selection-bar" role="toolbar" aria-label="Выбор получателей">
+                    <button id="work-selection-all" type="button" class="selection-btn">Выделить всех</button>
+                    <button id="work-selection-clear" type="button" class="selection-btn">Снять</button>
+                    <button id="work-selection-confirm" type="button" class="selection-btn selection-btn-ok" aria-label="Подтвердить выбор" disabled>✓</button>
+                </div>
             </div>
             </div>
         </section>
@@ -833,6 +903,15 @@
                 <button id="work-client-identity-btn" type="button" class="work-btn work-btn-center">Изменить идентификацию</button>
                 <div id="work-client-actions-status" class="work-note hidden"></div>
             </div>
+        </div>
+    </div>
+
+    <div id="work-center-modal" class="work-modal-center hidden" aria-hidden="true">
+        <div class="work-modal-box" role="dialog" aria-modal="true" aria-labelledby="work-center-modal-title">
+            <div id="work-center-modal-title" class="work-modal-title"></div>
+            <div id="work-center-modal-text" class="work-modal-text"></div>
+            <div id="work-center-modal-list" class="work-modal-list hidden"></div>
+            <div id="work-center-modal-actions" class="work-modal-actions"></div>
         </div>
     </div>
 

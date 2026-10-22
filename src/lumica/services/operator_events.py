@@ -17,7 +17,7 @@ SERVER_EVENTS_TOPIC = "🔴 События серверов"
 USER_EVENTS_TOPIC = "👥 События пользователей"
 
 
-def post_to_topic(topic_title: str, text: str) -> bool:
+def post_to_topic(topic_title: str, text: str, *, parse_mode: str | None = None) -> bool:
     """Синхронно отправляет текст в тему операторской группы. Возвращает False,
     если группа не настроена или Telegram недоступен: событие - вспомогательное,
     оно не должно ломать основную операцию."""
@@ -31,10 +31,13 @@ def post_to_topic(topic_title: str, text: str) -> bool:
     chat_id, thread_id = config.get("chat_id"), topics.get(topic_title)
     if not chat_id or not thread_id:
         return False
+    payload = {"chat_id": str(chat_id), "message_thread_id": int(thread_id), "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
     try:
         response = requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": str(chat_id), "message_thread_id": int(thread_id), "text": text},
+            json=payload,
             timeout=8,
         )
         response.raise_for_status()
