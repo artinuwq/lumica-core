@@ -2567,3 +2567,118 @@
         .work-page-pill {
             -webkit-tap-highlight-color: transparent;
         }
+
+        /* Финансы */
+        .finance-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.6rem;
+            margin-bottom: 0.8rem;
+        }
+        .finance-tile {
+            min-width: 0;
+            padding: 0.8rem 0.75rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .finance-tile-label {
+            color: rgba(219, 234, 255, 0.68);
+            font-size: 0.72rem;
+            line-height: 1.25;
+            min-height: 1.8em;
+        }
+        .finance-tile-value {
+            margin-top: 0.3rem;
+            font-size: 1.25rem;
+            font-weight: 800;
+            overflow-wrap: anywhere;
+        }
+        .finance-tile-sub {
+            margin-top: 0.2rem;
+            color: rgba(219, 234, 255, 0.55);
+            font-size: 0.72rem;
+        }
+        .finance-tile.positive {
+            border-color: rgba(70, 215, 140, 0.55);
+            background: rgba(52, 199, 120, 0.12);
+        }
+        .finance-tile.positive .finance-tile-value {
+            color: #7df0ae;
+        }
+        .finance-tile.negative,
+        .finance-tile-debt.has-debt {
+            border-color: rgba(255, 120, 120, 0.55);
+            background: rgba(220, 70, 70, 0.12);
+        }
+        .finance-tile.negative .finance-tile-value,
+        .finance-tile-debt.has-debt .finance-tile-value {
+            color: #ff9b9b;
+        }
+        .finance-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.8rem;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            font-size: 0.9rem;
+        }
+        .finance-row:last-of-type {
+            border-bottom: none;
+        }
+        .finance-row b {
+            white-space: nowrap;
+        }
+        .finance-row small {
+            display: block;
+            color: rgba(219, 234, 255, 0.55);
+            font-size: 0.72rem;
+        }
+        .finance-debtors {
+            display: grid;
+            gap: 0.5rem;
+        }
+        .finance-debtor {
+            padding: 0.6rem 0.7rem;
+            border-radius: 0.9rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .finance-debtor-name {
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+        .finance-debtor-name small {
+            margin-left: 0.4rem;
+            color: rgba(219, 234, 255, 0.55);
+            font-weight: 400;
+        }
+        .finance-debtor-tiles {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.45rem;
+        }
+        .finance-mini {
+            padding: 0.4rem 0.6rem;
+            border-radius: 0.7rem;
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .finance-mini.owed {
+            background: rgba(220, 70, 70, 0.16);
+            border: 1px solid rgba(255, 120, 120, 0.4);
+        }
+        .finance-mini.date {
+            text-align: right;
+        }
+        .finance-mini-label {
+            color: rgba(219, 234, 255, 0.6);
+            font-size: 0.68rem;
+        }
+        .finance-mini-value {
+            font-size: 0.95rem;
+            font-weight: 800;
+        }
+        .finance-mini.owed .finance-mini-value {
+            color: #ff9b9b;
+        }

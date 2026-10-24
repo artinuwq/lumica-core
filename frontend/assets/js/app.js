@@ -62,6 +62,8 @@ const statusCard = document.getElementById("status-card");
         const adminSettingUrl = (settingKey) => `${adminSettingsUrl}/${encodeURIComponent(settingKey)}`;
         const adminPanelsUrl = `${window.location.origin}/api/admin/panels`;
         const adminBroadcastsUrl = `${window.location.origin}/api/admin/broadcasts`;
+        const adminFinanceSummaryUrl = `${window.location.origin}/api/admin/finance/summary`;
+        const adminFinanceExpensesUrl = `${window.location.origin}/api/admin/finance/expenses`;
         const adminPanelsTestUrl = `${window.location.origin}/api/admin/panels/test-connection`;
         const adminPanelUpdateUrl = (panelId) => `${adminPanelsUrl}/${encodeURIComponent(panelId)}`;
         const adminPanelMetricsUrl = (panelId) => `${adminPanelsUrl}/${encodeURIComponent(panelId)}/metrics`;
@@ -230,6 +232,7 @@ const statusCard = document.getElementById("status-card");
         const workRecipientFilterSummaryTextEl = document.getElementById("work-recipient-filter-summary-text");
         const workRecipientFilterSummaryResetEl = document.getElementById("work-recipient-filter-summary-reset");
         const workAdminNotificationsBtnEl = document.getElementById("work-admin-notifications-btn");
+        const workAdminFinanceBtnEl = document.getElementById("work-admin-finance-btn");
         const workBroadcastTypesEl = document.getElementById("work-broadcast-types");
         const workBroadcastSummaryEl = document.getElementById("work-broadcast-recipients-summary");
         const workBroadcastPickEl = document.getElementById("work-broadcast-pick");
@@ -245,6 +248,8 @@ const statusCard = document.getElementById("status-card");
         const workCenterModalListEl = document.getElementById("work-center-modal-list");
         const workCenterModalActionsEl = document.getElementById("work-center-modal-actions");
         const broadcastState = { type: "", recipientIds: [], selected: new Set(), sending: false };
+        const financeState = { summary: null, loading: false };
+        const finEl = (id) => document.getElementById(id);
         // Полноэкранные окна: что писать в капсуле сверху, пока они открыты.
         const fullscreenSheetTitles = new Map([
             [workClientActionsOverlayEl, "Действия"],
@@ -500,6 +505,10 @@ const statusCard = document.getElementById("status-card");
             ["work-admin-page", "Администрирование"],
             ["work-broadcast-page", "Рассылка"],
             ["work-broadcast-recipients-page", "Получатели"],
+            ["work-finance-page", "Финансы"],
+            ["work-finance-details-page", "Детали"],
+            ["work-finance-debtors-page", "Должники"],
+            ["work-finance-expenses-page", "Расходы"],
             ["work-client-page", "Клиент"],
             ["work-client-connections-page", "Подписки"],
             ["work-client-group-page", "Группа"],
@@ -744,6 +753,9 @@ const statusCard = document.getElementById("status-card");
             if (pageId === "work-broadcast-recipients-page") {
                 return "refresh-work-clients";
             }
+            if (String(pageId).startsWith("work-finance")) {
+                return "refresh-work-finance";
+            }
             if (pageId === "work-inbound-detail-page") {
                 return "";
             }
@@ -840,6 +852,8 @@ const statusCard = document.getElementById("status-card");
                     workState.inbounds = Array.isArray(inboundsResp?.inbounds) ? inboundsResp.inbounds : [];
                     renderWorkInboundsManager();
                     renderWorkInboundSelectOptions();
+                } else if (action === "refresh-work-finance") {
+                    await loadFinanceSummary();
                 } else if (action === "refresh-work-panels") {
                     await loadWorkPanels();
                 } else if (action === "refresh-work-client") {
@@ -3599,6 +3613,160 @@ const statusCard = document.getElementById("status-card");
         workFilterApplyEl?.addEventListener("click", () => setWorkSheetVisible(workClientsFiltersOverlayEl, false));
         workClientsFiltersCloseEl?.addEventListener("click", () => setWorkSheetVisible(workClientsFiltersOverlayEl, false));
 
+        // ---------- Финансы ----------
+        const FINANCE_DAY_LABELS = [
+            ["15", "15-е число"], ["30", "30-е число"], ["other", "Другие дни"], ["none", "Без даты оплаты"],
+        ];
+
+        function setFinanceStatus(message, tone = "") {
+            setFormNote(finEl("fin-status"), message, tone);
+        }
+
+        async function loadFinanceSummary() {
+            if (financeState.loading) return;
+            financeState.loading = true;
+            try {
+                const response = await fetchJson(adminFinanceSummaryUrl, false);
+                financeState.summary = response?.summary || null;
+                setFinanceStatus("");
+                renderFinance();
+            } catch (err) {
+                console.error("finance summary error:", err);
+                setFinanceStatus(err?.message || "Не удалось загрузить финансы", "error");
+            } finally {
+                financeState.loading = false;
+            }
+        }
+
+        function financeNumber(value) {
+            const n = Number(value);
+            return Number.isFinite(n) ? n : 0;
+        }
+
+        function renderFinance() {
+            const summary = financeState.summary;
+            if (!summary) return;
+            const receipts = financeNumber(summary.receipts);
+            const expenses = financeNumber(summary.expenses);
+            const income = financeNumber(summary.income);
+            const debt = financeNumber(summary.debt?.amount);
+            const debtCount = Number(summary.debt?.count || 0);
+            const next = summary.next_payment;
+
+            finEl("fin-receipts").textContent = fmtMoney(receipts);
+            finEl("fin-receipts-sub").textContent = `платят: ${summary.payers || 0}`;
+            finEl("fin-next").textContent = next ? fmtMoney(next.amount) : "—";
+            finEl("fin-next-sub").textContent = next ? `${fmtDateOnly(next.date)} · ${peopleText(next.payers)}` : "нет платёжных дней";
+            finEl("fin-income").textContent = fmtMoney(income);
+            const incomeTile = finEl("fin-income-tile");
+            incomeTile.classList.toggle("positive", income > 0);
+            incomeTile.classList.toggle("negative", income < 0);
+            finEl("fin-debt").textContent = fmtMoney(debt);
+            finEl("fin-debt-sub").textContent = debtCount ? peopleText(debtCount) : "должников нет";
+            finEl("fin-debt-tile").classList.toggle("has-debt", debt > 0);
+
+            finEl("fin-d-receipts").textContent = fmtMoney(receipts);
+            finEl("fin-d-expenses").textContent = fmtMoney(expenses);
+            finEl("fin-d-income").textContent = fmtMoney(income);
+            finEl("fin-d-debt").textContent = fmtMoney(debt);
+            finEl("fin-d-debt-count").textContent = String(debtCount);
+
+            const byDay = finEl("fin-by-day");
+            byDay.innerHTML = "";
+            FINANCE_DAY_LABELS.forEach(([key, label]) => {
+                const entry = summary.by_day?.[key];
+                if (!entry) return;
+                const row = document.createElement("div");
+                row.className = "finance-row";
+                const left = document.createElement("span");
+                left.textContent = label;
+                const small = document.createElement("small");
+                small.textContent = peopleText(entry.payers);
+                left.appendChild(small);
+                const value = document.createElement("b");
+                value.textContent = fmtMoney(entry.amount);
+                row.appendChild(left);
+                row.appendChild(value);
+                byDay.appendChild(row);
+            });
+            if (!byDay.children.length) {
+                const empty = document.createElement("div");
+                empty.className = "field-hint";
+                empty.textContent = "Платящих клиентов пока нет.";
+                byDay.appendChild(empty);
+            }
+
+            const list = finEl("fin-debtors-list");
+            list.innerHTML = "";
+            const debtors = Array.isArray(summary.debtors) ? summary.debtors : [];
+            if (!debtors.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = "Должников нет 🎉";
+                list.appendChild(empty);
+            }
+            debtors.forEach((debtor) => {
+                const card = document.createElement("div");
+                card.className = "finance-debtor";
+                const name = document.createElement("div");
+                name.className = "finance-debtor-name";
+                name.textContent = debtor.name || `#${debtor.user_id}`;
+                if (debtor.periods > 1) {
+                    const small = document.createElement("small");
+                    small.textContent = `${debtor.periods} ${pluralRu(debtor.periods, ["период", "периода", "периодов"])}`;
+                    name.appendChild(small);
+                }
+                const tiles = document.createElement("div");
+                tiles.className = "finance-debtor-tiles";
+                const makeMini = (cls, label, value) => {
+                    const mini = document.createElement("div");
+                    mini.className = `finance-mini ${cls}`;
+                    const l = document.createElement("div");
+                    l.className = "finance-mini-label";
+                    l.textContent = label;
+                    const v = document.createElement("div");
+                    v.className = "finance-mini-value";
+                    v.textContent = value;
+                    mini.appendChild(l);
+                    mini.appendChild(v);
+                    return mini;
+                };
+                tiles.appendChild(makeMini("owed", "Должен", fmtMoney(debtor.amount)));
+                tiles.appendChild(makeMini("date", "Дата", fmtDateOnly(debtor.due_date)));
+                card.appendChild(name);
+                card.appendChild(tiles);
+                list.appendChild(card);
+            });
+
+            const input = finEl("fin-expenses-input");
+            if (input && document.activeElement !== input) input.value = expenses ? String(expenses) : "";
+        }
+
+        workAdminFinanceBtnEl?.addEventListener("click", () => switchWorkPage("work-finance-page"));
+        finEl("fin-details-btn")?.addEventListener("click", () => switchWorkPage("work-finance-details-page"));
+        finEl("fin-expenses-btn")?.addEventListener("click", () => switchWorkPage("work-finance-expenses-page"));
+        finEl("fin-debtors-btn")?.addEventListener("click", () => switchWorkPage("work-finance-debtors-page"));
+        finEl("fin-d-debtors-btn")?.addEventListener("click", () => switchWorkPage("work-finance-debtors-page"));
+        finEl("fin-expenses-save")?.addEventListener("click", async () => {
+            const statusEl = finEl("fin-expenses-status");
+            const raw = String(finEl("fin-expenses-input")?.value || "").trim();
+            if (raw === "") return setFormNote(statusEl, "Введите сумму расходов", "error");
+            const button = finEl("fin-expenses-save");
+            button.disabled = true;
+            setFormNote(statusEl, "Сохраняем…");
+            try {
+                const result = await postJson(adminFinanceExpensesUrl, { amount: raw });
+                financeState.summary = result?.summary || financeState.summary;
+                renderFinance();
+                setFormNote(statusEl, "Сохранено", "success");
+            } catch (err) {
+                console.error("save expenses error:", err);
+                setFormNote(statusEl, err?.message || "Не удалось сохранить", "error");
+            } finally {
+                button.disabled = false;
+            }
+        });
+
         // ---------- Администрирование: рассылка ----------
         const BROADCAST_TYPE_LABELS = { ad: "Реклама", news: "Новости", important: "Важное", maintenance: "Технические работы" };
 
@@ -6066,7 +6234,7 @@ const statusCard = document.getElementById("status-card");
             if (adminOnlyMode) {
                 const activeTab = next.includes("panel") || next.includes("inbound")
                     ? "work-panels-page"
-                    : (next === "work-admin-page" || next.startsWith("work-broadcast"))
+                    : (next === "work-admin-page" || next.startsWith("work-broadcast") || next.startsWith("work-finance"))
                         ? "work-admin-page"
                         : "work-clients-page";
                 adminPageButtons.forEach((button) => {
@@ -6084,6 +6252,11 @@ const statusCard = document.getElementById("status-card");
                     renderRecipientList();
                 }
                 if (next === "work-broadcast-page") renderBroadcastPage();
+                if (next.startsWith("work-finance")) {
+                    // Заходим на главную финансов - берём свежие цифры; на вложенных страницах хватает уже загруженных.
+                    if (next === "work-finance-page" || !financeState.summary) loadFinanceSummary();
+                    else renderFinance();
+                }
             }
             const hideWorkHeaders = next !== "work-menu-page";
             setTopbarVisibility(hideWorkHeaders);

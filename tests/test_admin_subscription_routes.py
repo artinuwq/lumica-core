@@ -68,6 +68,11 @@ SCRIPT = textwrap.dedent(
     out["broadcast_sent_to"] = sorted(x for x in sent_to if x)
     out["broadcast_bad_type"] = c.post("/api/admin/broadcasts", json={"type": "x", "text": "a", "user_ids": [cid]}).status_code
     out["broadcast_no_users"] = c.post("/api/admin/broadcasts", json={"type": "ad", "text": "a", "user_ids": []}).status_code
+    _fin = c.get("/api/admin/finance/summary").get_json()["summary"]
+    out["fin_summary"] = [_fin["payers"], _fin["debt"]["count"]]
+    out["fin_expenses"] = c.post("/api/admin/finance/expenses", json={"amount": "1500"}).get_json()["summary"]["expenses"]
+    out["fin_bad"] = c.post("/api/admin/finance/expenses", json={"amount": "abc"}).status_code
+    out["fin_empty"] = c.post("/api/admin/finance/expenses", json={}).status_code
     out["identity"] = c.post(f"/api/admin/users/{cid}/identity",
                              json={"name": "New Name", "username": "@new_user", "telegram_id": "555"}).status_code
     out["identity_duplicate"] = c.post(f"/api/admin/users/{cid}/identity", json={"telegram_id": "1"}).status_code
@@ -93,6 +98,7 @@ def test_admin_subscription_endpoints_do_not_crash_in_the_real_app():
         "details": 200, "extend_months": 200, "date": 200, "manual_extend": 200, "freeze": 200, "overview": 200,
         "broadcast": {"ok": True, "total": 2, "sent": 2, "failed": [], "log_posted": False},
         "broadcast_sent_to": ["2", "3"], "broadcast_bad_type": 400, "broadcast_no_users": 400,
+        "fin_summary": [1, 0], "fin_expenses": "1500.00", "fin_bad": 400, "fin_empty": 400,
         "identity": 200, "identity_duplicate": 409, "identity_bad_username": 400,
         "delete_self": 400, "delete_client": 200, "client_gone": True, "new_group_admin": True,
     }

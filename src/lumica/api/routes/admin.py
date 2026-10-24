@@ -7,7 +7,7 @@ from lumica.domain.models import (
 )
 from lumica.services import user_provisioning
 from lumica.services import subscription_updates
-from lumica.services import broadcasts, user_deletion
+from lumica.services import broadcasts, finance, user_deletion
 from lumica.services.operator_events import USER_EVENTS_TOPIC, post_to_topic as post_operator_topic
 from lumica.services.panel_labels import server_code
 from lumica.services.notification_settings import is_silent
@@ -2111,6 +2111,40 @@ def register_admin_routes(app, deps):
             db.delete(row)
             db.commit()
             return jsonify({"ok": True, "deleted": True})
+
+    @app.get("/api/admin/finance/summary")
+    def admin_finance_summary():
+        """Поступления, расходы, доход, долг и список должников."""
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            return jsonify({"ok": True, "summary": finance.compute_summary(db)})
+
+    @app.post("/api/admin/finance/expenses")
+    def admin_finance_expenses():
+        """Регулярные расходы за месяц (одно число)."""
+        auth, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        raw = str(body.get("amount") if body.get("amount") is not None else "").strip().replace(",", ".")
+        if not raw:
+            return jsonify({"ok": False, "error": "Введите сумму расходов"}), 400
+        try:
+            with SessionLocal() as db:
+                finance.set_monthly_expenses(db, raw)
+                record_user_event(
+                    db,
+                    actor_user_id=auth["user_id"],
+                    subject_user_id=None,
+                    action="finance_expenses_changed",
+                    changes={"amount": raw},
+                )
+                db.commit()
+                return jsonify({"ok": True, "summary": finance.compute_summary(db)})
+        except (ValueError, ArithmeticError):
+            return jsonify({"ok": False, "error": "Сумма расходов должна быть числом от 0 до 1 000 000 000"}), 400
 
     @app.post("/api/admin/broadcasts")
     def admin_broadcast():

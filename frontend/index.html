@@ -428,6 +428,10 @@
                                 <div class="work-page-title">Администрирование</div>
                             </div>
                             <div class="work-actions">
+                                <button id="work-admin-finance-btn" type="button" class="work-action-link">
+                                    <span class="work-action-link-label">Финансы</span>
+                                    <span class="work-action-link-chevron" aria-hidden="true">›</span>
+                                </button>
                                 <button id="work-admin-notifications-btn" type="button" class="work-action-link">
                                     <span class="work-action-link-label">Уведомления</span>
                                     <span class="work-action-link-chevron" aria-hidden="true">›</span>
@@ -481,6 +485,94 @@
                                 <button id="work-recipient-filter-summary-reset" type="button" class="work-filter-summary-reset">Сбросить</button>
                             </div>
                             <div id="work-recipient-list" class="work-recipient-list"></div>
+                        </section>
+
+                        <section id="work-finance-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-admin-page">← Назад</button>
+                                <div class="work-page-title">Финансы</div>
+                            </div>
+                            <div class="finance-grid">
+                                <div class="finance-tile">
+                                    <div class="finance-tile-label">Поступления за месяц</div>
+                                    <div id="fin-receipts" class="finance-tile-value">—</div>
+                                    <div id="fin-receipts-sub" class="finance-tile-sub"></div>
+                                </div>
+                                <div class="finance-tile">
+                                    <div class="finance-tile-label">Поступления за след. платёжный день</div>
+                                    <div id="fin-next" class="finance-tile-value">—</div>
+                                    <div id="fin-next-sub" class="finance-tile-sub"></div>
+                                </div>
+                                <div id="fin-income-tile" class="finance-tile">
+                                    <div class="finance-tile-label">Доход за месяц</div>
+                                    <div id="fin-income" class="finance-tile-value">—</div>
+                                    <div class="finance-tile-sub">поступления − расходы</div>
+                                </div>
+                                <div id="fin-debt-tile" class="finance-tile finance-tile-debt">
+                                    <div class="finance-tile-label">Долг</div>
+                                    <div id="fin-debt" class="finance-tile-value">—</div>
+                                    <div id="fin-debt-sub" class="finance-tile-sub"></div>
+                                </div>
+                            </div>
+                            <div class="work-bind-actions work-bind-actions-row">
+                                <button id="fin-details-btn" type="button" class="work-btn work-btn-center">Детали</button>
+                                <button id="fin-expenses-btn" type="button" class="work-btn work-btn-center">Расходы</button>
+                            </div>
+                            <div class="work-bind-actions work-bind-actions-auto">
+                                <button id="fin-debtors-btn" type="button" class="work-btn work-btn-center">Должники</button>
+                            </div>
+                            <div id="fin-status" class="work-note hidden"></div>
+                        </section>
+
+                        <section id="work-finance-details-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-finance-page">← Назад</button>
+                                <div class="work-page-title">Детали</div>
+                            </div>
+                            <div class="form-card">
+                                <div class="form-card-title">За месяц</div>
+                                <div class="finance-row"><span>Поступления за месяц</span><b id="fin-d-receipts">—</b></div>
+                                <div class="finance-row"><span>Расходы за месяц</span><b id="fin-d-expenses">—</b></div>
+                                <div class="finance-row"><span>Доход за месяц</span><b id="fin-d-income">—</b></div>
+                            </div>
+                            <div class="form-card">
+                                <div class="form-card-title">По платёжным дням</div>
+                                <div id="fin-by-day"></div>
+                            </div>
+                            <div class="form-card">
+                                <div class="form-card-title">Долг</div>
+                                <div class="finance-row"><span>Сколько должны</span><b id="fin-d-debt">—</b></div>
+                                <div class="finance-row"><span>Сколько их</span><b id="fin-d-debt-count">—</b></div>
+                                <button id="fin-d-debtors-btn" type="button" class="work-btn work-btn-center">Должники</button>
+                            </div>
+                        </section>
+
+                        <section id="work-finance-debtors-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-finance-page">← Назад</button>
+                                <div class="work-page-title">Должники</div>
+                            </div>
+                            <div id="fin-debtors-list" class="finance-debtors"></div>
+                        </section>
+
+                        <section id="work-finance-expenses-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-finance-page">← Назад</button>
+                                <div class="work-page-title">Расходы</div>
+                            </div>
+                            <div class="form-card">
+                                <div class="form-card-title">Расходы</div>
+                                <div class="field">
+                                    <label class="field-label" for="fin-expenses-input">Сколько расходов в месяц</label>
+                                    <div class="field-affix">
+                                        <input id="fin-expenses-input" class="field-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0">
+                                        <span class="field-suffix">₽</span>
+                                    </div>
+                                </div>
+                                <div class="field-hint">Регулярные расходы за месяц. Доход считается как поступления минус расходы.</div>
+                                <button id="fin-expenses-save" type="button" class="work-btn work-btn-primary work-btn-center">Сохранить</button>
+                                <div id="fin-expenses-status" class="work-note hidden"></div>
+                            </div>
                         </section>
 
                         <section id="work-panels-page" class="work-page hidden">
