@@ -1329,7 +1329,7 @@ const statusCard = document.getElementById("status-card");
         };
 
         function subscriptionStatusLabel(subscription) {
-            if (!subscription) return "Нет подписки";
+            if (!subscription) return "Не оформлена";
             if (subscription.is_frozen) return "Заморожена";
             const raw = normalizeSubscriptionStatus(subscription.status);
             return SUBSCRIPTION_STATUS_LABELS[raw] || raw || "—";
@@ -6040,7 +6040,9 @@ const statusCard = document.getElementById("status-card");
 
             const viaAdmin = isWorkClientGroupMember(overview);
             const adminSub = viaAdmin ? (overview?.group?.admin_subscription || null) : null;
-            workClientSubStatusEl.textContent = subscriptionStatusLabel(sub);
+            // Участник группы без своей записи подписки живёт по подписке администратора.
+            const statusViaAdmin = Boolean(viaAdmin && !sub && adminSub);
+            workClientSubStatusEl.textContent = subscriptionStatusLabel(statusViaAdmin ? adminSub : sub);
             // Участник группы платит через администратора: срок и цену берём у него (плитки зелёные).
             workClientSubUntilEl.textContent = viaAdmin
                 ? (adminSub ? formatSubscriptionUntil(adminSub, fmtDateOnly) : "—")
@@ -6049,6 +6051,7 @@ const statusCard = document.getElementById("status-card");
             [workClientSubUntilEl, workClientSubPriceEl].forEach((el) => {
                 el.closest(".work-panel-tile")?.classList.toggle("work-panel-tile-green", viaAdmin);
             });
+            workClientSubStatusEl.closest(".work-panel-tile")?.classList.toggle("work-panel-tile-green", statusViaAdmin);
         }
         async function loadSelectedUserOverview() {
             if (!workState.selectedUserId) {

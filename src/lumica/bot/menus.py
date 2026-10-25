@@ -166,6 +166,15 @@ def _fmt_until(subscription: Subscription) -> str:
     return subscription.access_until.strftime("%d.%m.%Y") if subscription.access_until else "не указана"
 
 
+def user_accounts(db, user_id: int) -> list[VpnAccount]:
+    return (
+        db.query(VpnAccount)
+        .filter(VpnAccount.user_id == user_id, VpnAccount.status == "active")
+        .order_by(VpnAccount.id.asc())
+        .all()
+    )
+
+
 def subscription_links(db, subscription: Subscription) -> list[tuple[str | None, str]]:
     """Ссылки подписки как (подпись сервера, ссылка): по одной на клиента панели.
     Логика выбора ссылки та же, что в mini app: см. services/subscription_links.py."""
@@ -176,13 +185,12 @@ def subscription_links(db, subscription: Subscription) -> list[tuple[str | None,
         .order_by(VpnAccount.id.asc())
         .all()
     )
-    if not accounts:
-        accounts = (
-            db.query(VpnAccount)
-            .filter(VpnAccount.user_id == subscription.user_id, VpnAccount.status == "active")
-            .order_by(VpnAccount.id.asc())
-            .all()
-        )
+    return account_links(db, accounts or user_accounts(db, subscription.user_id))
+
+
+def account_links(db, accounts: list[VpnAccount]) -> list[tuple[str | None, str]]:
+    """Ссылки по подключениям клиента. Нужны и тогда, когда у клиента ещё нет записи подписки
+    (подключения привязали, а срок и цену не назначали): ссылки всё равно выдаём."""
     links: list[tuple[str | None, str]] = []
     seen: set[str] = set()
     for account in accounts:
@@ -205,6 +213,7 @@ def format_subscription_message(
     *,
     hide_billing: bool = False,
     owner_name: str | None = None,
+    billing_note: str | None = None,
 ) -> str:
     """HTML-текст подписки.
 
@@ -217,7 +226,9 @@ def format_subscription_message(
     else:
         lines.append("Ваша подписка")
         lines.append("")
-        if hide_billing:
+        if billing_note:  # записи подписки нет: вместо срока и цены - пояснение
+            lines.append(billing_note)
+        elif hide_billing:
             lines.append("Дату оплаты и стоимость семейной подписки видит только администратор группы.")
         else:
             lines.append(f"Дата оплаты до: {_fmt_until(subscription)}")
@@ -257,7 +268,19 @@ def collect_subscription_messages(db, user: User | None) -> list[str]:
     messages: list[str] = []
     own = _subs(user.id)
     if not own:
-        messages.append("Подписок пока нет.")
+        links = account_links(db, user_accounts(db, user.id))
+        if links:
+            if group and not is_group_admin:
+                admin = db.query(User).filter(User.id == group.admin_user_id).first() if group.admin_user_id else None
+                note = (
+                    f"Оплату вносит администратор группы «{html.escape(_display_name(admin))}»."
+                    if admin else "Оплату вносит администратор группы."
+                )
+            else:
+                note = "Срок оплаты и цена пока не назначены."
+            messages.append(format_subscription_message(None, links, billing_note=note))
+        else:
+            messages.append("Подписок пока нет.")
     for item in own:
         messages.append(format_subscription_message(item, subscription_links(db, item), hide_billing=hide_billing))
 
@@ -267,7 +290,11 @@ def collect_subscription_messages(db, user: User | None) -> list[str]:
             member_subs = _subs(member.id)
             name = _display_name(member)
             if not member_subs:
-                messages.append(f"👤 {html.escape(name)}\nПодписки нет.")
+                member_links = account_links(db, user_accounts(db, member.id))
+                if member_links:  # у участника своей записи подписки нет, но ссылки выданы
+                    messages.append(format_subscription_message(None, member_links, owner_name=name))
+                else:
+                    messages.append(f"👤 {html.escape(name)}\nПодписки нет.")
                 continue
             for item in member_subs:
                 messages.append(format_subscription_message(item, subscription_links(db, item), owner_name=name))

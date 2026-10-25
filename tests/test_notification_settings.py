@@ -329,3 +329,62 @@ def test_menu_settings_button_turns_the_menu_into_settings(monkeypatch):
     message.edit_text.assert_awaited_once()
     assert message.edit_text.await_args.args[0].startswith("⚙️ Настройки уведомлений")
     message.answer.assert_not_awaited()  # отдельное сообщение не отправляется
+
+
+# ---- клиент с подключениями, но без записи подписки (подключения привязали, «Продлить» не нажимали)
+
+def _bound_account(db, user, panel_id="p1", sub_id="abc"):
+    db.add(VpnAccount(user_id=user.id, protocol="vless", status="active",
+                      meta_json={"panel_id": panel_id, "sub_id": sub_id}))
+
+
+def test_client_without_subscription_record_still_gets_links(clean_env, monkeypatch):
+    from lumica.bot import menus
+
+    monkeypatch.setattr(subscription_links, "probe_url", lambda url, timeout=0: True)
+    factory = _factory()
+    with factory() as db:
+        db.add(Panel(id="p1", name="FI", provider="3xui", auth_type="token", auth_secret_ref="x",
+                     base_url="https://fi.example:2053/panel/api", region="fi"))
+        user = User(telegram_id="3", name="Client")
+        nothing = User(telegram_id="4", name="Nothing")
+        db.add_all([user, nothing])
+        db.flush()
+        _bound_account(db, user)
+        db.commit()
+        texts = menus.collect_subscription_messages(db, user)
+        empty = menus.collect_subscription_messages(db, nothing)
+    assert len(texts) == 1
+    assert "Срок оплаты и цена пока не назначены." in texts[0]
+    assert 'Сервер "Fi":\n<blockquote><code>https://fi.example:2053/sub/abc</code>' in texts[0]
+    assert "Подписок пока нет" not in texts[0]
+    assert empty == ["Подписок пока нет."]
+
+
+def test_family_member_without_own_subscription_sees_links_and_who_pays(clean_env, monkeypatch):
+    from lumica.bot import menus
+    from lumica.domain.models import Group
+
+    monkeypatch.setattr(subscription_links, "probe_url", lambda url, timeout=0: True)
+    factory = _factory()
+    with factory() as db:
+        db.add(Panel(id="p1", name="FI", provider="3xui", auth_type="token", auth_secret_ref="x",
+                     base_url="https://fi.example:2053/panel/api", region="fi"))
+        owner = User(telegram_id="1", name="Owner")
+        member = User(telegram_id="2", name="Marina")
+        db.add_all([owner, member])
+        db.flush()
+        group = Group(name="G", admin_user_id=owner.id)
+        db.add(group)
+        db.flush()
+        owner.group_id = member.group_id = group.id
+        db.add(Subscription(user_id=owner.id, status="active", access_until=datetime(2030, 5, 14),
+                            price_amount=Decimal("300")))
+        _bound_account(db, member, sub_id="mar")
+        db.commit()
+        own_view = menus.collect_subscription_messages(db, member)
+        admin_view = menus.collect_subscription_messages(db, owner)
+    assert "Оплату вносит администратор группы «Owner»." in own_view[0]
+    assert "https://fi.example:2053/sub/mar" in own_view[0]
+    # администратор видит ссылки участника отдельным сообщением
+    assert any(m.startswith("Подписка участника группы\n👤 Marina") and "/sub/mar" in m for m in admin_view)
