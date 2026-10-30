@@ -7,7 +7,9 @@ from aiogram.types import BotCommand
 from .chatops import resume_update_notice, router as chatops_router
 from .menus import router as menus_router
 from .onboarding import router as onboarding_router
-from .payments import router as payments_router
+from .payments import resume_pending_requests, router as payments_router
+from .registration import router as registration_router
+from .welcome import backfill_existing_users
 from .settings import router as settings_router
 from .subscriptions import router as subscriptions_router
 from .workspace import router as workspace_router
@@ -20,6 +22,7 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.include_router(chatops_router)
     dp.include_router(workspace_router)
     dp.include_router(menus_router)
+    dp.include_router(registration_router)
     dp.include_router(payments_router)
     dp.include_router(settings_router)
 
@@ -32,6 +35,8 @@ async def start_bot():
     bot = Bot(token=token)
     dp = Dispatcher()
     register_handlers(dp)
+    # Уже существующие клиенты не должны получить приветствие для новичков после обновления.
+    await asyncio.to_thread(backfill_existing_users)
     try:  # подсказки в меню «/»: чтобы /menu и /subscription было легко найти
         await bot.set_my_commands([
             BotCommand(command="menu", description="Главное меню"),
@@ -41,10 +46,13 @@ async def start_bot():
         pass
     # Если бот перезапущен самим обновлением - дописываем итог в сообщение /update.
     resume_task = asyncio.create_task(resume_update_notice(bot))
+    # Заявки на оплату, ждавшие чек до перезапуска, получают таймер автоотмены заново.
+    payments_task = asyncio.create_task(resume_pending_requests(bot))
     try:
         await dp.start_polling(bot)
     finally:
         resume_task.cancel()
+        payments_task.cancel()
 
 
 if __name__ == "__main__":

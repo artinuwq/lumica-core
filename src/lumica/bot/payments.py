@@ -1,7 +1,7 @@
 """Оплата подписки через бота.
 
 Клиент: «Оплатить» -> реквизиты + просьба прислать чек (одна активная заявка на
-человека, автоотмена через 15 минут) -> чек уходит в тему «Заявки и Оплата»
+человека, автоотмена через 15 минут; заявка хранится в БД и переживает перезапуск бота) -> чек уходит в тему «Заявки и Оплата»
 операторской группы с кнопками. Администратор: [Подтвердить] [Отклонить] ->
 после подтверждения [Продлить на 1 месяц] / [Открыть] / [Пропустить].
 """
@@ -11,14 +11,13 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+import secrets
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from aiogram import Bot, Router, types
 from aiogram.exceptions import TelegramAPIError
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from lumica.domain.models import AppSetting, Group, PaymentRequest, Subscription, User
@@ -45,20 +44,90 @@ EXPIRED_TEXT = (
 RECEIPT_ACCEPTED_TEXT = "Оплата принята на рассмотрение администратором, ожидайте результата"
 
 
-class PaymentReceipt(StatesGroup):
-    waiting_for_file = State()
+PENDING_KEY_PREFIX = "payments.pending:"
 
 
 @dataclass
 class PendingPayment:
+    """Ожидающая чека заявка клиента. Хранится в app_settings, поэтому не теряется при перезапуске."""
+
+    telegram_id: int
     chat_id: int
     subscription_ids: list[int]
+    expires_at: datetime
     message_id: int | None = None
-    task: asyncio.Task | None = field(default=None, repr=False)
+    token: str = ""  # отличает эту заявку от более новой (чтобы чужой таймер её не закрыл)
 
 
-# Активные заявки по telegram_id плательщика. Хранится в памяти процесса, как и FSM.
-_PENDING: dict[int, PendingPayment] = {}
+# Таймеры автоотмены живут в процессе; после перезапуска их восстанавливает resume_pending_requests.
+_TASKS: dict[int, asyncio.Task] = {}
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _pending_key(telegram_id: int) -> str:
+    return f"{PENDING_KEY_PREFIX}{telegram_id}"
+
+
+def _pending_from_row(row: AppSetting) -> PendingPayment | None:
+    value = row.value_json if isinstance(row.value_json, dict) else {}
+    try:
+        expires = datetime.fromisoformat(str(value["expires_at"]))
+        return PendingPayment(
+            telegram_id=int(row.key[len(PENDING_KEY_PREFIX):]),
+            chat_id=int(value["chat_id"]),
+            subscription_ids=[int(x) for x in value.get("subscription_ids") or []],
+            expires_at=expires if expires.tzinfo else expires.replace(tzinfo=timezone.utc),
+            message_id=int(value["message_id"]) if value.get("message_id") else None,
+            token=str(value.get("token") or ""),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def load_pending(telegram_id: int) -> PendingPayment | None:
+    with SessionLocal() as db:
+        row = db.query(AppSetting).filter(AppSetting.key == _pending_key(telegram_id)).first()
+        return _pending_from_row(row) if row else None
+
+
+def list_pending() -> list[PendingPayment]:
+    with SessionLocal() as db:
+        rows = db.query(AppSetting).filter(AppSetting.key.like(f"{PENDING_KEY_PREFIX}%")).all()
+        return [item for item in (_pending_from_row(row) for row in rows) if item]
+
+
+def save_pending(pending: PendingPayment) -> None:
+    payload = {
+        "chat_id": pending.chat_id,
+        "subscription_ids": list(pending.subscription_ids),
+        "expires_at": pending.expires_at.isoformat(),
+        "message_id": pending.message_id,
+        "token": pending.token,
+    }
+    with SessionLocal() as db:
+        row = db.query(AppSetting).filter(AppSetting.key == _pending_key(pending.telegram_id)).first()
+        if row:
+            row.value_json = payload
+        else:
+            db.add(AppSetting(key=_pending_key(pending.telegram_id), value_json=payload, description="Заявка на оплату"))
+        db.commit()
+
+
+def drop_pending(telegram_id: int) -> PendingPayment | None:
+    """Удаляет заявку и останавливает её таймер. Возвращает то, что было."""
+    with SessionLocal() as db:
+        row = db.query(AppSetting).filter(AppSetting.key == _pending_key(telegram_id)).first()
+        existing = _pending_from_row(row) if row else None
+        if row:
+            db.delete(row)
+            db.commit()
+    task = _TASKS.pop(telegram_id, None)
+    if task and task is not asyncio.current_task():
+        task.cancel()
+    return existing
 
 
 def _parse_payment_target(data: str) -> tuple[int, bool] | None:
@@ -108,14 +177,6 @@ def _is_admin(telegram_id: int) -> bool:
 
 # ------------------------------------------------------- заявка клиента
 
-def _release_pending(telegram_id: int) -> PendingPayment | None:
-    pending = _PENDING.pop(telegram_id, None)
-    task = pending.task if pending else None
-    if task and task is not asyncio.current_task():
-        task.cancel()
-    return pending
-
-
 async def _delete_later(bot: Bot, chat_id: int, message_id: int, delay: float) -> None:
     try:
         await asyncio.sleep(delay)
@@ -124,51 +185,82 @@ async def _delete_later(bot: Bot, chat_id: int, message_id: int, delay: float) -
         pass
 
 
-async def _expire_request(bot: Bot, telegram_id: int, state: FSMContext, pending: PendingPayment) -> None:
+async def _expire_request(bot: Bot, telegram_id: int, token: str, delay: float) -> None:
     try:
-        await asyncio.sleep(PAYMENT_TIMEOUT_SECONDS)
+        await asyncio.sleep(max(delay, 0))
     except asyncio.CancelledError:
         return
-    if _PENDING.get(telegram_id) is not pending:
+    current = load_pending(telegram_id)
+    if current is None or current.token != token:
+        return  # заявку уже отправили, отменили или заменили новой
+    drop_pending(telegram_id)
+    if not current.message_id:
         return
-    _PENDING.pop(telegram_id, None)
     try:
-        await state.clear()
-    except Exception:  # noqa: BLE001 - автоотмена не должна падать из-за хранилища FSM
-        logger.exception("Could not clear FSM state for %s", telegram_id)
-    if pending.message_id:
+        await bot.edit_message_text(
+            EXPIRED_TEXT, chat_id=current.chat_id, message_id=current.message_id, reply_markup=menu_button()
+        )
+    except TelegramAPIError:
         try:
-            await bot.edit_message_text(
-                EXPIRED_TEXT, chat_id=pending.chat_id, message_id=pending.message_id, reply_markup=menu_button()
-            )
+            await bot.send_message(current.chat_id, EXPIRED_TEXT, reply_markup=menu_button())
         except TelegramAPIError:
-            await bot.send_message(pending.chat_id, EXPIRED_TEXT, reply_markup=menu_button())
+            logger.warning("Could not tell %s that the payment request expired", telegram_id)
+
+
+def _schedule_expiry(bot: Bot, pending: PendingPayment) -> None:
+    old = _TASKS.pop(pending.telegram_id, None)
+    if old and old is not asyncio.current_task():
+        old.cancel()
+    delay = (pending.expires_at - _now()).total_seconds()
+    _TASKS[pending.telegram_id] = asyncio.create_task(
+        _expire_request(bot, pending.telegram_id, pending.token, delay)
+    )
+
+
+async def resume_pending_requests(bot: Bot) -> None:
+    """При старте бота: заявки, ждавшие чек до перезапуска, снова получают таймер автоотмены.
+    Просроченные закрываются сразу (клиенту уйдёт сообщение «заявка отменена»)."""
+    for pending in list_pending():
+        _schedule_expiry(bot, pending)
+
+
+def _has_pending_payment(message: types.Message) -> bool:
+    """Фильтр: личное сообщение клиента, у которого сейчас открыта заявка (не команда)."""
+    if not message.from_user or getattr(getattr(message, "chat", None), "type", "private") != "private":
+        return False
+    if (message.text or "").startswith("/"):
+        return False
+    return load_pending(message.from_user.id) is not None
 
 
 async def begin_payment_request(
-    query: CallbackQuery, state: FSMContext, bot: Bot, *, subscription_ids: list[int], details: str | None
+    query: CallbackQuery, bot: Bot, *, subscription_ids: list[int], details: str | None
 ) -> None:
     """Создаёт ровно одну активную заявку на человека."""
     telegram_id = query.from_user.id
-    existing = _PENDING.get(telegram_id)
+    existing = load_pending(telegram_id)
+    if existing and existing.expires_at > _now():
+        await query.answer("Заявка на оплату уже создана. Отправьте чек в ответ на неё.", show_alert=True)
+        return
     if existing:
-        if await state.get_state() == PaymentReceipt.waiting_for_file.state:
-            await query.answer("Заявка на оплату уже создана. Отправьте чек в ответ на неё.", show_alert=True)
-            return
-        _release_pending(telegram_id)  # состояние сброшено (например, /start) - заявка протухла
+        drop_pending(telegram_id)  # срок вышел, а таймер не успел сработать (например, бот был выключен)
 
     if not details:
         await query.answer()
         await bot.send_message(query.from_user.id, NO_DETAILS_TEXT, reply_markup=no_details_keyboard())
         return
 
-    # Занимаем слот до первого await, чтобы двойное нажатие не создало две заявки.
-    pending = PendingPayment(chat_id=query.from_user.id, subscription_ids=list(subscription_ids))
-    _PENDING[telegram_id] = pending
+    # Заявка записывается до первого await, поэтому двойное нажатие не создаст вторую.
+    pending = PendingPayment(
+        telegram_id=telegram_id,
+        chat_id=query.from_user.id,
+        subscription_ids=list(subscription_ids),
+        expires_at=_now() + timedelta(seconds=PAYMENT_TIMEOUT_SECONDS),
+        token=secrets.token_hex(6),
+    )
+    save_pending(pending)
     await query.answer()
     try:
-        await state.set_state(PaymentReceipt.waiting_for_file)
-        await state.update_data(subscription_ids=list(subscription_ids))
         sent = await bot.send_message(
             pending.chat_id,
             "Ваши реквизиты для оплаты:\n"
@@ -179,11 +271,11 @@ async def begin_payment_request(
             reply_markup=_cancel_keyboard(),
         )
     except Exception:
-        _release_pending(telegram_id)
-        await state.clear()
+        drop_pending(telegram_id)
         raise
     pending.message_id = sent.message_id
-    pending.task = asyncio.create_task(_expire_request(bot, telegram_id, state, pending))
+    save_pending(pending)
+    _schedule_expiry(bot, pending)
 
 
 def _payable_subscriptions(db, user: User) -> tuple[list[Subscription], str | None, str | None]:
@@ -213,7 +305,7 @@ def _payable_subscriptions(db, user: User) -> tuple[list[Subscription], str | No
 
 
 @router.callback_query(lambda query: query.data == "menu:pay")
-async def pay_menu(query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def pay_menu(query: CallbackQuery, bot: Bot) -> None:
     if not query.from_user:
         return
     with SessionLocal() as db:
@@ -226,11 +318,11 @@ async def pay_menu(query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     if error:
         await query.answer(error, show_alert=True)
         return
-    await begin_payment_request(query, state, bot, subscription_ids=subscription_ids, details=details)
+    await begin_payment_request(query, bot, subscription_ids=subscription_ids, details=details)
 
 
 @router.callback_query(lambda query: (query.data or "").startswith(("payment:send:", "payment:send-group:")))
-async def request_receipt(query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def request_receipt(query: CallbackQuery, bot: Bot) -> None:
     """Кнопка «Подтвердить оплату» из напоминания об оплате."""
     if not query.from_user or not query.data:
         return
@@ -257,14 +349,13 @@ async def request_receipt(query: CallbackQuery, state: FSMContext, bot: Bot) -> 
             await query.answer("Подписки к оплате не найдены", show_alert=True)
             return
         subscription_ids = [item.id for item in subscriptions]
-    await begin_payment_request(query, state, bot, subscription_ids=subscription_ids, details=details)
+    await begin_payment_request(query, bot, subscription_ids=subscription_ids, details=details)
 
 
 @router.callback_query(lambda query: query.data == "payment:cancel")
-async def cancel_receipt(query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    await state.clear()
+async def cancel_receipt(query: CallbackQuery, bot: Bot) -> None:
     if query.from_user:
-        _release_pending(query.from_user.id)
+        drop_pending(query.from_user.id)
     await query.answer()
     message = query.message
     if not message:
@@ -331,14 +422,14 @@ async def _send_details(message: types.Message, details: str | None) -> None:
 
 # ------------------------------------------------------ получение чека
 
-@router.message(PaymentReceipt.waiting_for_file)
-async def receive_receipt(message: types.Message, state: FSMContext, bot: Bot) -> None:
+@router.message(_has_pending_payment)
+async def receive_receipt(message: types.Message, bot: Bot) -> None:
     if not message.from_user:
         return
     telegram_id = message.from_user.id
-    pending = _PENDING.get(telegram_id)
-    if pending is None:
-        await state.clear()
+    pending = load_pending(telegram_id)
+    if pending is None or pending.expires_at <= _now():
+        drop_pending(telegram_id)
         await message.answer(
             "Заявка на оплату уже закрыта. Создайте новую через меню.", reply_markup=menu_button()
         )
@@ -347,8 +438,7 @@ async def receive_receipt(message: types.Message, state: FSMContext, bot: Bot) -
     if not file_id:
         await message.answer("Нужно отправить фото или документ с чеком. Для отмены нажмите «Отменить» в сообщении выше.")
         return
-    data = await state.get_data()
-    subscription_ids = data.get("subscription_ids") or pending.subscription_ids
+    subscription_ids = pending.subscription_ids
     try:
         subscription_ids = sorted({int(value) for value in subscription_ids})
     except (TypeError, ValueError):
@@ -371,8 +461,7 @@ async def receive_receipt(message: types.Message, state: FSMContext, bot: Bot) -
         workspace = db.query(AppSetting).filter(AppSetting.key == WORKSPACE_KEY).first()
         config = workspace.value_json if workspace and isinstance(workspace.value_json, dict) else {}
         if not owns_all or not config.get("chat_id") or not config.get("topics", {}).get("Заявки и Оплата"):
-            await state.clear()
-            _release_pending(telegram_id)
+            drop_pending(telegram_id)
             await message.answer("Не удалось передать чек. Обратитесь в рабочий аккаунт.", reply_markup=menu_button())
             return
         if group:
@@ -424,8 +513,7 @@ async def receive_receipt(message: types.Message, state: FSMContext, bot: Bot) -
             if row and row.status == "pending":
                 row.status = "delivery_failed"
                 db.commit()
-        await state.clear()
-        _release_pending(telegram_id)
+        drop_pending(telegram_id)
         await message.answer(
             "Не удалось передать чек администратору. Попробуйте позже или напишите в рабочий аккаунт.",
             reply_markup=menu_button(),
@@ -438,8 +526,7 @@ async def receive_receipt(message: types.Message, state: FSMContext, bot: Bot) -
             row.operator_message_id = copied.message_id
             db.commit()
 
-    await state.clear()
-    finished = _release_pending(telegram_id)
+    finished = drop_pending(telegram_id)
     if finished and finished.message_id:
         try:  # чек уже отправлен - отменять заявку поздно
             await bot.edit_message_reply_markup(chat_id=finished.chat_id, message_id=finished.message_id, reply_markup=None)
@@ -632,4 +719,6 @@ async def open_payment_user(query: CallbackQuery) -> None:
     await query.answer("Скоро: откроется карточка пользователя в mini app")
 
 
-__all__ = ["router", "PaymentReceipt", "begin_payment_request", "_parse_payment_target"]
+__all__ = [
+    "router", "begin_payment_request", "resume_pending_requests", "load_pending", "drop_pending", "_parse_payment_target",
+]

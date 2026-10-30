@@ -23,7 +23,7 @@ SCRIPT = textwrap.dedent(
     from datetime import datetime, timedelta, timezone
     from lumica.api import create_app
     from lumica.api.app import _token_hash
-    from lumica.domain.models import AuthSession, Group, Subscription, User
+    from lumica.domain.models import Application, AuthSession, Group, Subscription, User
     from lumica.infra.db import SessionLocal
     app = create_app()
     app.before_request_funcs[None] = []  # CSRF здесь не проверяем
@@ -41,7 +41,12 @@ SCRIPT = textwrap.dedent(
         group = Group(name="Fam", admin_user_id=client.id)
         db.add(group); db.flush()
         client.group_id = group.id; other.group_id = group.id
-        db.commit(); cid = client.id; oid = other.id; aid = admin.id
+        applicant = User(telegram_id="900", name="TgName", status="unverified")
+        db.add(applicant); db.flush()
+        a1 = Application(user_id=applicant.id, full_name="Иван Иванов", extra_info="нужен прокси")
+        a2 = Application(user_id=applicant.id, full_name="Петр", extra_info=None)
+        db.add_all([a1, a2]); db.flush()
+        db.commit(); cid = client.id; oid = other.id; aid = admin.id; a1id = a1.id; a2id = a2.id; apid = applicant.id
     c = app.test_client(); c.set_cookie("session", "tok")
     out = {}
     for name, payload in {
@@ -55,11 +60,14 @@ SCRIPT = textwrap.dedent(
     out["overview"] = c.get(f"/api/admin/users/{cid}/overview").status_code
     import requests as _requests
     sent_to = []
+    texts = []
     class _Resp:
         status_code = 200
+        ok = True
         def json(self): return {"ok": True}
+        def raise_for_status(self): return None
     def _fake_post(url, json=None, timeout=None):
-        sent_to.append((json or {}).get("chat_id")); return _Resp()
+        sent_to.append((json or {}).get("chat_id")); texts.append(json or {}); return _Resp()
     _requests.post = _fake_post
     os.environ["TELEGRAM_BOT_TOKEN"] = "t"
     import lumica.services.broadcasts as _b
@@ -73,6 +81,22 @@ SCRIPT = textwrap.dedent(
     out["fin_expenses"] = c.post("/api/admin/finance/expenses", json={"amount": "1500"}).get_json()["summary"]["expenses"]
     out["fin_bad"] = c.post("/api/admin/finance/expenses", json={"amount": "abc"}).status_code
     out["fin_empty"] = c.post("/api/admin/finance/expenses", json={}).status_code
+    lst = c.get("/api/admin/applications").get_json()["applications"]
+    out["app_list"] = [lst[0]["id"] == a2id, len(lst), lst[1]["full_name"], lst[1]["telegram_id"], lst[1]["extra_info"]]
+    out["app_detail_404"] = c.get("/api/admin/applications/9999").status_code
+    out["app_detail"] = c.get(f"/api/admin/applications/{a1id}").get_json()["application"]["status"]
+    texts.clear()
+    ok = c.post(f"/api/admin/applications/{a1id}/approve", json={"message": "Добро пожаловать!"}).get_json()
+    out["app_approve"] = [ok["ok"], ok["notified"], ok["application"]["status"]]
+    out["app_approve_msg"] = [(t["chat_id"], t["text"], t["reply_markup"]["inline_keyboard"][0][0]["callback_data"]) for t in texts]
+    out["app_approve_again"] = c.post(f"/api/admin/applications/{a1id}/approve", json={}).status_code
+    texts.clear()
+    rej = c.post(f"/api/admin/applications/{a2id}/reject", json={"reason": "нет мест"}).get_json()
+    out["app_reject"] = [rej["ok"], rej["application"]["status"], rej["application"]["review_note"]]
+    out["app_reject_msg"] = [t["text"] for t in texts]
+    out["app_reject_again"] = c.post(f"/api/admin/applications/{a2id}/reject", json={}).status_code
+    with SessionLocal() as db:
+        out["app_user_name"] = db.query(User).filter(User.id == apid).first().name
     out["identity"] = c.post(f"/api/admin/users/{cid}/identity",
                              json={"name": "New Name", "username": "@new_user", "telegram_id": "555"}).status_code
     out["identity_duplicate"] = c.post(f"/api/admin/users/{cid}/identity", json={"telegram_id": "1"}).status_code
@@ -99,6 +123,13 @@ def test_admin_subscription_endpoints_do_not_crash_in_the_real_app():
         "broadcast": {"ok": True, "total": 2, "sent": 2, "failed": [], "log_posted": False},
         "broadcast_sent_to": ["2", "3"], "broadcast_bad_type": 400, "broadcast_no_users": 400,
         "fin_summary": [1, 0], "fin_expenses": "1500.00", "fin_bad": 400, "fin_empty": 400,
+        "app_list": [True, 2, "Иван Иванов", "900", "нужен прокси"], "app_detail_404": 404, "app_detail": "approved" if False else "new",
+        "app_approve": [True, True, "approved"],
+        "app_approve_msg": [["900", "Ваша заявка одобрена ✅\n\nДобро пожаловать!", "menu:main"]],
+        "app_approve_again": 409,
+        "app_reject": [True, "rejected", "нет мест"],
+        "app_reject_msg": ["Ваша заявка отклонена ❌\n\nПричина: нет мест"], "app_reject_again": 409,
+        "app_user_name": "Иван Иванов",
         "identity": 200, "identity_duplicate": 409, "identity_bad_username": 400,
         "delete_self": 400, "delete_client": 200, "client_gone": True, "new_group_admin": True,
     }

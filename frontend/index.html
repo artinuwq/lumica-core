@@ -211,10 +211,26 @@
                         <section id="work-user-create-page" class="work-page hidden">
                             <div class="work-page-head">
                                 <button class="work-back-btn" data-work-back="work-clients-page">← Назад</button>
-                                <div class="work-page-title">Новый пользователь</div>
+                                <div id="work-user-create-title" class="work-page-title">Новый пользователь</div>
                             </div>
 
-                            <div class="form-card">
+                            <div id="work-app-block" class="hidden">
+                                <div class="card">
+                                    <div class="left">
+                                        <div class="badge">👤</div>
+                                        <div>
+                                            <div class="card-title" id="work-app-name">—</div>
+                                            <div class="card-sub" id="work-app-meta">—</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-card">
+                                    <div class="form-card-title">Сообщение клиента</div>
+                                    <div id="work-app-message" class="work-app-quote">—</div>
+                                </div>
+                            </div>
+
+                            <div id="work-user-who-card" class="form-card">
                                 <div class="form-card-title">Кто это</div>
                                 <select id="work-user-create-mode" data-ui="segmented">
                                     <option value="existing">Уже есть</option>
@@ -288,7 +304,13 @@
                                 <div id="work-user-members-list" class="binding-list"></div>
                             </div>
 
+                            <div id="work-app-reply-card" class="form-card hidden">
+                                <div class="form-card-title">Передать клиенту</div>
+                                <textarea id="work-app-reply" class="field-input field-textarea" rows="3" placeholder="Если оставить пустым, клиент получит: «Ваша заявка одобрена»"></textarea>
+                            </div>
+
                             <button id="work-user-create-submit" type="button" class="work-btn work-btn-primary work-btn-center">Создать пользователя</button>
+                            <button id="work-app-reject-btn" type="button" class="work-btn work-btn-center work-btn-danger hidden">Отклонить заявку</button>
                             <div id="work-user-create-status" class="work-note hidden"></div>
                         </section>
 
@@ -428,6 +450,10 @@
                                 <div class="work-page-title">Администрирование</div>
                             </div>
                             <div class="work-actions">
+                                <button id="work-admin-applications-btn" type="button" class="work-action-link">
+                                    <span id="work-admin-applications-label" class="work-action-link-label">Заявки</span>
+                                    <span class="work-action-link-chevron" aria-hidden="true">›</span>
+                                </button>
                                 <button id="work-admin-finance-btn" type="button" class="work-action-link">
                                     <span class="work-action-link-label">Финансы</span>
                                     <span class="work-action-link-chevron" aria-hidden="true">›</span>
@@ -573,6 +599,19 @@
                                 <button id="fin-expenses-save" type="button" class="work-btn work-btn-primary work-btn-center">Сохранить</button>
                                 <div id="fin-expenses-status" class="work-note hidden"></div>
                             </div>
+                        </section>
+
+                        <section id="work-applications-page" class="work-page hidden">
+                            <div class="work-page-head">
+                                <button class="work-back-btn" data-work-back="work-admin-page">← Назад</button>
+                                <div class="work-page-title">Заявки</div>
+                            </div>
+                            <div id="work-applications-filter" class="work-chip-grid work-chip-grid-2">
+                                <button type="button" class="work-chip active" data-app-filter="open">Новые</button>
+                                <button type="button" class="work-chip" data-app-filter="all">Все</button>
+                            </div>
+                            <div id="work-applications-status" class="work-note hidden"></div>
+                            <div id="work-applications-list" class="app-list"></div>
                         </section>
 
                         <section id="work-panels-page" class="work-page hidden">
@@ -1003,6 +1042,7 @@
             <div id="work-center-modal-title" class="work-modal-title"></div>
             <div id="work-center-modal-text" class="work-modal-text"></div>
             <div id="work-center-modal-list" class="work-modal-list hidden"></div>
+            <textarea id="work-center-modal-input" class="field-input field-textarea hidden" rows="3"></textarea>
             <div id="work-center-modal-actions" class="work-modal-actions"></div>
         </div>
     </div>

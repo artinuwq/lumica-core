@@ -7,6 +7,7 @@ from lumica.domain.models import (
 )
 from lumica.services import user_provisioning
 from lumica.services import subscription_updates
+from lumica.services import applications as application_service
 from lumica.services import broadcasts, finance, user_deletion
 from lumica.services.operator_events import USER_EVENTS_TOPIC, post_to_topic as post_operator_topic
 from lumica.services.panel_labels import server_code
@@ -2111,6 +2112,104 @@ def register_admin_routes(app, deps):
             db.delete(row)
             db.commit()
             return jsonify({"ok": True, "deleted": True})
+
+    def _serialize_application(application, user) -> dict:
+        return {
+            "id": application.id,
+            "user_id": application.user_id,
+            "full_name": application.full_name,
+            "status": application.status,
+            "extra_info": application.extra_info,
+            "review_note": application.review_note,
+            "created_at": application.created_at.isoformat() if getattr(application, "created_at", None) else None,
+            "reviewed_at": application.reviewed_at.isoformat() if application.reviewed_at else None,
+            "telegram_id": user.telegram_id if user else None,
+            "username": user.username if user else None,
+            "tg_name": user.name if user else None,
+        }
+
+    _MENU_MARKUP = {"inline_keyboard": [[{"text": "Меню", "callback_data": "menu:main"}]]}
+
+    @app.get("/api/admin/applications")
+    def admin_applications():
+        """Заявки на регистрацию из бота (новые сверху)."""
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            rows = db.query(Application).order_by(Application.id.desc()).limit(300).all()
+            users = {u.id: u for u in db.query(User).filter(User.id.in_([r.user_id for r in rows] or [0])).all()}
+            return jsonify({"ok": True, "applications": [_serialize_application(r, users.get(r.user_id)) for r in rows]})
+
+    @app.get("/api/admin/applications/<int:application_id>")
+    def admin_application_detail(application_id: int):
+        _, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        with SessionLocal() as db:
+            row = db.query(Application).filter(Application.id == application_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Заявка не найдена"}), 404
+            user = db.query(User).filter(User.id == row.user_id).first()
+            return jsonify({"ok": True, "application": _serialize_application(row, user)})
+
+    @app.post("/api/admin/applications/<int:application_id>/approve")
+    def admin_application_approve(application_id: int):
+        """Подтверждает заявку (клиент к этому моменту уже настроен формой создания) и сообщает ему."""
+        auth, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        message = str((request.get_json(silent=True) or {}).get("message") or "").strip()[:1000]
+        with SessionLocal() as db:
+            row = db.query(Application).filter(Application.id == application_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Заявка не найдена"}), 404
+            try:
+                user = application_service.approve(db, row, staff_user_id=auth["user_id"])
+            except application_service.ApplicationError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 409
+            user.name = row.full_name  # ФИО из заявки полезнее имени из профиля Telegram
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=user.id,
+                action="application_approved",
+                changes={"application_id": row.id, "message": message or None},
+            )
+            db.commit()
+            text = "Ваша заявка одобрена ✅" + (f"\n\n{message}" if message else "")
+            notified = send_raw(user.telegram_id, text, reply_markup=_MENU_MARKUP)
+            return jsonify({"ok": True, "notified": bool(notified), "application": _serialize_application(row, user)})
+
+    @app.post("/api/admin/applications/<int:application_id>/reject")
+    def admin_application_reject(application_id: int):
+        """Отклоняет заявку; причину (если указана) получает клиент."""
+        auth, err = _auth_context(require_role="admin")
+        if err:
+            return err
+        reason = str((request.get_json(silent=True) or {}).get("reason") or "").strip()[:1000]
+        with SessionLocal() as db:
+            row = db.query(Application).filter(Application.id == application_id).first()
+            if not row:
+                return jsonify({"ok": False, "error": "Заявка не найдена"}), 404
+            try:
+                application_service.reject(db, row, staff_user_id=auth["user_id"], note=reason or None)
+            except application_service.ApplicationError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 409
+            user = db.query(User).filter(User.id == row.user_id).first()
+            record_user_event(
+                db,
+                actor_user_id=auth["user_id"],
+                subject_user_id=user.id if user else None,
+                action="application_rejected",
+                changes={"application_id": row.id, "reason": reason or None},
+            )
+            db.commit()
+            text = "Ваша заявка отклонена ❌\n\n" + (
+                f"Причина: {reason}" if reason else "Если вы не знаете почему, напишите нам."
+            )
+            notified = send_raw(user.telegram_id, text, reply_markup=_MENU_MARKUP) if user else False
+            return jsonify({"ok": True, "notified": bool(notified), "application": _serialize_application(row, user)})
 
     @app.get("/api/admin/finance/summary")
     def admin_finance_summary():

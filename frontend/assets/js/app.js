@@ -62,6 +62,7 @@ const statusCard = document.getElementById("status-card");
         const adminSettingUrl = (settingKey) => `${adminSettingsUrl}/${encodeURIComponent(settingKey)}`;
         const adminPanelsUrl = `${window.location.origin}/api/admin/panels`;
         const adminBroadcastsUrl = `${window.location.origin}/api/admin/broadcasts`;
+        const adminApplicationsUrl = `${window.location.origin}/api/admin/applications`;
         const adminFinanceSummaryUrl = `${window.location.origin}/api/admin/finance/summary`;
         const adminFinanceExpensesUrl = `${window.location.origin}/api/admin/finance/expenses`;
         const adminPanelsTestUrl = `${window.location.origin}/api/admin/panels/test-connection`;
@@ -247,8 +248,28 @@ const statusCard = document.getElementById("status-card");
         const workCenterModalTextEl = document.getElementById("work-center-modal-text");
         const workCenterModalListEl = document.getElementById("work-center-modal-list");
         const workCenterModalActionsEl = document.getElementById("work-center-modal-actions");
+        const workCenterModalInputEl = document.getElementById("work-center-modal-input");
+        const workAdminApplicationsBtnEl = document.getElementById("work-admin-applications-btn");
+        const workAdminApplicationsLabelEl = document.getElementById("work-admin-applications-label");
+        const workApplicationsListEl = document.getElementById("work-applications-list");
+        const workApplicationsStatusEl = document.getElementById("work-applications-status");
+        const workApplicationsFilterEl = document.getElementById("work-applications-filter");
+        const workAppBlockEl = document.getElementById("work-app-block");
+        const workAppNameEl = document.getElementById("work-app-name");
+        const workAppMetaEl = document.getElementById("work-app-meta");
+        const workAppMessageEl = document.getElementById("work-app-message");
+        const workAppReplyCardEl = document.getElementById("work-app-reply-card");
+        const workAppReplyEl = document.getElementById("work-app-reply");
+        const workAppRejectBtnEl = document.getElementById("work-app-reject-btn");
+        const workUserWhoCardEl = document.getElementById("work-user-who-card");
+        const workUserCreateTitleEl = document.getElementById("work-user-create-title");
         const broadcastState = { type: "", recipientIds: [], selected: new Set(), sending: false };
         const financeState = { summary: null, loading: false };
+        // Заявки на регистрацию: список и режим «одобрение» на форме создания пользователя.
+        const appsState = { items: [], filter: "open", loading: false };
+        const OPEN_APP_STATUSES = ["new", "reviewing"];
+        let applicationMode = null;
+        let lastCenterModalInput = "";
         const finEl = (id) => document.getElementById(id);
         // Полноэкранные окна: что писать в капсуле сверху, пока они открыты.
         const fullscreenSheetTitles = new Map([
@@ -505,6 +526,7 @@ const statusCard = document.getElementById("status-card");
             ["work-admin-page", "Администрирование"],
             ["work-broadcast-page", "Рассылка"],
             ["work-broadcast-recipients-page", "Получатели"],
+            ["work-applications-page", "Заявки"],
             ["work-finance-page", "Финансы"],
             ["work-finance-details-page", "Детали"],
             ["work-finance-debtors-page", "Должники"],
@@ -725,6 +747,9 @@ const statusCard = document.getElementById("status-card");
         }
 
         function resolveWorkContextTitle(pageId) {
+            if (pageId === "work-user-create-page" && applicationMode) {
+                return `Заявка №${applicationMode.id}`;
+            }
             if (pageId === "work-client-page") {
                 const dynamicTitle = String(workClientPageTitleEl?.textContent || "").trim();
                 return dynamicTitle || "Клиент";
@@ -755,6 +780,9 @@ const statusCard = document.getElementById("status-card");
             }
             if (String(pageId).startsWith("work-finance")) {
                 return "refresh-work-finance";
+            }
+            if (pageId === "work-applications-page") {
+                return "refresh-work-applications";
             }
             if (pageId === "work-inbound-detail-page") {
                 return "";
@@ -852,6 +880,8 @@ const statusCard = document.getElementById("status-card");
                     workState.inbounds = Array.isArray(inboundsResp?.inbounds) ? inboundsResp.inbounds : [];
                     renderWorkInboundsManager();
                     renderWorkInboundSelectOptions();
+                } else if (action === "refresh-work-applications") {
+                    await loadApplications();
                 } else if (action === "refresh-work-finance") {
                     await loadFinanceSummary();
                 } else if (action === "refresh-work-panels") {
@@ -3613,6 +3643,179 @@ const statusCard = document.getElementById("status-card");
         workFilterApplyEl?.addEventListener("click", () => setWorkSheetVisible(workClientsFiltersOverlayEl, false));
         workClientsFiltersCloseEl?.addEventListener("click", () => setWorkSheetVisible(workClientsFiltersOverlayEl, false));
 
+        // ---------- Заявки на регистрацию ----------
+        const APP_STATUS_LABELS = {
+            new: "новая", reviewing: "рассматривается", need_more_info: "нужна информация",
+            approved: "одобрена", rejected: "отклонена", cancelled: "отменена",
+        };
+
+        function appDisplayName(app) {
+            return app.full_name || app.tg_name || (app.username ? `@${app.username}` : `#${app.user_id}`);
+        }
+
+        function appMeta(app) {
+            return [app.username ? `@${app.username}` : "без username", `TG ${app.telegram_id || "—"}`].join(" · ");
+        }
+
+        function updateApplicationsHub() {
+            const open = appsState.items.filter((a) => OPEN_APP_STATUSES.includes(a.status)).length;
+            if (workAdminApplicationsLabelEl) {
+                workAdminApplicationsLabelEl.textContent = open ? `Заявки · ${open}` : "Заявки";
+            }
+        }
+
+        async function loadApplications({ quiet = false } = {}) {
+            if (appsState.loading) return;
+            appsState.loading = true;
+            try {
+                const response = await fetchJson(adminApplicationsUrl, false);
+                appsState.items = Array.isArray(response?.applications) ? response.applications : [];
+                updateApplicationsHub();
+                renderApplicationsList();
+            } catch (err) {
+                console.error("load applications error:", err);
+                if (!quiet) setFormNote(workApplicationsStatusEl, err?.message || "Не удалось загрузить заявки", "error");
+            } finally {
+                appsState.loading = false;
+            }
+        }
+
+        function renderApplicationsList() {
+            if (!workApplicationsListEl) return;
+            workApplicationsFilterEl?.querySelectorAll("[data-app-filter]").forEach((chip) => {
+                chip.classList.toggle("active", chip.dataset.appFilter === appsState.filter);
+            });
+            const items = appsState.filter === "open"
+                ? appsState.items.filter((a) => OPEN_APP_STATUSES.includes(a.status))
+                : appsState.items;
+            workApplicationsListEl.innerHTML = "";
+            if (!items.length) {
+                const empty = document.createElement("div");
+                empty.className = "work-empty";
+                empty.textContent = appsState.filter === "open" ? "Новых заявок нет 🎉" : "Заявок пока нет.";
+                workApplicationsListEl.appendChild(empty);
+                return;
+            }
+            items.forEach((app) => {
+                const row = document.createElement("button");
+                row.type = "button";
+                row.className = `app-row${OPEN_APP_STATUSES.includes(app.status) ? " new" : ""}`;
+                row.innerHTML = `<span class="avatar" aria-hidden="true">👤</span>
+                    <span class="app-row-text"><div class="app-row-name"></div><div class="app-row-sub"></div></span>
+                    <span class="app-row-badge"></span>`;
+                row.querySelector(".app-row-name").textContent = appDisplayName(app);
+                row.querySelector(".app-row-sub").textContent =
+                    `${appMeta(app)}${app.created_at ? ` · ${fmtDateOnly(app.created_at)}` : ""}`;
+                row.querySelector(".app-row-badge").textContent = APP_STATUS_LABELS[app.status] || app.status;
+                row.addEventListener("click", () => {
+                    openApplication(app).catch((err) => {
+                        console.error("open application error:", err);
+                        setFormNote(workApplicationsStatusEl, err?.message || "Не удалось открыть заявку", "error");
+                    });
+                });
+                workApplicationsListEl.appendChild(row);
+            });
+        }
+
+        workApplicationsFilterEl?.addEventListener("click", (event) => {
+            const chip = event.target.closest("[data-app-filter]");
+            if (!chip) return;
+            appsState.filter = chip.dataset.appFilter;
+            renderApplicationsList();
+        });
+        workAdminApplicationsBtnEl?.addEventListener("click", () => switchWorkPage("work-applications-page"));
+
+        /** Включает/выключает вид «рассмотрение заявки» на форме создания пользователя. */
+        function setApplicationMode(app) {
+            applicationMode = app || null;
+            const on = Boolean(app);
+            workAppBlockEl?.classList.toggle("hidden", !on);
+            workAppReplyCardEl?.classList.toggle("hidden", !on);
+            workAppRejectBtnEl?.classList.toggle("hidden", !on);
+            workUserWhoCardEl?.classList.toggle("hidden", on);
+            if (workUserCreateTitleEl) workUserCreateTitleEl.textContent = on ? `Заявка №${app.id}` : "Новый пользователь";
+            if (workUserCreateSubmitEl) workUserCreateSubmitEl.textContent = on ? "Подтвердить заявку" : "Создать пользователя";
+            if (workAppReplyEl) workAppReplyEl.value = "";
+            const backBtn = document.querySelector("#work-user-create-page > .work-page-head .work-back-btn");
+            const backTarget = on ? "work-applications-page" : "work-clients-page";
+            if (backBtn) backBtn.dataset.workBack = backTarget;
+            workBackTargetByPage.set("work-user-create-page", backTarget);
+            updateWorkPageContext(getActiveWorkPageId());  // в капсуле «Заявка №N» вместо «Новый пользователь»
+            if (on) {
+                if (workAppNameEl) workAppNameEl.textContent = appDisplayName(app);
+                if (workAppMetaEl) workAppMetaEl.textContent = appMeta(app);
+                if (workAppMessageEl) workAppMessageEl.textContent = app.extra_info || "Клиент ничего не добавил";
+            }
+        }
+
+        async function openApplication(app) {
+            if (!OPEN_APP_STATUSES.includes(app.status)) {
+                await askCenterModal({
+                    title: `Заявка №${app.id}`,
+                    text: [
+                        `ФИО: ${app.full_name}`,
+                        `Статус: ${APP_STATUS_LABELS[app.status] || app.status}`,
+                        `Сообщение: ${app.extra_info || "—"}`,
+                        app.review_note ? `Комментарий: ${app.review_note}` : "",
+                    ].filter(Boolean).join("\n"),
+                    rows: [[{ id: "close", label: "Закрыть" }]],
+                });
+                return;
+            }
+            const fresh = (await fetchJson(`${adminApplicationsUrl}/${app.id}`, false))?.application || app;
+            if (!OPEN_APP_STATUSES.includes(fresh.status)) {
+                await loadApplications();
+                return;
+            }
+            // Входим на форму создания (она сбрасывается при входе), затем выбираем клиента из заявки.
+            switchWorkPage("work-user-create-page");
+            setApplicationMode(fresh);
+            if (workUserCreateModeEl) workUserCreateModeEl.value = "existing";
+            if (workUserExistingSelectEl) {
+                let option = [...workUserExistingSelectEl.options].find((o) => o.value === String(fresh.user_id));
+                if (!option) {
+                    option = document.createElement("option");
+                    option.value = String(fresh.user_id);
+                    workUserExistingSelectEl.appendChild(option);
+                }
+                option.textContent = appDisplayName(fresh);
+                option.dataset.metaTop = fresh.username ? `@${fresh.username}` : "без username";
+                option.dataset.metaBottom = `ID ${fresh.telegram_id || "—"}`;
+                workUserExistingSelectEl.value = String(fresh.user_id);
+                workUserExistingSelectEl.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            updateUserCreateMode();
+        }
+
+        workAppRejectBtnEl?.addEventListener("click", async () => {
+            const application = applicationMode;
+            if (!application) return;
+            const choice = await askCenterModal({
+                title: "Отклонить заявку?",
+                text: "Клиент получит сообщение. Причину можно указать ниже, это необязательно.",
+                inputPlaceholder: "Причина отказа",
+                rows: [[{ id: "cancel", label: "Отмена" }, { id: "reject", label: "Отклонить", variant: "danger" }]],
+            });
+            if (choice !== "reject") return;
+            const reason = lastCenterModalInput.trim();
+            workAppRejectBtnEl.disabled = true;
+            try {
+                const result = await postJson(`${adminApplicationsUrl}/${application.id}/reject`, { reason });
+                setApplicationMode(null);
+                switchWorkPage("work-applications-page");
+                setFormNote(
+                    workApplicationsStatusEl,
+                    result?.notified ? "Заявка отклонена, клиент получил сообщение" : "Заявка отклонена, но сообщение клиенту отправить не удалось",
+                    result?.notified ? "success" : "error"
+                );
+            } catch (err) {
+                console.error("reject application error:", err);
+                setFormNote(workUserCreateStatusEl, err?.message || "Не удалось отклонить заявку", "error");
+            } finally {
+                workAppRejectBtnEl.disabled = false;
+            }
+        });
+
         // ---------- Финансы ----------
         const FINANCE_DAY_LABELS = [
             ["15", "15-е число"], ["30", "30-е число"], ["other", "Другие дни"], ["none", "Без даты оплаты"],
@@ -3789,6 +3992,7 @@ const statusCard = document.getElementById("status-card");
 
         function closeCenterModal(result = "cancel") {
             if (!isCenterModalOpen()) return;
+            lastCenterModalInput = String(workCenterModalInputEl?.value || "");
             workCenterModalEl.classList.add("hidden");
             workCenterModalEl.setAttribute("aria-hidden", "true");
             const resolve = centerModalResolve;
@@ -3798,9 +4002,14 @@ const statusCard = document.getElementById("status-card");
         }
 
         /** Окно по центру экрана. rows - строки кнопок: [{id, label, variant, toggleList}]. Возвращает id нажатой кнопки. */
-        function askCenterModal({ title, text = "", listLines = null, rows }) {
+        function askCenterModal({ title, text = "", listLines = null, rows, inputPlaceholder = null }) {
             if (!workCenterModalEl) return Promise.resolve("cancel");
             closeCenterModal("cancel");
+            if (workCenterModalInputEl) {
+                workCenterModalInputEl.value = "";
+                workCenterModalInputEl.placeholder = inputPlaceholder || "";
+                workCenterModalInputEl.classList.toggle("hidden", inputPlaceholder === null);
+            }
             workCenterModalTitleEl.textContent = title;
             workCenterModalTextEl.textContent = text;
             workCenterModalListEl.innerHTML = "";
@@ -4711,6 +4920,29 @@ const statusCard = document.getElementById("status-card");
                 }
 
                 await loadWorkClientsData();
+                if (applicationMode) {
+                    // Заявка: клиент настроен формой, теперь подтверждаем её и сообщаем клиенту.
+                    const application = applicationMode;
+                    let note = "Заявка подтверждена, клиент получил сообщение";
+                    let tone = "success";
+                    try {
+                        const result = await postJson(`${adminApplicationsUrl}/${application.id}/approve`, {
+                            message: String(workAppReplyEl?.value || "").trim(),
+                        });
+                        if (!result?.notified) note = "Заявка подтверждена, но сообщение клиенту отправить не удалось";
+                    } catch (err) {
+                        note = `Клиент настроен, но заявку подтвердить не удалось: ${err?.message || "ошибка"}`;
+                        tone = "error";
+                    }
+                    if (failures.length) {
+                        note += `. Не всё применилось: ${failures.join("; ")}`;
+                        tone = "error";
+                    }
+                    setApplicationMode(null);
+                    switchWorkPage("work-applications-page");
+                    setFormNote(workApplicationsStatusEl, note, tone);
+                    return;
+                }
                 if (userId) await openWorkClientPage(userId);
                 if (failures.length) {
                     setFormNote(
@@ -6227,7 +6459,11 @@ const statusCard = document.getElementById("status-card");
             if (next === "work-panel-detail-page" && !workState.selectedPanelId) {
                 clearWorkPanelDetail();
             }
+            if (applicationMode && !["work-user-create-page", "work-user-member-page"].includes(next)) {
+                setApplicationMode(null);  // вышли из рассмотрения заявки - форма снова обычная
+            }
             if (next === "work-user-create-page" && current !== "work-user-member-page") {
+                if (applicationMode && current !== "work-applications-page") setApplicationMode(null);
                 resetUserCreateForm();
             }
             if (next === "work-user-member-page" && current !== "work-user-member-page") {
@@ -6237,7 +6473,8 @@ const statusCard = document.getElementById("status-card");
             if (adminOnlyMode) {
                 const activeTab = next.includes("panel") || next.includes("inbound")
                     ? "work-panels-page"
-                    : (next === "work-admin-page" || next.startsWith("work-broadcast") || next.startsWith("work-finance"))
+                    : (next === "work-admin-page" || next.startsWith("work-broadcast") || next.startsWith("work-finance")
+                        || next === "work-applications-page" || (applicationMode && next.startsWith("work-user-")))
                         ? "work-admin-page"
                         : "work-clients-page";
                 adminPageButtons.forEach((button) => {
@@ -6255,6 +6492,8 @@ const statusCard = document.getElementById("status-card");
                     renderRecipientList();
                 }
                 if (next === "work-broadcast-page") renderBroadcastPage();
+                if (next === "work-admin-page") loadApplications({ quiet: true });
+                if (next === "work-applications-page") loadApplications();
                 if (next.startsWith("work-finance")) {
                     // Заходим на главную финансов - берём свежие цифры; на вложенных страницах хватает уже загруженных.
                     if (next === "work-finance-page" || !financeState.summary) loadFinanceSummary();

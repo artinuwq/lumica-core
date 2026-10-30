@@ -12,7 +12,9 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
-from lumica.domain.models import AppSetting, Group, Panel, Subscription, SubscriptionVpnAccount, User, VpnAccount
+from lumica.domain.models import (
+    Application, AppSetting, Group, Panel, Subscription, SubscriptionVpnAccount, User, VpnAccount,
+)
 from lumica.infra.db import SessionLocal
 from lumica.services import groups as group_service
 from lumica.services import subscription_links as subscription_links_module
@@ -27,6 +29,29 @@ USER_GREETING = (
     "статус инфраструктуры и связаться с поддержкой."
 )
 HELP_TEXT = "Здесь будет справка."
+
+# Состояние клиента определяет, какое меню ему показывать.
+STATE_ACTIVE = "active"        # подписка найдена
+STATE_APPLICANT = "applicant"  # подписки нет, но заявка уже подана
+STATE_NEW = "new"              # подписки нет и заявки нет
+APPLICATION_OPEN_STATUSES = ("new", "reviewing", "need_more_info")
+APPLICATION_STATUS_LABELS = {
+    "new": "на рассмотрении ⏳",
+    "reviewing": "рассматривается ⏳",
+    "need_more_info": "нужна дополнительная информация ✍️",
+    "approved": "одобрена ✅",
+    "rejected": "отклонена ❌",
+    "cancelled": "отменена",
+}
+GREETINGS = {
+    STATE_ACTIVE: USER_GREETING,
+    STATE_NEW: (
+        "Здравствуйте! Добро пожаловать в Lumica.\n\n"
+        "Подписка не найдена 😔 Если вы уже пользуетесь Lumica, нажмите «Регистрация» и оставьте заявку, "
+        "мы добавим связь. Если вы здесь впервые, оставьте заявку так же."
+    ),
+    STATE_APPLICANT: "Здравствуйте! Ваша заявка принята и ждёт рассмотрения ✨ Статус можно посмотреть кнопкой ниже.",
+}
 ADMIN_GREETING = "Добро пожаловать в Lumica"
 
 
@@ -42,7 +67,21 @@ def support_url() -> str:
     return os.getenv("SUPPORT_URL", "https://t.me/NovenWrk")
 
 
-def user_menu() -> InlineKeyboardMarkup:
+def user_menu(state: str = STATE_ACTIVE) -> InlineKeyboardMarkup:
+    settings_help_row = [
+        InlineKeyboardButton(text="⚙️ Настройки", callback_data="menu:settings"),
+        InlineKeyboardButton(text="🌐 Центр Lumica", callback_data="menu:help"),
+    ]
+    if state == STATE_NEW:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📝 Регистрация", callback_data="menu:register")],
+            settings_help_row,
+        ])
+    if state == STATE_APPLICANT:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📨 Статус заявки", callback_data="menu:appstatus")],
+            settings_help_row,
+        ])
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="📋 Подписка", callback_data="menu:subscription"),
@@ -127,13 +166,56 @@ def servers_status_text(db) -> str:
     return "🌍 Состояние серверов\n" + "\n".join(lines)
 
 
-def main_menu_content(is_admin: bool) -> tuple[str, InlineKeyboardMarkup]:
-    return (ADMIN_GREETING, admin_menu()) if is_admin else (USER_GREETING, user_menu())
+def client_state(db, telegram_id) -> str:
+    """Подписка найдена (есть подписка, подключения или семья) / есть открытая заявка / ничего нет."""
+    user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+    if user is None:
+        return STATE_NEW
+    has_subscription = (
+        db.query(Subscription.id).filter(Subscription.user_id == user.id, Subscription.status != "draft").first()
+        is not None
+    )
+    has_accounts = (
+        db.query(VpnAccount.id).filter(VpnAccount.user_id == user.id, VpnAccount.status == "active").first()
+        is not None
+    )
+    if has_subscription or has_accounts or user.group_id:
+        return STATE_ACTIVE
+    has_application = (
+        db.query(Application.id)
+        .filter(Application.user_id == user.id, Application.status.in_(APPLICATION_OPEN_STATUSES))
+        .first()
+        is not None
+    )
+    return STATE_APPLICANT if has_application else STATE_NEW
 
 
-async def answer_main_menu(message: types.Message, *, is_admin: bool) -> None:
-    text, markup = main_menu_content(is_admin)
+def resolve_menu_context(telegram_id: int) -> tuple[bool, str]:
+    """(администратор ли, состояние клиента) для выбора меню."""
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+        is_admin = is_admin_telegram_user(user, telegram_id)
+        return is_admin, STATE_ACTIVE if is_admin else client_state(db, telegram_id)
+
+
+def main_menu_content(is_admin: bool, state: str = STATE_ACTIVE) -> tuple[str, InlineKeyboardMarkup]:
+    if is_admin:
+        return ADMIN_GREETING, admin_menu()
+    return GREETINGS.get(state, USER_GREETING), user_menu(state)
+
+
+async def answer_main_menu(message: types.Message, *, is_admin: bool, state: str = STATE_ACTIVE) -> None:
+    text, markup = main_menu_content(is_admin, state)
     await message.answer(text, reply_markup=markup)
+
+
+async def show_main_menu_in_place(query: CallbackQuery) -> None:
+    """Возвращает главное меню в этом же сообщении (с учётом администратора и состояния клиента)."""
+    if not query.from_user:
+        return
+    is_admin, state = resolve_menu_context(query.from_user.id)
+    text, markup = main_menu_content(is_admin, state)
+    await _show_page(query, text, markup)
 
 
 async def _show_page(query: CallbackQuery, text: str, markup: InlineKeyboardMarkup) -> None:
@@ -321,13 +403,8 @@ async def cmd_menu(message: types.Message) -> None:
     """/menu - показать главное меню ещё раз."""
     if not message.from_user:
         return
-    with SessionLocal() as db:
-        user = db.query(User).filter(User.telegram_id == str(message.from_user.id)).first()
-        is_admin = is_admin_telegram_user(user, message.from_user.id)
-    if user is None and not is_admin:
-        await message.answer("Вы ещё не зарегистрированы. Отправьте /start, чтобы оставить заявку.")
-        return
-    await answer_main_menu(message, is_admin=is_admin)
+    is_admin, state = resolve_menu_context(message.from_user.id)
+    await answer_main_menu(message, is_admin=is_admin, state=state)
 
 
 @router.callback_query(lambda query: query.data == "menu:main")
@@ -335,10 +412,8 @@ async def menu_main(query: CallbackQuery) -> None:
     await query.answer()
     if not query.from_user or not query.message:
         return
-    with SessionLocal() as db:
-        user = db.query(User).filter(User.telegram_id == str(query.from_user.id)).first()
-        is_admin = is_admin_telegram_user(user, query.from_user.id)
-    await answer_main_menu(query.message, is_admin=is_admin)
+    is_admin, state = resolve_menu_context(query.from_user.id)
+    await answer_main_menu(query.message, is_admin=is_admin, state=state)
 
 
 @router.callback_query(lambda query: query.data == "menu:subscription")
@@ -368,13 +443,36 @@ async def help_menu(query: CallbackQuery) -> None:
 async def back_to_menu(query: CallbackQuery) -> None:
     """Возврат на главное меню в этом же сообщении."""
     await query.answer()
+    await show_main_menu_in_place(query)
+
+
+@router.callback_query(lambda query: query.data == "menu:appstatus")
+async def application_status_menu(query: CallbackQuery) -> None:
+    """Страница «Статус заявки» в стиле регистрации; «Меню» возвращает главное меню в этом же сообщении."""
+    await query.answer()
     if not query.from_user:
         return
     with SessionLocal() as db:
         user = db.query(User).filter(User.telegram_id == str(query.from_user.id)).first()
-        is_admin = is_admin_telegram_user(user, query.from_user.id)
-    text, markup = main_menu_content(is_admin)
-    await _show_page(query, text, markup)
+        application = (
+            db.query(Application).filter(Application.user_id == user.id).order_by(Application.id.desc()).first()
+            if user else None
+        )
+        if application is None:
+            text = "Заявок пока нет. Нажмите «Регистрация» в меню, чтобы оставить заявку."
+        else:
+            lines = [
+                f"Регистрация | Заявка №{application.id}",
+                "",
+                f"ФИО: {html.escape(application.full_name)}",
+                f"Дополнительная информация: {html.escape(application.extra_info) if application.extra_info else '—'}",
+                "",
+                f"Статус: {APPLICATION_STATUS_LABELS.get(application.status, application.status)}",
+            ]
+            if application.review_note and application.status in ("rejected", "need_more_info"):
+                lines.append(f"Комментарий: {html.escape(application.review_note)}")
+            text = "\n".join(lines)
+    await _show_page(query, text, page_back_keyboard("Меню"))
 
 
 __all__ = [
@@ -382,6 +480,9 @@ __all__ = [
     "user_menu",
     "admin_menu",
     "menu_button",
+    "client_state",
+    "resolve_menu_context",
+    "show_main_menu_in_place",
     "page_back_keyboard",
     "main_menu_content",
     "no_details_keyboard",

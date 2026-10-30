@@ -1,13 +1,10 @@
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.storage.base import StorageKey
-from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -106,10 +103,6 @@ def _bot():
     return bot
 
 
-def _state(user_id):
-    return FSMContext(MemoryStorage(), StorageKey(bot_id=1, chat_id=user_id, user_id=user_id))
-
-
 def _query(user_id, data, message=None):
     return SimpleNamespace(
         from_user=SimpleNamespace(id=user_id, full_name="Ivan", username="ivan"),
@@ -135,21 +128,28 @@ def _payment_db(monkeypatch, *, details="Карта 1234"):
         ))
         db.commit()
     monkeypatch.setattr(payments, "SessionLocal", factory)
-    payments._PENDING.clear()
+    payments._TASKS.clear()
     return factory
+
+
+def _receipt_message(user_id=42, *, text=None, photo=True, chat_type="private"):
+    answers = []
+    message = SimpleNamespace(
+        from_user=SimpleNamespace(id=user_id, full_name="Ivan", username="ivan"),
+        chat=SimpleNamespace(id=user_id, type=chat_type), message_id=900, text=text,
+        photo=[SimpleNamespace(file_id="F")] if photo else None, document=None,
+        answer=AsyncMock(side_effect=lambda *a, **k: answers.append(a[0])),
+    )
+    return message, answers
 
 
 def test_pay_twice_creates_single_request(monkeypatch):
     _payment_db(monkeypatch)
-    bot, state = _bot(), _state(42)
+    bot = _bot()
 
     async def scenario():
         first, second = _query(42, "menu:pay"), _query(42, "menu:pay")
-        await asyncio.gather(
-            payments.pay_menu(first, state, bot), payments.pay_menu(second, state, bot)
-        )
-        await asyncio.sleep(0)
-        payments._release_pending(42)
+        await asyncio.gather(payments.pay_menu(first, bot), payments.pay_menu(second, bot))
         return first, second
 
     first, second = asyncio.run(scenario())
@@ -159,88 +159,196 @@ def test_pay_twice_creates_single_request(monkeypatch):
     assert _buttons(bot.send_message.await_args.kwargs["reply_markup"]) == [["Отменить"]]
     alerts = [c for q in (first, second) for c in q.answer.await_args_list if c.kwargs.get("show_alert")]
     assert len(alerts) == 1 and "уже создана" in alerts[0].args[0]
+    pending = payments.load_pending(42)
+    assert pending and pending.message_id == 100 and pending.subscription_ids == [1]
+
+
+def test_request_survives_bot_restart_receipt_still_accepted(monkeypatch):
+    """Клиент нажал «Оплатить», бот перезапустился (новый цикл событий и пустая память), чек принимается."""
+    factory = _payment_db(monkeypatch)
+    asyncio.run(payments.pay_menu(_query(42, "menu:pay"), _bot()))   # процесс №1
+    payments._TASKS.clear()                                          # память процесса №1 потеряна
+    bot2 = _bot()
+    message, answers = _receipt_message()
+    asyncio.run(payments.receive_receipt(message, bot2))             # процесс №2
+    assert answers == ["Оплата принята на рассмотрение администратором, ожидайте результата"]
+    assert bot2.copy_message.await_args.kwargs["message_thread_id"] == 7
+    assert payments.load_pending(42) is None
+    with factory() as db:
+        assert db.query(PaymentRequest).one().status == "pending"
+
+
+def test_cancel_works_after_bot_restart(monkeypatch):
+    _payment_db(monkeypatch)
+    monkeypatch.setattr(payments, "CANCELLED_MESSAGE_LIFETIME_SECONDS", 0.01)
+    asyncio.run(payments.pay_menu(_query(42, "menu:pay"), _bot()))
+    payments._TASKS.clear()
+    bot2 = _bot()
+    message = SimpleNamespace(chat=SimpleNamespace(id=42), message_id=100, edit_text=AsyncMock())
+
+    async def scenario():
+        await payments.cancel_receipt(_query(42, "payment:cancel", message), bot2)
+        await asyncio.sleep(0.1)
+
+    asyncio.run(scenario())
+    assert message.edit_text.await_args.args[0] == "Заявка на оплату успешно отменена\nСпасибо за честность"
+    assert _buttons(message.edit_text.await_args.kwargs["reply_markup"]) == [["Меню"]]
+    bot2.delete_message.assert_awaited_once_with(42, 100)
+    assert payments.load_pending(42) is None
+
+
+def test_timeout_timer_is_restored_after_restart_and_expires_the_request(monkeypatch):
+    _payment_db(monkeypatch)
+    monkeypatch.setattr(payments, "PAYMENT_TIMEOUT_SECONDS", 0.3)
+    asyncio.run(payments.pay_menu(_query(42, "menu:pay"), _bot()))   # таймер процесса №1 исчез вместе с ним
+    payments._TASKS.clear()
+    assert payments.load_pending(42) is not None
+    bot2 = _bot()
+
+    async def scenario():
+        await payments.resume_pending_requests(bot2)
+        await asyncio.sleep(0.6)
+
+    asyncio.run(scenario())
+    args = bot2.edit_message_text.await_args
+    assert "отменена автоматической системой" in args.args[0] and "создайте заявку заново" in args.args[0]
+    assert (args.kwargs["chat_id"], args.kwargs["message_id"]) == (42, 100)
+    assert _buttons(args.kwargs["reply_markup"]) == [["Меню"]]
+    assert payments.load_pending(42) is None
+
+
+def test_request_that_expired_while_bot_was_down_is_closed_on_start(monkeypatch):
+    _payment_db(monkeypatch)
+    asyncio.run(payments.pay_menu(_query(42, "menu:pay"), _bot()))
+    payments._TASKS.clear()
+    pending = payments.load_pending(42)
+    pending.expires_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+    payments.save_pending(pending)
+    bot2 = _bot()
+
+    async def scenario():
+        await payments.resume_pending_requests(bot2)
+        await asyncio.sleep(0.1)
+
+    asyncio.run(scenario())
+    assert "отменена автоматической системой" in bot2.edit_message_text.await_args.args[0]
+    assert payments.load_pending(42) is None
+
+
+def test_receipt_after_expiry_is_refused_even_before_the_timer_fires(monkeypatch):
+    _payment_db(monkeypatch)
+    asyncio.run(payments.pay_menu(_query(42, "menu:pay"), _bot()))
+    payments._TASKS.clear()
+    pending = payments.load_pending(42)
+    pending.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    payments.save_pending(pending)
+    bot2 = _bot()
+    message, answers = _receipt_message()
+    asyncio.run(payments.receive_receipt(message, bot2))
+    assert answers == ["Заявка на оплату уже закрыта. Создайте новую через меню."]
+    bot2.copy_message.assert_not_awaited()
+    assert payments.load_pending(42) is None
+
+
+def test_only_private_non_command_messages_of_a_waiting_client_are_taken(monkeypatch):
+    _payment_db(monkeypatch)
+    stranger, _ = _receipt_message(user_id=7)
+    assert payments._has_pending_payment(stranger) is False          # заявки нет
+    asyncio.run(payments.pay_menu(_query(42, "menu:pay"), _bot()))
+    photo, _ = _receipt_message()
+    command, _ = _receipt_message(text="/menu", photo=False)
+    group, _ = _receipt_message(chat_type="supergroup")
+    assert payments._has_pending_payment(photo) is True
+    assert payments._has_pending_payment(command) is False           # /menu остаётся командой
+    assert payments._has_pending_payment(group) is False
+    asyncio.run(asyncio.sleep(0))
 
 
 def test_cancel_edits_message_and_deletes_it_later(monkeypatch):
     _payment_db(monkeypatch)
     monkeypatch.setattr(payments, "CANCELLED_MESSAGE_LIFETIME_SECONDS", 0.01)
-    bot, state = _bot(), _state(42)
-    message = SimpleNamespace(
-        chat=SimpleNamespace(id=42), message_id=100, edit_text=AsyncMock()
-    )
+    bot = _bot()
+    message = SimpleNamespace(chat=SimpleNamespace(id=42), message_id=100, edit_text=AsyncMock())
 
     async def scenario():
-        await payments.pay_menu(_query(42, "menu:pay"), state, bot)
-        await payments.cancel_receipt(_query(42, "payment:cancel", message), state, bot)
+        await payments.pay_menu(_query(42, "menu:pay"), bot)
+        await payments.cancel_receipt(_query(42, "payment:cancel", message), bot)
         await asyncio.sleep(0.1)
 
     asyncio.run(scenario())
-    message.edit_text.assert_awaited_once()
     assert message.edit_text.await_args.args[0] == "Заявка на оплату успешно отменена\nСпасибо за честность"
     assert _buttons(message.edit_text.await_args.kwargs["reply_markup"]) == [["Меню"]]
     bot.delete_message.assert_awaited_once_with(42, 100)
-    assert 42 not in payments._PENDING
+    assert payments.load_pending(42) is None
 
 
 def test_request_expires_after_timeout(monkeypatch):
     _payment_db(monkeypatch)
     monkeypatch.setattr(payments, "PAYMENT_TIMEOUT_SECONDS", 0.05)
-    bot, state = _bot(), _state(42)
+    bot = _bot()
 
     async def scenario():
-        await payments.pay_menu(_query(42, "menu:pay"), state, bot)
-        await asyncio.sleep(0.2)
-        return await state.get_state()
+        await payments.pay_menu(_query(42, "menu:pay"), bot)
+        await asyncio.sleep(0.3)
 
-    assert asyncio.run(scenario()) is None
+    asyncio.run(scenario())
     bot.edit_message_text.assert_awaited_once()
     args = bot.edit_message_text.await_args
     assert "отменена автоматической системой" in args.args[0]
-    assert "создайте заявку заново" in args.args[0]
     assert _buttons(args.kwargs["reply_markup"]) == [["Меню"]]
-    assert 42 not in payments._PENDING
+    assert payments.load_pending(42) is None
+
+
+def test_receipt_cancels_the_timeout_timer(monkeypatch):
+    _payment_db(monkeypatch)
+    monkeypatch.setattr(payments, "PAYMENT_TIMEOUT_SECONDS", 0.4)
+    bot = _bot()
+    message, answers = _receipt_message()
+
+    async def scenario():
+        await payments.pay_menu(_query(42, "menu:pay"), bot)
+        await payments.receive_receipt(message, bot)
+        await asyncio.sleep(0.9)
+
+    asyncio.run(scenario())
+    bot.edit_message_text.assert_not_awaited()   # «заявка отменена» после принятого чека не приходит
+    assert answers == ["Оплата принята на рассмотрение администратором, ожидайте результата"]
 
 
 def test_missing_details_do_not_start_request(monkeypatch):
     _payment_db(monkeypatch, details=None)
-    bot, state = _bot(), _state(42)
-    asyncio.run(payments.pay_menu(_query(42, "menu:pay"), state, bot))
+    bot = _bot()
+    asyncio.run(payments.pay_menu(_query(42, "menu:pay"), bot))
     sent = bot.send_message.await_args
     assert sent.args[1] == "Реквизиты для вас пока не настроены. Напишите в рабочий аккаунт"
     assert sent.args[1].count("http") == 0
     buttons = sent.kwargs["reply_markup"].inline_keyboard[0]
     assert [b.text for b in buttons] == ["Меню", "Аккаунт"]
     assert buttons[0].callback_data == "menu:main" and buttons[1].url.startswith("https://t.me/")
-    assert 42 not in payments._PENDING
+    assert payments.load_pending(42) is None
 
 
 def _send_receipt(factory_monkeypatch):
-    bot, state = _bot(), _state(42)
-    answers = []
-    photo_message = SimpleNamespace(
-        from_user=SimpleNamespace(id=42, full_name="Ivan", username="ivan"),
-        chat=SimpleNamespace(id=42), message_id=900,
-        photo=[SimpleNamespace(file_id="F")], document=None,
-        answer=AsyncMock(side_effect=lambda *a, **k: answers.append(a[0])),
-    )
+    bot = _bot()
+    message, answers = _receipt_message()
 
     async def scenario():
-        await payments.pay_menu(_query(42, "menu:pay"), state, bot)
-        await payments.receive_receipt(photo_message, state, bot)
-        return await state.get_state()
+        await payments.pay_menu(_query(42, "menu:pay"), bot)
+        await payments.receive_receipt(message, bot)
 
-    return bot, answers, asyncio.run(scenario())
+    asyncio.run(scenario())
+    return bot, answers, None
 
 
 def test_receipt_goes_to_admin_topic_with_buttons_and_user_is_told(monkeypatch):
     factory = _payment_db(monkeypatch)
-    bot, answers, state_after = _send_receipt(monkeypatch)
+    bot, answers, _ = _send_receipt(monkeypatch)
     kwargs = bot.copy_message.await_args.kwargs
     assert kwargs["message_thread_id"] == 7
     assert _buttons(kwargs["reply_markup"]) == [["Подтвердить", "Отклонить"]]
     assert "Оплата #1" in kwargs["caption"] and "Ivan" in kwargs["caption"]
     assert answers == ["Оплата принята на рассмотрение администратором, ожидайте результата"]
-    assert state_after is None and 42 not in payments._PENDING
+    assert payments.load_pending(42) is None
     bot.edit_message_reply_markup.assert_awaited_once()  # кнопка «Отменить» убрана
     with factory() as db:
         item = db.query(PaymentRequest).one()
@@ -482,6 +590,8 @@ def test_server_status_is_a_page_that_replaces_the_message(monkeypatch):
             }),
             User(telegram_id="42", name="Ivan"),
         ])
+        db.flush()
+        db.add(Subscription(user_id=db.query(User).filter(User.telegram_id == "42").one().id, status="active"))
         db.commit()
     monkeypatch.setattr(menus, "SessionLocal", factory)
     monkeypatch.setattr(menus, "is_authorized", lambda *a, **k: False)
@@ -508,7 +618,10 @@ def test_server_status_is_a_page_that_replaces_the_message(monkeypatch):
 def test_help_center_is_a_placeholder_page_with_back_button(monkeypatch):
     factory = _factory()
     with factory() as db:
-        db.add(User(telegram_id="42", name="Ivan"))
+        user = User(telegram_id="42", name="Ivan")
+        db.add(user)
+        db.flush()
+        db.add(Subscription(user_id=user.id, status="active"))
         db.commit()
     monkeypatch.setattr(menus, "SessionLocal", factory)
     monkeypatch.setattr(menus, "is_authorized", lambda *a, **k: False)
@@ -532,7 +645,10 @@ def test_admin_menu_unchanged_and_has_no_server_block(monkeypatch):
 def test_menu_command_shows_menu_again(monkeypatch):
     factory = _factory()
     with factory() as db:
-        db.add(User(telegram_id="42", name="Ivan"))
+        user = User(telegram_id="42", name="Ivan")
+        db.add(user)
+        db.flush()
+        db.add(Subscription(user_id=user.id, status="active"))
         db.commit()
     monkeypatch.setattr(menus, "SessionLocal", factory)
     monkeypatch.setattr(menus, "is_authorized", lambda *a, **k: False)
@@ -544,7 +660,9 @@ def test_menu_command_shows_menu_again(monkeypatch):
     stranger, stranger_answers = _menu_message()
     stranger.from_user.id = 999
     asyncio.run(menus.cmd_menu(stranger))
-    assert "/start" in stranger_answers[0][0][0]
+    # незнакомому /menu показывает меню с кнопкой регистрации, а не тупик
+    assert stranger_answers[0][0][0] == menus.GREETINGS["new"]
+    assert _buttons(stranger_answers[0][1]["reply_markup"])[0] == ["📝 Регистрация"]
 
 
 def test_subscription_message_ends_with_proxy_links_quote():

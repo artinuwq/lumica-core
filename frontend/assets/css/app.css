@@ -2682,3 +2682,70 @@
         .finance-mini.owed .finance-mini-value {
             color: #ff9b9b;
         }
+
+        /* Заявки */
+        .app-list {
+            display: grid;
+            gap: 0.35rem;
+            margin-top: 0.6rem;
+        }
+        .app-row {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            width: 100%;
+            padding: 0.45rem 0.65rem;
+            border-radius: 0.8rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            color: #eef4ff;
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+        .app-row.new {
+            border-color: rgba(125, 140, 255, 0.55);
+            background: rgba(90, 110, 255, 0.12);
+        }
+        .app-row .avatar {
+            font-size: 1.3rem;
+        }
+        .app-row-text {
+            min-width: 0;
+            flex: 1;
+        }
+        .app-row-name {
+            font-size: 0.92rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .app-row-sub {
+            color: rgba(219, 234, 255, 0.62);
+            font-size: 0.74rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .app-row-badge {
+            flex: 0 0 auto;
+            padding: 0.12rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .app-row.new .app-row-badge {
+            background: rgba(125, 140, 255, 0.35);
+        }
+        .work-app-quote {
+            padding: 0.55rem 0.75rem;
+            border-left: 3px solid rgba(125, 140, 255, 0.7);
+            border-radius: 0.4rem;
+            background: rgba(255, 255, 255, 0.05);
+            font-size: 0.88rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
